@@ -75,7 +75,12 @@ export async function listPendingAndApproved() {
     const message = err instanceof Error ? err.message : "Unknown error calling the Supabase admin API";
     const keyLen = process.env.PIQUE_SERVICE_ROLE_KEY?.length ?? 0;
     const urlLen = process.env.NEXT_PUBLIC_SUPABASE_URL?.length ?? 0;
-    adminApiError = `${message} [debug: PIQUE_SERVICE_ROLE_KEY seen by server = ${keyLen} chars, NEXT_PUBLIC_SUPABASE_URL = ${urlLen} chars]`;
+    const vercelEnv = process.env.VERCEL_ENV ?? "(unset)";
+    const vercelFlag = process.env.VERCEL ?? "(unset)";
+    const nodeEnv = process.env.NODE_ENV ?? "(unset)";
+    const anonKeyLen = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length ?? 0;
+    const googleDomainLen = process.env.GOOGLE_WORKSPACE_DOMAIN?.length ?? 0;
+    adminApiError = `${message} [debug: PIQUE_SERVICE_ROLE_KEY=${keyLen}ch, NEXT_PUBLIC_SUPABASE_URL=${urlLen}ch, NEXT_PUBLIC_SUPABASE_ANON_KEY=${anonKeyLen}ch, GOOGLE_WORKSPACE_DOMAIN=${googleDomainLen}ch, VERCEL=${vercelFlag}, VERCEL_ENV=${vercelEnv}, NODE_ENV=${nodeEnv}]`;
   }
 
   const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
