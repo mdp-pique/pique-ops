@@ -73,9 +73,9 @@ export async function listPendingAndApproved() {
   } catch (err) {
     console.error("Failed to list auth users (check SUPABASE_SERVICE_ROLE_KEY):", err);
     const message = err instanceof Error ? err.message : "Unknown error calling the Supabase admin API";
-    const keyLen = process.env.SUPABASE_SERVICE_ROLE_KEY?.length ?? 0;
+    const keyLen = process.env.PIQUE_SERVICE_ROLE_KEY?.length ?? 0;
     const urlLen = process.env.NEXT_PUBLIC_SUPABASE_URL?.length ?? 0;
-    adminApiError = `${message} [debug: SUPABASE_SERVICE_ROLE_KEY seen by server = ${keyLen} chars, NEXT_PUBLIC_SUPABASE_URL = ${urlLen} chars]`;
+    adminApiError = `${message} [debug: PIQUE_SERVICE_ROLE_KEY seen by server = ${keyLen} chars, NEXT_PUBLIC_SUPABASE_URL = ${urlLen} chars]`;
   }
 
   const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));

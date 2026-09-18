@@ -26,7 +26,7 @@ export default async function AdminUsersPage() {
       {adminApiError && (
         <div className="mb-6 rounded border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">
           Couldn&apos;t reach the Supabase admin API, so pending sign-ins can&apos;t be listed right now
-          (existing team members below are unaffected). Likely cause: <code>SUPABASE_SERVICE_ROLE_KEY</code>{" "}
+          (existing team members below are unaffected). Likely cause: <code>PIQUE_SERVICE_ROLE_KEY</code>{" "}
           is missing or wrong in Vercel&apos;s environment variables.
           <br />
           <span className="text-xs text-red-400">{adminApiError}</span>
