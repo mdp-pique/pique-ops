@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SignOutButton } from "../sign-out-button";
 
@@ -9,6 +10,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { data: profile } = user
     ? await supabase.from("profiles").select("role, display_name").eq("id", user.id).maybeSingle()
     : { data: null };
+
+  if (user && !profile) redirect("/pending");
 
   return (
     <div className="flex min-h-screen flex-col">
