@@ -53,26 +53,38 @@ export async function revokeUser(userId: string) {
 }
 
 export async function listPendingAndApproved() {
-  await requireAdmin();
+  const { supabase } = await requireAdmin();
 
-  const admin = createAdminClient();
-  const supabase = await createClient();
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles")
+    .select("id, role, display_name, created_at")
+    .order("created_at");
 
-  const [{ data: authUsers }, { data: profiles }] = await Promise.all([
-    admin.auth.admin.listUsers({ perPage: 200 }),
-    supabase.from("profiles").select("id, role, display_name, created_at").order("created_at"),
-  ]);
+  if (profilesError) console.error("Failed to load profiles:", profilesError);
+
+  let authUsers: { id: string; email?: string; created_at: string }[] = [];
+  let adminApiError: string | null = null;
+
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin.auth.admin.listUsers({ perPage: 200 });
+    if (error) throw error;
+    authUsers = data.users;
+  } catch (err) {
+    console.error("Failed to list auth users (check SUPABASE_SERVICE_ROLE_KEY):", err);
+    adminApiError = err instanceof Error ? err.message : "Unknown error calling the Supabase admin API";
+  }
 
   const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
 
   const approved = (profiles ?? []).map((p) => ({
     ...p,
-    email: authUsers?.users.find((u) => u.id === p.id)?.email ?? "(unknown)",
+    email: authUsers.find((u) => u.id === p.id)?.email ?? "(unknown)",
   }));
 
-  const pending = (authUsers?.users ?? [])
+  const pending = authUsers
     .filter((u) => !profileById.has(u.id))
     .map((u) => ({ id: u.id, email: u.email ?? "(no email)", created_at: u.created_at }));
 
-  return { approved, pending };
+  return { approved, pending, adminApiError };
 }

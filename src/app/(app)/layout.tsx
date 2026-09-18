@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SignOutButton } from "../sign-out-button";
+import { NavLinks } from "./nav-links";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -20,14 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/" className="text-sm font-semibold">
             Pique Ops
           </Link>
-          <Link href="/reservations" className="text-xs text-gray-400 hover:text-white">
-            Reservations
-          </Link>
-          {profile?.role === "admin" && (
-            <Link href="/admin/users" className="text-xs text-gray-400 hover:text-white">
-              Team
-            </Link>
-          )}
+          <NavLinks isAdmin={profile?.role === "admin"} />
         </div>
         <div className="flex items-center gap-4 text-xs text-gray-400">
           <span>

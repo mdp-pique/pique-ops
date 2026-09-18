@@ -17,11 +17,21 @@ export default async function AdminUsersPage() {
     );
   }
 
-  const { approved, pending } = await listPendingAndApproved();
+  const { approved, pending, adminApiError } = await listPendingAndApproved();
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
       <h1 className="mb-6 text-lg font-semibold">Team</h1>
+
+      {adminApiError && (
+        <div className="mb-6 rounded border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">
+          Couldn&apos;t reach the Supabase admin API, so pending sign-ins can&apos;t be listed right now
+          (existing team members below are unaffected). Likely cause: <code>SUPABASE_SERVICE_ROLE_KEY</code>{" "}
+          is missing or wrong in Vercel&apos;s environment variables.
+          <br />
+          <span className="text-xs text-red-400">{adminApiError}</span>
+        </div>
+      )}
 
       <section className="mb-8">
         <h2 className="mb-2 text-xs uppercase text-gray-500">
