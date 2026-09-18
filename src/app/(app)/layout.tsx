@@ -16,9 +16,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between border-b border-gray-800 px-6 py-3">
-        <Link href="/" className="text-sm font-semibold">
-          Pique Ops
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link href="/" className="text-sm font-semibold">
+            Pique Ops
+          </Link>
+          <Link href="/reservations" className="text-xs text-gray-400 hover:text-white">
+            Reservations
+          </Link>
+          {profile?.role === "admin" && (
+            <Link href="/admin/users" className="text-xs text-gray-400 hover:text-white">
+              Team
+            </Link>
+          )}
+        </div>
         <div className="flex items-center gap-4 text-xs text-gray-400">
           <span>
             {user?.email}

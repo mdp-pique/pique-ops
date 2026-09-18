@@ -87,14 +87,19 @@ export default async function TicketDetailPage({
         <Field label="Priority" value={ticket.priority} />
         <Field label="Stage" value={ticket.stage ?? "—"} />
         <Field label="Property" value={ticket.property?.public_name ?? ticket.property?.property_name ?? "—"} />
-        <Field
-          label="Reservation"
-          value={
-            ticket.reservation
-              ? `${ticket.reservation.confirmation_code ?? "—"} (${ticket.reservation.check_in} → ${ticket.reservation.check_out})`
-              : "—"
-          }
-        />
+        <div className="contents">
+          <dt className="text-gray-500">Reservation</dt>
+          <dd>
+            {ticket.reservation_id ? (
+              <Link href={`/reservations/${ticket.reservation_id}`} className="text-blue-400 hover:underline">
+                {ticket.reservation?.confirmation_code ?? "view timeline"} ({ticket.reservation?.check_in} →{" "}
+                {ticket.reservation?.check_out})
+              </Link>
+            ) : (
+              "—"
+            )}
+          </dd>
+        </div>
         <Field label="Guest" value={ticket.guest_name ?? "—"} />
         <Field label="Source" value={ticket.source} />
         <Field label="Created by" value={ticket.created_by_profile?.display_name ?? "Automation"} />
