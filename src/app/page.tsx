@@ -5,9 +5,13 @@ export default async function Home() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: profile } = user
+  const { data: profile, error: profileError } = user
     ? await supabase.from("profiles").select("role, display_name").eq("id", user.id).maybeSingle()
-    : { data: null };
+    : { data: null, error: null };
+
+  if (profileError) {
+    console.error("Failed to load profile:", profileError);
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
