@@ -71,16 +71,8 @@ export async function listPendingAndApproved() {
     if (error) throw error;
     authUsers = data.users;
   } catch (err) {
-    console.error("Failed to list auth users (check SUPABASE_SERVICE_ROLE_KEY):", err);
-    const message = err instanceof Error ? err.message : "Unknown error calling the Supabase admin API";
-    const keyLen = process.env.PIQUE_SERVICE_ROLE_KEY?.length ?? 0;
-    const urlLen = process.env.NEXT_PUBLIC_SUPABASE_URL?.length ?? 0;
-    const vercelEnv = process.env.VERCEL_ENV ?? "(unset)";
-    const vercelFlag = process.env.VERCEL ?? "(unset)";
-    const nodeEnv = process.env.NODE_ENV ?? "(unset)";
-    const anonKeyLen = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.length ?? 0;
-    const googleDomainLen = process.env.GOOGLE_WORKSPACE_DOMAIN?.length ?? 0;
-    adminApiError = `${message} [debug: PIQUE_SERVICE_ROLE_KEY=${keyLen}ch, NEXT_PUBLIC_SUPABASE_URL=${urlLen}ch, NEXT_PUBLIC_SUPABASE_ANON_KEY=${anonKeyLen}ch, GOOGLE_WORKSPACE_DOMAIN=${googleDomainLen}ch, VERCEL=${vercelFlag}, VERCEL_ENV=${vercelEnv}, NODE_ENV=${nodeEnv}]`;
+    console.error("Failed to list auth users (check PIQUE_SERVICE_ROLE_KEY):", err);
+    adminApiError = err instanceof Error ? err.message : "Unknown error calling the Supabase admin API";
   }
 
   const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
