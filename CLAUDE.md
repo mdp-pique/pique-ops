@@ -9,22 +9,26 @@ Internal ticketing & conversations platform for Pique Properties. Full spec: `do
 - Google OAuth via Supabase Auth, restricted to the company Workspace domain.
 - Migrations live in `supabase/migrations/`, applied via the Supabase CLI. Never hand-edit the production schema.
 
-## Known schema overlap — read before touching §5 (Data model) in the PRD
+## Known schema overlap — resolved 2026-09-18
 
-The PRD's §5 schema was drafted without visibility into the existing database. A schema check on 2026-09-18 found overlap that changes how `conversations`/`messages` should be built:
+The PRD's §5 schema was drafted without visibility into the existing database. A schema check found overlap with `public.messages` (~193k rows, already syncs Hospitable guest messages) and `public.unanswered_message_alerts` (~45 rows, already does unanswered-message detection + Slack alerting). Decisions made and implemented:
 
-- **`public.messages` already exists** (~193k rows) and already syncs Hospitable guest messages: `id, hospitable_message_id (unique), property_id, reservation_id, guest_id, direction, message_type, subject, body, sent_at, read_at, booking_source, raw_hospitable_data, last_synced_at, created_at, updated_at`. It has no `conversation_id` or `intent` column, and there is no `conversations` table — messages are flat, grouped only by `reservation_id`/`guest_id`.
-- **`public.unanswered_message_alerts` already exists** (~45 rows) and already implements unanswered-message detection + Slack alerting: `id, hospitable_message_id (unique), reservation_id, alerted_at, slack_channel, slack_ts, resolved_at, resolved_by, last_escalated_at, escalation_count`.
-- No `public.calls` table exists — GHL calls/voicemail is genuinely new.
-- No `public.profiles` table exists — genuinely new, needed for app auth/roles (`id` FK to `auth.users`).
-- No `public.conversations` table exists.
-- `public.guests` already exists (uuid PK, Hospitable-synced) — this *is* the PRD's "no guests table on purpose" instinct already satisfied; don't create a second one.
+1. **`public.messages` extended in place** (migration `20260918200000_ticketing_foundation.sql`): added nullable `conversation_id`, `intent`, `intent_confidence` columns rather than creating a parallel `messages` table. A new thin `conversations` table was added for grouping (calls attach to it too).
+2. **`public.unanswered_message_alerts` is being retired, but not yet cut over.** Two live n8n workflows still own this feature and must NOT be edited until the new app is tested and trusted:
+   - `Hospitable-Webhook-Receiver` (id `MRtl3ONWIiY5GnuW`) — on every inbound guest message, waits 10 min, classifies with Claude, upserts `unanswered_message_alerts`, posts to Slack `pique-team-chat-missed`.
+   - `Pique-Unanswered-Message-Followup` (id `Lm0ATrPHvnP3lrDP`) — every 10 min, escalates or auto-resolves unresolved alerts.
 
-**Decide explicitly, before writing the tickets/conversations migration, whether to:**
-1. Extend `public.messages` in place (add `intent`, `intent_confidence`, maybe `conversation_id`) rather than creating a parallel `messages` table, and
-2. Either retire `unanswered_message_alerts` in favor of the new `unanswered_message` ticket type, or keep it as the detector that ticket-creation hooks into — pick one, don't run both independently.
+   Instead, migration `20260918210000_shadow_unanswered_alerts_to_tickets.sql` adds a **Postgres trigger** (`mirror_unanswered_alert_to_ticket`, AFTER INSERT OR UPDATE on `unanswered_message_alerts`) that shadow-copies every alert into `tickets` (`type = 'unanswered_message'`, `external_ref = 'unanswered:{hospitable_message_id}'`) in real time. The trigger is wrapped in its own exception handler — a bug in it can never block or roll back the original write to `unanswered_message_alerts`, so the two n8n workflows are provably unaffected. Backfilled all 45 existing alerts on migration (verified 1:1 against the source table: 9 open / 36 resolved in both).
 
-This is exactly the PRD's own rule #1 ("don't build two tables that do the same job") — resolve it deliberately rather than shipping a duplicate.
+   **Do not edit either n8n workflow, and do not drop `unanswered_message_alerts` or this trigger, until the ticket queue UI has been used to verify parity with the existing Slack alert flow.** The actual cutover (n8n writes/reads `tickets` directly, old table and trigger removed) is a separate, deliberate step requiring explicit sign-off — see the "never edit what's already working" rule below.
+3. No `public.calls` table existed — created new (GHL calls/voicemail, genuinely new surface).
+4. No `public.profiles` table existed — created new (app auth/roles, `id` FK to `auth.users`).
+5. `public.guests` already existed (uuid PK, Hospitable-synced) — this *is* the PRD's "no guests table on purpose" instinct already satisfied; nothing new needed there.
+6. PRD §5 also called for adding `reservation_id` to `cleaning_job_map`, but that table is a **static** Connecteam-job-to-property mapping (verified: every `connecteam_job_id` appears exactly once, no `check_date`), not a per-occurrence record — a reservation-level FK doesn't make sense there. Only `cleaning_form_submission` and `cleaning_shift_check` (both have `check_date` in their composite PK, genuinely per-occurrence) got the `reservation_id` column.
+
+## Operating rule: never edit what's already working
+
+The team's explicit rule for this project: build and extend freely and fast, but **never edit an existing, currently-working system** (a live n8n workflow, an existing table's current writers/readers, existing behavior anyone depends on) without stopping and getting explicit sign-off first. Additive changes (new tables, new nullable columns, new triggers that are exception-safe and don't change existing return values, new n8n workflows) are fine to do proactively. Editing something that already runs in production (an active n8n workflow, an existing RLS policy, dropping/renaming an existing column) is not — flag it and wait for a yes, however good the reason.
 
 ## Schema conventions (existing tables, follow for new ones)
 
