@@ -28,3 +28,5 @@ npx supabase db push
 ```
 
 This app shares a production Supabase project with other internal tools — see `CLAUDE.md` for schema conventions and known overlap to check before adding tables.
+
+`src/lib/supabase/database.types.ts` is generated from the live schema (`npx supabase gen types typescript --project-id fnapzaunhfjqftvbduma`) and committed so the app has accurate types for every table, including the ~45 pre-existing ones. Regenerate it after any migration that changes table/column shape.
