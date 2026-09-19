@@ -1,41 +1,57 @@
 import { TopBar } from "@/components/pique/TopBar";
 import { Tile } from "@/components/pique/primitives";
 import { QueueRow } from "@/components/pique/QueueRow";
-import { ReservationBubble } from "@/components/pique/ReservationBubble";
-import { getTodaySummary } from "@/lib/data/today";
+import { Hero } from "@/components/pique/dashboard/Hero";
+import { Sparkline } from "@/components/pique/dashboard/Sparkline";
+import { LiveActivity } from "@/components/pique/dashboard/LiveActivity";
+import { AskPique } from "@/components/pique/dashboard/AskPique";
 import { getNeedsHumanNow } from "@/lib/data/tickets";
-import { getReservationCards } from "@/lib/data/reservations";
+import { getPortfolioSpine, getDashboardKpis, getTrends, getLiveActivity } from "@/lib/data/dashboard";
+import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 
-export default async function TodayPage() {
-  const [summary, needsHuman, current] = await Promise.all([
-    getTodaySummary(),
-    getNeedsHumanNow(6),
-    getReservationCards("staying"),
-  ]);
+export default async function DashboardPage() {
+  const supabase = await createClient();
 
-  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+  const [spine, kpis, trends, activity, needsHuman, { count: propertyCount }] = await Promise.all([
+    getPortfolioSpine(),
+    getDashboardKpis(),
+    getTrends(),
+    getLiveActivity(),
+    getNeedsHumanNow(5),
+    supabase.from("properties").select("id", { count: "exact", head: true }).eq("is_active", true),
+  ]);
 
   return (
     <>
-      <TopBar title="Today" subtitle={`${today} – Edmonton, Calgary, Canmore`} />
+      <TopBar title="Dashboard" subtitle={`Live state across ${propertyCount ?? 0} properties – Edmonton, Calgary, Canmore`} />
+
+      <Hero nodes={spine} />
+
+      <AskPique />
 
       <div className="tiles">
-        <Tile href="/queue" variant="warn" eyebrow="Open tickets" value={summary.openTicketCount} label={`${summary.breachedCount} past SLA`} />
-        <Tile href="/queue?type=msg" variant="crit" eyebrow="Unanswered" value={summary.unansweredCount} label="guest messages" />
+        <Tile href="/queue" variant="warn" eyebrow="Open tickets" value={kpis.openTickets} label={`${kpis.openTicketsPastSla} past SLA`} />
         <Tile
-          href="/reservations?bucket=booked"
-          variant="accent"
-          eyebrow="Arriving"
-          value={summary.arrivalsCount}
-          label={`next 7 days – ${summary.arrivalsFlaggedCount} flagged`}
+          href="/inbox"
+          variant="crit"
+          eyebrow="Awaiting reply"
+          value={kpis.awaitingMessages + kpis.awaitingCalls}
+          label={`${kpis.awaitingMessages} messages · ${kpis.awaitingCalls} calls`}
         />
         <Tile
-          href="/reservations?bucket=staying"
-          variant="ok"
-          eyebrow="In stay"
-          value={summary.inStayCount}
-          label={`${summary.inStayWithMaintenanceCount} with open maintenance`}
+          href="/queue?type=clean"
+          variant="accent"
+          eyebrow="Cleans in flight"
+          value={kpis.cleansInFlight}
+          label={`${kpis.cleansLate} late · ${kpis.cleansFormIncomplete} form incomplete`}
+        />
+        <Tile
+          href="/queue?type=claim"
+          variant="warn"
+          eyebrow="Open claims"
+          value={kpis.openClaims}
+          label={kpis.nextClaimDeadlineDays != null ? `next deadline in ${kpis.nextClaimDeadlineDays} days` : "no deadlines on file"}
         />
       </div>
 
@@ -51,14 +67,24 @@ export default async function TodayPage() {
       </div>
 
       <div className="section-h">
-        <h2>In stay right now</h2>
-        <Link href="/reservations?bucket=staying">All staying</Link>
+        <h2>Trends</h2>
       </div>
-      <div className="grid">
-        {current.slice(0, 8).map((card) => (
-          <ReservationBubble key={card.id} card={card} />
-        ))}
+      <div className="sparks">
+        <Sparkline
+          title="Account rating"
+          qualifier="trailing 12mo"
+          data={trends.rating}
+          decimals={2}
+          threshold={{ value: 4.8, label: "4.8 Superhost" }}
+        />
+        <Sparkline title="Open tickets" qualifier="last 14 days" data={trends.openTickets} decimals={0} />
+        <Sparkline title="Cleanliness subscore" qualifier="monthly avg" data={trends.cleanliness} decimals={2} />
       </div>
+
+      <div className="section-h">
+        <h2>Live activity</h2>
+      </div>
+      <LiveActivity items={activity} />
     </>
   );
 }

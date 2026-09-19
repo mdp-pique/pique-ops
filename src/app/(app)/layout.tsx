@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Rail } from "@/components/pique/Rail";
 import { DrawerProvider } from "@/components/pique/drawer/DrawerContext";
 import { DrawerRoot } from "@/components/pique/drawer/DrawerRoot";
+import { AskPiqueHotkey } from "@/components/pique/dashboard/AskPiqueHotkey";
 
 function initialsFor(name: string | null | undefined, email: string | null | undefined): string {
   if (name) {
@@ -34,6 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <main className="main">{children}</main>
         </div>
         <DrawerRoot />
+        <AskPiqueHotkey />
       </div>
     </DrawerProvider>
   );

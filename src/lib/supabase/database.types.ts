@@ -235,6 +235,53 @@ export type Database = {
         }
         Relationships: []
       }
+      ask_log: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          error: string | null
+          id: string
+          queries: Json
+          question: string
+          row_counts: Json
+          tool_call_count: number
+          total_tokens: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          id?: string
+          queries?: Json
+          question: string
+          row_counts?: Json
+          tool_call_count?: number
+          total_tokens?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          id?: string
+          queries?: Json
+          question?: string
+          row_counts?: Json
+          tool_call_count?: number
+          total_tokens?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ask_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calendar: {
         Row: {
           available: boolean | null
@@ -3150,6 +3197,7 @@ export type Database = {
       }
     }
     Functions: {
+      ask_pique_run_sql: { Args: { query: string }; Returns: Json[] }
       get_checkout_evidence: {
         Args: { day: string }
         Returns: {
