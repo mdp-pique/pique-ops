@@ -1,0 +1,115 @@
+"use client";
+
+import type { ReservationDrawerData } from "@/lib/data/reservations";
+import { Spine } from "@/components/pique/Spine";
+import { StatusPill, IconBtn } from "@/components/pique/primitives";
+import { statusPillFor } from "@/lib/pique-ui/status-pill";
+import { useDrawer } from "./DrawerContext";
+
+export function ReservationPanel({ data }: { data: ReservationDrawerData }) {
+  const { openTicket, back, close, hasBack } = useDrawer();
+  const pill = statusPillFor(data.bucket, data.stages);
+
+  return (
+    <>
+      <div className="d-top">
+        <div className="crumbs">
+          {hasBack && (
+            <IconBtn label="Back" onClick={back}>
+              <svg viewBox="0 0 24 24">
+                <path d="M15 6l-6 6 6 6" />
+              </svg>
+            </IconBtn>
+          )}
+          <span>Reservation</span>
+          <span>&rsaquo;</span>
+          <b>{data.propertyName}</b>
+        </div>
+        <IconBtn label="Close" onClick={close}>
+          <svg viewBox="0 0 24 24">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </IconBtn>
+      </div>
+      <div className="d-body">
+        <div className="d-hero">
+          <h2>
+            {data.guestName} at {data.propertyName}
+          </h2>
+          <div className="m">
+            <span>{data.city}</span>
+            <span>
+              {data.checkIn} &ndash; {data.checkOut}
+            </span>
+            <StatusPill variant={pill.variant}>{pill.label}</StatusPill>
+          </div>
+        </div>
+
+        <div className="card">
+          <Spine stages={data.stages} lg />
+        </div>
+
+        <div className="card">
+          <h3>
+            Open on this reservation <span className="mono">{data.openTickets.length} item{data.openTickets.length === 1 ? "" : "s"}</span>
+          </h3>
+          {data.openTickets.length === 0 ? (
+            <div className="d" style={{ color: "var(--ink-3)" }}>
+              Nothing open. Clean run.
+            </div>
+          ) : (
+            data.openTickets.map((t) => (
+              <div className="issue" key={t.id}>
+                <div>
+                  <div className="t">{t.title}</div>
+                  <div className="d">
+                    {t.typeLabel} &middot; {t.ownerName} &middot; {t.dueText}
+                  </div>
+                </div>
+                <button className="go" onClick={() => openTicket(t.id)}>
+                  Open
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {data.thread && (
+          <div className="card">
+            <h3>
+              Conversation <span className="mono">Hospitable</span>
+            </h3>
+            <div className="thread">
+              {data.thread.map((m, i) => (
+                <div key={i} className={`msg ${m.direction === "inbound" ? "in" : "out"} ${m.isAuto ? "auto" : ""}`}>
+                  {m.body}
+                  <small>
+                    {m.isAuto ? "Auto-reply · " : ""}
+                    {m.sentAt ? new Date(m.sentAt).toLocaleString() : ""}
+                  </small>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {data.review && (
+          <div className="card">
+            <h3>
+              Review <span className="mono">{data.review.stars} &#9733;</span>
+            </h3>
+            {data.review.text && <p className="quote">&ldquo;{data.review.text}&rdquo;</p>}
+            <div className="subs">
+              {data.review.subs.map((s) => (
+                <span key={s.label} className={`sub ${s.value != null && s.value <= 3 ? "low" : ""}`}>
+                  {s.label}
+                  <b className="num">{s.value ?? "—"}</b>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}

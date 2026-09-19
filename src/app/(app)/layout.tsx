@@ -1,8 +1,20 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { SignOutButton } from "../sign-out-button";
-import { NavLinks } from "./nav-links";
+import { Rail } from "@/components/pique/Rail";
+import { DrawerProvider } from "@/components/pique/drawer/DrawerContext";
+import { DrawerRoot } from "@/components/pique/drawer/DrawerRoot";
+
+function initialsFor(name: string | null | undefined, email: string | null | undefined): string {
+  if (name) {
+    return name
+      .split(" ")
+      .map((x) => x[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  }
+  return (email ?? "??").slice(0, 2).toUpperCase();
+}
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -15,23 +27,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (user && !profile) redirect("/pending");
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-gray-800 px-6 py-3">
-        <div className="flex items-center gap-4">
-          <Link href="/" className="text-sm font-semibold">
-            Pique Ops
-          </Link>
-          <NavLinks isAdmin={profile?.role === "admin"} />
+    <DrawerProvider>
+      <div className="pq">
+        <div className="app">
+          <Rail initials={initialsFor(profile?.display_name, user?.email)} />
+          <main className="main">{children}</main>
         </div>
-        <div className="flex items-center gap-4 text-xs text-gray-400">
-          <span>
-            {user?.email}
-            {profile ? ` · ${profile.role}` : " · no profile"}
-          </span>
-          <SignOutButton />
-        </div>
-      </header>
-      <main className="flex-1">{children}</main>
-    </div>
+        <DrawerRoot />
+      </div>
+    </DrawerProvider>
   );
 }

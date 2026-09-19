@@ -1,0 +1,243 @@
+import { createClient } from "@/lib/supabase/server";
+import { todayLocal, type Bucket } from "@/lib/pique-ui/dates";
+import { computeStages, type StageTicketInfo } from "@/lib/pique-ui/spine";
+import { ticketTagClass, ticketTypeLabel, OPEN_STATUSES } from "@/lib/pique-ui/mappings";
+import type { StageState } from "@/lib/pique-ui/mappings";
+
+export interface ReservationCard {
+  id: string;
+  propertyName: string;
+  city: string | null;
+  checkIn: string;
+  checkOut: string;
+  guestName: string;
+  bucket: Bucket;
+  stages: StageState[];
+  tags: { cls: string; label: string }[];
+  reviewStars: number | null;
+}
+
+const BUCKET_LIMIT = 60;
+
+export async function getReservationBucketCounts(): Promise<Record<Bucket, number>> {
+  const supabase = await createClient();
+  const today = todayLocal();
+
+  const [future, current, past] = await Promise.all([
+    supabase.from("reservations").select("id", { count: "exact", head: true }).gt("check_in", today),
+    supabase.from("reservations").select("id", { count: "exact", head: true }).lte("check_in", today).gt("check_out", today),
+    supabase.from("reservations").select("id", { count: "exact", head: true }).lte("check_out", today),
+  ]);
+
+  return { future: future.count ?? 0, current: current.count ?? 0, past: past.count ?? 0 };
+}
+
+export async function getReservationCards(bucket: Bucket): Promise<ReservationCard[]> {
+  const supabase = await createClient();
+  const today = todayLocal();
+
+  let query = supabase
+    .from("reservations")
+    .select(
+      `id, check_in, check_out,
+       property:properties(property_name, public_name, city),
+       guest:guests(full_name)`,
+    );
+
+  if (bucket === "future") {
+    query = query.gt("check_in", today).order("check_in", { ascending: true });
+  } else if (bucket === "current") {
+    query = query.lte("check_in", today).gt("check_out", today).order("check_out", { ascending: true });
+  } else {
+    query = query.lte("check_out", today).order("check_out", { ascending: false });
+  }
+
+  const { data: reservations, error } = await query.limit(BUCKET_LIMIT);
+  if (error) {
+    console.error("getReservationCards:", error);
+    return [];
+  }
+  if (!reservations?.length) return [];
+
+  return attachTicketsAndReviews(reservations, bucket);
+}
+
+async function attachTicketsAndReviews(
+  reservations: {
+    id: string;
+    check_in: string;
+    check_out: string;
+    property: { property_name: string | null; public_name: string | null; city: string | null } | null;
+    guest: { full_name: string | null } | null;
+  }[],
+  bucket: Bucket,
+): Promise<ReservationCard[]> {
+  const supabase = await createClient();
+  const ids = reservations.map((r) => r.id);
+
+  const [{ data: tickets }, { data: reviews }] = await Promise.all([
+    supabase
+      .from("tickets")
+      .select("reservation_id, type, stage, status, priority, sla_breached")
+      .in("reservation_id", ids),
+    supabase.from("reviews").select("reservation_id, overall_rating").in("reservation_id", ids),
+  ]);
+
+  const ticketsByRes = new Map<string, NonNullable<typeof tickets>>();
+  for (const t of tickets ?? []) {
+    if (!t.reservation_id) continue;
+    const arr = ticketsByRes.get(t.reservation_id) ?? [];
+    arr.push(t);
+    ticketsByRes.set(t.reservation_id, arr);
+  }
+  const reviewByRes = new Map((reviews ?? []).map((r) => [r.reservation_id, r.overall_rating]));
+
+  return reservations.map((r) => {
+    const resTickets = ticketsByRes.get(r.id) ?? [];
+    const openTickets = resTickets.filter((t) => (OPEN_STATUSES as readonly string[]).includes(t.status));
+    const stageTickets: StageTicketInfo[] = resTickets.map((t) => ({
+      stage: t.stage,
+      status: t.status,
+      priority: t.priority,
+      sla_breached: t.sla_breached,
+    }));
+
+    const rating = reviewByRes.get(r.id);
+
+    return {
+      id: r.id,
+      propertyName: r.property?.public_name ?? r.property?.property_name ?? "Unknown property",
+      city: r.property?.city ?? null,
+      checkIn: r.check_in,
+      checkOut: r.check_out,
+      guestName: r.guest?.full_name ?? "Unknown guest",
+      bucket,
+      stages: computeStages(r.check_in, r.check_out, stageTickets, bucket),
+      tags: [...new Set(openTickets.map((t) => t.type))].map((type) => ({
+        cls: ticketTagClass(type),
+        label: ticketTypeLabel(type),
+      })),
+      reviewStars: rating != null ? Math.round(rating) : null,
+    };
+  });
+}
+
+export interface ReservationDrawerData {
+  id: string;
+  propertyName: string;
+  city: string | null;
+  checkIn: string;
+  checkOut: string;
+  guestName: string;
+  bucket: Bucket;
+  stages: StageState[];
+  openTickets: {
+    id: string;
+    type: string;
+    typeLabel: string;
+    title: string;
+    stage: string | null;
+    ownerName: string;
+    dueText: string;
+  }[];
+  review: {
+    stars: number;
+    text: string | null;
+    subs: { label: string; value: number | null }[];
+  } | null;
+  thread: { direction: string; body: string; sentAt: string; isAuto: boolean }[] | null;
+}
+
+export async function getReservationDrawerData(id: string): Promise<ReservationDrawerData | null> {
+  const supabase = await createClient();
+  const { data: r, error } = await supabase
+    .from("reservations")
+    .select(
+      `id, check_in, check_out,
+       property:properties(property_name, public_name, city),
+       guest:guests(full_name)`,
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) console.error("getReservationDrawerData:", error);
+  if (!r) return null;
+
+  const { bucketFor } = await import("@/lib/pique-ui/dates");
+  const bucket = bucketFor(r.check_in, r.check_out);
+
+  const [{ data: tickets }, { data: review }, { data: messages }] = await Promise.all([
+    supabase
+      .from("tickets")
+      .select(
+        `id, type, stage, status, priority, sla_breached, due_at, created_at, metadata,
+         assignee:profiles!tickets_assignee_id_fkey(display_name)`,
+      )
+      .eq("reservation_id", id),
+    supabase
+      .from("reviews")
+      .select("overall_rating, cleanliness_rating, communication_rating, checkin_rating, accuracy_rating, value_rating, review_text")
+      .eq("reservation_id", id)
+      .maybeSingle(),
+    supabase
+      .from("messages")
+      .select("direction, body, sent_at, raw_hospitable_data")
+      .eq("reservation_id", id)
+      .order("sent_at", { ascending: true })
+      .limit(30),
+  ]);
+
+  const { ticketTitle, dueText } = await import("@/lib/pique-ui/ticket-display");
+
+  const stageTickets: StageTicketInfo[] = (tickets ?? []).map((t) => ({
+    stage: t.stage,
+    status: t.status,
+    priority: t.priority,
+    sla_breached: t.sla_breached,
+  }));
+
+  const openTickets = (tickets ?? [])
+    .filter((t) => (OPEN_STATUSES as readonly string[]).includes(t.status))
+    .map((t) => ({
+      id: t.id,
+      type: t.type,
+      typeLabel: ticketTypeLabel(t.type),
+      title: ticketTitle(t as { type: string; metadata: Record<string, unknown> }),
+      stage: t.stage,
+      ownerName: t.assignee?.display_name ?? "Unassigned",
+      dueText: dueText(t).text,
+    }));
+
+  return {
+    id: r.id,
+    propertyName: r.property?.public_name ?? r.property?.property_name ?? "Unknown property",
+    city: r.property?.city ?? null,
+    checkIn: r.check_in,
+    checkOut: r.check_out,
+    guestName: r.guest?.full_name ?? "Unknown guest",
+    bucket,
+    stages: computeStages(r.check_in, r.check_out, stageTickets, bucket),
+    openTickets,
+    review: review
+      ? {
+          stars: Math.round(review.overall_rating ?? 0),
+          text: review.review_text,
+          subs: [
+            { label: "Clean", value: review.cleanliness_rating },
+            { label: "Comm", value: review.communication_rating },
+            { label: "Check-in", value: review.checkin_rating },
+            { label: "Accuracy", value: review.accuracy_rating },
+            { label: "Value", value: review.value_rating },
+          ],
+        }
+      : null,
+    thread: messages?.length
+      ? messages.map((m) => ({
+          direction: m.direction ?? "inbound",
+          body: m.body ?? "",
+          sentAt: m.sent_at ?? "",
+          isAuto: (m.raw_hospitable_data as { source?: string } | null)?.source === "automated",
+        }))
+      : null,
+  };
+}

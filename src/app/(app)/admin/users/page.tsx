@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { PROFILE_ROLES } from "@/lib/types";
 import { approveUser, listPendingAndApproved, revokeUser, updateRole } from "./actions";
+import { SignOutButton } from "@/app/sign-out-button";
 
 export default async function AdminUsersPage() {
   const supabase = await createClient();
@@ -21,7 +22,13 @@ export default async function AdminUsersPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
-      <h1 className="mb-6 text-lg font-semibold">Team</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-lg font-semibold">Team</h1>
+        <div className="flex items-center gap-3 text-sm text-gray-400">
+          <span>{user?.email}</span>
+          <SignOutButton />
+        </div>
+      </div>
 
       {adminApiError && (
         <div className="mb-6 rounded border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">

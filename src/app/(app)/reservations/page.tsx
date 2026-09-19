@@ -1,85 +1,92 @@
-import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { TopBar } from "@/components/pique/TopBar";
+import { Segmented, ChipLink } from "@/components/pique/primitives";
+import { ReservationBubble } from "@/components/pique/ReservationBubble";
+import { getReservationBucketCounts, getReservationCards } from "@/lib/data/reservations";
+import type { Bucket } from "@/lib/pique-ui/dates";
 
-export default async function ReservationsSearchPage({
+const HINTS: Record<Bucket, string> = {
+  past: "Accountability stage: reviews, removal cases, claims, cleaner attribution.",
+  current: "Stay stage: messages, maintenance, access.",
+  future: "Pre-arrival: vetting, ID, pets, pack-n-play, codes.",
+};
+
+export default async function ReservationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ bucket?: string; city?: string; attention?: string }>;
 }) {
-  const { q } = await searchParams;
-  const supabase = await createClient();
+  const sp = await searchParams;
+  const bucket: Bucket = sp.bucket === "past" || sp.bucket === "future" ? sp.bucket : "current";
 
-  let results: {
-    id: string;
-    confirmation_code: string | null;
-    check_in: string;
-    check_out: string;
-    status: string | null;
-    property: { property_name: string | null; public_name: string | null } | null;
-    guest: { full_name: string | null } | null;
-  }[] = [];
+  const [counts, cards] = await Promise.all([getReservationBucketCounts(), getReservationCards(bucket)]);
 
-  if (q && q.trim().length > 1) {
-    const { data } = await supabase
-      .from("reservations")
-      .select(
-        `id, confirmation_code, check_in, check_out, status,
-         property:properties(property_name, public_name),
-         guest:guests(full_name)`
-      )
-      .or(`confirmation_code.ilike.%${q}%`)
-      .order("check_in", { ascending: false })
-      .limit(25);
-    results = data ?? [];
+  const cities = [...new Set(cards.map((c) => c.city).filter((c): c is string => !!c))].sort();
 
-    if (results.length === 0) {
-      const { data: byGuest } = await supabase
-        .from("reservations")
-        .select(
-          `id, confirmation_code, check_in, check_out, status,
-           property:properties(property_name, public_name),
-           guest:guests!inner(full_name)`
-        )
-        .ilike("guest.full_name", `%${q}%`)
-        .order("check_in", { ascending: false })
-        .limit(25);
-      results = byGuest ?? [];
-    }
-  }
+  let filtered = cards;
+  if (sp.city) filtered = filtered.filter((c) => c.city === sp.city);
+  if (sp.attention === "1") filtered = filtered.filter((c) => c.tags.length > 0);
+
+  const paramsWithout = (key: string) => {
+    const params = new URLSearchParams();
+    if (bucket !== "current") params.set("bucket", bucket);
+    if (sp.city && key !== "city") params.set("city", sp.city);
+    if (sp.attention === "1" && key !== "attention") params.set("attention", "1");
+    return params;
+  };
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
-      <h1 className="mb-4 text-lg font-semibold">Reservations</h1>
-      <form className="mb-6 flex gap-2">
-        <input
-          name="q"
-          defaultValue={q}
-          placeholder="Confirmation code or guest name…"
-          className="flex-1 rounded border border-gray-700 bg-black px-3 py-2 text-sm"
+    <>
+      <TopBar title="Reservations" subtitle={HINTS[bucket]} />
+      <div className="toolbar">
+        <Segmented
+          active={bucket}
+          options={[
+            { key: "past", label: "Past", count: counts.past },
+            { key: "current", label: "Current", count: counts.current },
+            { key: "future", label: "Future", count: counts.future },
+          ]}
+          hrefFor={(key) => {
+            const params = paramsWithout("bucket");
+            if (key !== "current") params.set("bucket", key);
+            const qs = params.toString();
+            return qs ? `/reservations?${qs}` : "/reservations";
+          }}
         />
-        <button className="rounded border border-gray-700 px-4 py-2 text-sm hover:bg-gray-900">Search</button>
-      </form>
-
-      {q && results.length === 0 && <p className="text-sm text-gray-500">No matches for &quot;{q}&quot;.</p>}
-
-      <ul className="space-y-2">
-        {results.map((r) => (
-          <li key={r.id}>
-            <Link
-              href={`/reservations/${r.id}`}
-              className="flex items-center justify-between rounded border border-gray-800 p-3 text-sm hover:bg-gray-900"
+        <div className="chips">
+          <ChipLink
+            href={(() => {
+              const params = paramsWithout("attention");
+              if (sp.attention !== "1") params.set("attention", "1");
+              const qs = params.toString();
+              return qs ? `/reservations?${qs}` : "/reservations";
+            })()}
+            active={sp.attention === "1"}
+          >
+            <span className="dot" style={{ color: "var(--warn)" }} />
+            Needs attention
+          </ChipLink>
+          {cities.map((city) => (
+            <ChipLink
+              key={city}
+              href={(() => {
+                const params = paramsWithout("city");
+                if (sp.city !== city) params.set("city", city);
+                const qs = params.toString();
+                return qs ? `/reservations?${qs}` : "/reservations";
+              })()}
+              active={sp.city === city}
             >
-              <span>
-                {r.guest?.full_name ?? "Unknown guest"} ·{" "}
-                {r.property?.public_name ?? r.property?.property_name ?? "Unknown property"}
-              </span>
-              <span className="text-gray-500">
-                {r.check_in} → {r.check_out} · {r.confirmation_code ?? "no code"}
-              </span>
-            </Link>
-          </li>
+              {city}
+            </ChipLink>
+          ))}
+        </div>
+      </div>
+      <div className="grid">
+        {filtered.map((card) => (
+          <ReservationBubble key={card.id} card={card} />
         ))}
-      </ul>
-    </div>
+        {filtered.length === 0 && <div className="card">No reservations match this view.</div>}
+      </div>
+    </>
   );
 }
