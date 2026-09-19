@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { OPEN_STATUSES } from "@/lib/pique-ui/mappings";
 
 export interface InboxRow {
   reservationId: string;
@@ -15,20 +16,34 @@ const MAX_ROWS = 40;
 export async function getInboxRows(): Promise<InboxRow[]> {
   const supabase = await createClient();
 
-  const { data: messages, error } = await supabase
-    .from("messages")
-    .select(
-      `id, direction, body, sent_at, reservation_id,
-       reservation:reservations(guest:guests(full_name), property:properties(property_name, public_name))`,
-    )
-    .not("reservation_id", "is", null)
-    .order("sent_at", { ascending: false })
-    .limit(RECENT_MESSAGE_SAMPLE);
+  const [{ data: messages, error }, { data: openUnansweredTickets }] = await Promise.all([
+    supabase
+      .from("messages")
+      .select(
+        `id, direction, body, sent_at, reservation_id,
+         reservation:reservations(guest:guests(full_name), property:properties(property_name, public_name))`,
+      )
+      .not("reservation_id", "is", null)
+      .order("sent_at", { ascending: false })
+      .limit(RECENT_MESSAGE_SAMPLE),
+    supabase
+      .from("tickets")
+      .select("reservation_id")
+      .eq("type", "unanswered_message")
+      .in("status", OPEN_STATUSES as unknown as string[])
+      .not("reservation_id", "is", null),
+  ]);
 
   if (error) {
     console.error("getInboxRows:", error);
     return [];
   }
+
+  // "Unanswered" here means the automation actually flagged it - a last
+  // inbound message alone isn't enough (e.g. a "thanks!" or an emoji that
+  // Claude already judged doesn't need a reply), so this stays in sync
+  // with what Queue/Today count instead of guessing from message direction.
+  const openUnansweredResIds = new Set((openUnansweredTickets ?? []).map((t) => t.reservation_id));
 
   const seen = new Set<string>();
   const rows: InboxRow[] = [];
@@ -42,7 +57,7 @@ export async function getInboxRows(): Promise<InboxRow[]> {
       guestName: m.reservation?.guest?.full_name ?? "Unknown guest",
       propertyName: m.reservation?.property?.public_name ?? m.reservation?.property?.property_name ?? "Unknown property",
       preview: (m.body ?? "").slice(0, 90) + ((m.body?.length ?? 0) > 90 ? "…" : ""),
-      unanswered: m.direction === "inbound",
+      unanswered: openUnansweredResIds.has(m.reservation_id),
       sentAt: m.sent_at ?? new Date(0).toISOString(),
     });
 
