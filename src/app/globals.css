@@ -247,7 +247,9 @@ h1,h2,h3{font-family:var(--font-outfit),var(--font-manrope),system-ui,sans-serif
 @keyframes live-pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
 .hspine{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;position:relative}
-.hspine::before{content:"";position:absolute;left:8.333%;right:8.333%;top:38px;height:2px;background:var(--line-2);opacity:.7}
+.hspine::before{content:"";position:absolute;left:8.333%;right:8.333%;top:38px;height:2px;
+  background:linear-gradient(90deg,transparent,var(--ok) 45%,var(--ok) 55%,transparent),var(--line-2);
+  background-size:45% 100%,100% 100%;background-repeat:no-repeat,no-repeat;background-position:-45% 0,0 0;opacity:.85}
 .hnode{display:flex;flex-direction:column;align-items:center;gap:9px;position:relative;text-align:center}
 .hnode .ring{width:76px;height:76px;border-radius:50%;background:var(--surface-solid);border:2px solid var(--line-2);display:grid;place-items:center;position:relative;transition:transform .18s,box-shadow .18s}
 .hnode:hover .ring{transform:translateY(-3px) scale(1.05);box-shadow:var(--shadow-lift)}
@@ -266,15 +268,12 @@ h1,h2,h3{font-family:var(--font-outfit),var(--font-manrope),system-ui,sans-serif
    attention while someone's actually reading them. Skipped entirely under
    prefers-reduced-motion rather than just paused, since it's decorative. */
 @media (prefers-reduced-motion: no-preference){
-  @keyframes hspine-sweep{0%{background-position:-45% 0}100%{background-position:145% 0}}
-  @keyframes hspine-sweep-v{0%{background-position:0 -45%}100%{background-position:0 145%}}
+  @keyframes hspine-sweep{0%{background-position:-45% 0,0 0}100%{background-position:145% 0,0 0}}
+  @keyframes hspine-sweep-v{0%{background-position:0 -45%,0 0}100%{background-position:0 145%,0 0}}
   @keyframes hnode-pulse{0%,92%,100%{box-shadow:0 0 0 0 transparent}4%{box-shadow:0 0 0 7px var(--ok-soft)}}
 
-  .hspine::after{content:"";position:absolute;left:8.333%;right:8.333%;top:38px;height:2px;pointer-events:none;
-    background:linear-gradient(90deg,transparent,var(--ok) 45%,var(--ok) 55%,transparent);
-    background-size:45% 100%;background-repeat:no-repeat;
-    animation:hspine-sweep 5s linear infinite;transition:opacity .2s}
-  .hspine:hover::after{opacity:0}
+  .hspine::before{animation:hspine-sweep 5s linear infinite}
+  .hspine:hover::before{animation-play-state:paused}
 
   .hnode .ring::after{content:"";position:absolute;inset:-2px;border-radius:50%;pointer-events:none;animation:hnode-pulse 5s linear infinite}
   .hnode:nth-child(1) .ring::after{animation-delay:1.0s}
@@ -292,12 +291,13 @@ h1,h2,h3{font-family:var(--font-outfit),var(--font-manrope),system-ui,sans-serif
   .hnode .n{font-size:19px}
   .hnode .lbl{font-size:9.5px}
   .hnode .sub{display:none}
-  .hspine::before,.hspine::after{top:29px}
+  .hspine::before{top:29px}
 }
 @media (max-width:560px){
   .hspine{grid-template-columns:1fr;gap:0}
-  .hspine::before,.hspine::after{left:27px;right:auto;top:38px;bottom:38px;width:2px;height:auto}
-  .hspine::after{background:linear-gradient(180deg,transparent,var(--ok) 45%,var(--ok) 55%,transparent);background-size:100% 45%;animation-name:hspine-sweep-v}
+  .hspine::before{left:27px;right:auto;top:38px;bottom:38px;width:2px;height:auto;
+    background:linear-gradient(180deg,transparent,var(--ok) 45%,var(--ok) 55%,transparent),var(--line-2);
+    background-size:100% 45%,100% 100%;background-position:0 -45%,0 0;animation-name:hspine-sweep-v}
   .hnode{flex-direction:row;align-items:center;gap:16px;padding:9px 0;text-align:left}
   .hnode .ring{width:56px;height:56px;flex-shrink:0}
   .hnode .txt{align-items:flex-start}
