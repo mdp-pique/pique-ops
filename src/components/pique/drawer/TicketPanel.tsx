@@ -6,6 +6,7 @@ import { Spine } from "@/components/pique/Spine";
 import { Tag, StatusPill, Btn, IconBtn } from "@/components/pique/primitives";
 import { useDrawer } from "./DrawerContext";
 import { assignTicketToMe, addTicketComment, rollOverTicket, markUnansweredMessageResolved } from "./actions";
+import { ReviewRemovalPanel } from "./ReviewRemovalPanel";
 
 export function TicketPanel({ data }: { data: TicketDrawerData }) {
   const { openRes, back, close, hasBack } = useDrawer();
@@ -89,6 +90,10 @@ export function TicketPanel({ data }: { data: TicketDrawerData }) {
             )}
           </div>
         </div>
+
+        {data.type === "review_removal_case" && typeof data.metadata.review_id === "string" && (
+          <ReviewRemovalPanel ticketId={data.id} reviewId={data.metadata.review_id} />
+        )}
 
         {data.items.length > 0 && (
           <div className="card">

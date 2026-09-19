@@ -13,7 +13,7 @@ export async function fetchTicketPanel(id: string): Promise<TicketDrawerData | n
   return getTicketDrawerData(id);
 }
 
-async function requireUser() {
+export async function requireUser() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
