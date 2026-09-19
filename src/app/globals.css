@@ -96,10 +96,10 @@ h1,h2,h3{font-family:var(--font-outfit),var(--font-manrope),system-ui,sans-serif
 
 /* ---------- segmented / chips ---------- */
 .seg{display:inline-flex;padding:4px;border-radius:999px;background:var(--surface);border:1px solid var(--line);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);box-shadow:var(--shadow);gap:2px}
-.seg button{padding:8px 16px;border-radius:999px;font-weight:600;color:var(--ink-3);font-size:13px;transition:all .18s;display:flex;align-items:center;gap:8px}
-.seg button .cnt{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--surface-2);color:var(--ink-3);border:1px solid var(--line)}
-.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
-.seg button[aria-pressed="true"] .cnt{background:rgba(255,255,255,.14);color:inherit;border-color:transparent}
+.seg button, .seg a{padding:8px 16px;border-radius:999px;font-weight:600;color:var(--ink-3);font-size:13px;transition:all .18s;display:flex;align-items:center;gap:8px;text-decoration:none}
+.seg button .cnt, .seg a .cnt{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--surface-2);color:var(--ink-3);border:1px solid var(--line)}
+.seg button[aria-pressed="true"], .seg a[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg button[aria-pressed="true"] .cnt, .seg a[aria-pressed="true"] .cnt{background:rgba(255,255,255,.14);color:inherit;border-color:transparent}
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .chip{padding:7px 12px;border-radius:999px;border:1px solid var(--line-2);color:var(--ink-2);font-weight:600;font-size:12px;background:var(--surface);transition:all .15s;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
 .chip .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
