@@ -20,7 +20,7 @@
   --shadow-lift:0 2px 4px rgba(15,23,42,.06),0 24px 50px -18px rgba(15,23,42,.28);
   --blur:saturate(160%) blur(18px);
   --r-xl:26px; --r-lg:20px; --r-md:14px; --r-sm:10px;
-  --rail:88px;
+  --rail:104px;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -68,7 +68,7 @@ h1,h2,h3{font-family:var(--font-outfit),var(--font-manrope),system-ui,sans-serif
 /* ---------- shell ---------- */
 .app{display:grid; grid-template-columns:var(--rail) 1fr; min-height:100%}
 .rail{
-  position:sticky; top:0; height:100vh; padding:20px 12px calc(16px + env(safe-area-inset-bottom,0px));
+  position:sticky; top:0; height:100vh; padding:20px 16px calc(16px + env(safe-area-inset-bottom,0px));
   display:flex; flex-direction:column; align-items:center; gap:8px;
   border-right:1px solid var(--line);
 }
@@ -76,9 +76,9 @@ h1,h2,h3{font-family:var(--font-outfit),var(--font-manrope),system-ui,sans-serif
 .logo img{width:100%;height:100%;object-fit:cover}
 .nav{display:flex;flex-direction:column;gap:6px;width:100%}
 .nav button, .nav a{
-  display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px;border-radius:16px;color:var(--ink-3);font-size:11px;font-weight:600;width:100%;transition:background .18s,color .18s;text-decoration:none
+  display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 8px;border-radius:16px;color:var(--ink-3);font-size:12px;font-weight:600;width:100%;transition:background .18s,color .18s;text-decoration:none
 }
-.nav button svg, .nav a svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav button svg, .nav a svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .nav button:hover, .nav a:hover{background:var(--surface);color:var(--ink)}
 .nav button[aria-current="page"], .nav a[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
 .rail .spacer{flex:1}
@@ -241,7 +241,8 @@ h1,h2,h3{font-family:var(--font-outfit),var(--font-manrope),system-ui,sans-serif
   .rail{position:fixed;bottom:0;top:auto;left:0;right:0;height:auto;flex-direction:row;justify-content:space-around;padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px));border-right:0;border-top:1px solid var(--line);background:var(--surface);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);z-index:10}
   .logo,.rail .spacer,.rail .me{display:none}
   .nav{flex-direction:row;justify-content:space-around}
-  .nav button, .nav a{padding:6px 4px;font-size:10px}
+  .nav button, .nav a{padding:6px 4px;font-size:10px;gap:6px}
+  .nav button svg, .nav a svg{width:22px;height:22px}
   .main{padding:16px 16px 96px}
   .topbar h1{font-size:21px}
   .search{min-width:0;width:100%}
