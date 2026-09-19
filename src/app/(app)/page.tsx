@@ -56,17 +56,6 @@ export default async function DashboardPage() {
       </div>
 
       <div className="section-h">
-        <h2>Needs a human now</h2>
-        <Link href="/queue">Open queue</Link>
-      </div>
-      <div className="list">
-        {needsHuman.length === 0 && <div className="card">Nothing needs a human right now.</div>}
-        {needsHuman.map((row) => (
-          <QueueRow key={row.id} row={row} />
-        ))}
-      </div>
-
-      <div className="section-h">
         <h2>Trends</h2>
       </div>
       <div className="sparks">
@@ -79,6 +68,17 @@ export default async function DashboardPage() {
         />
         <Sparkline title="Open tickets" qualifier="last 14 days" data={trends.openTickets} decimals={0} />
         <Sparkline title="Cleanliness subscore" qualifier="monthly avg" data={trends.cleanliness} decimals={2} />
+      </div>
+
+      <div className="section-h">
+        <h2>Needs a human now</h2>
+        <Link href="/queue">Open queue</Link>
+      </div>
+      <div className="list">
+        {needsHuman.length === 0 && <div className="card">Nothing needs a human right now.</div>}
+        {needsHuman.map((row) => (
+          <QueueRow key={row.id} row={row} />
+        ))}
       </div>
 
       <div className="section-h">
