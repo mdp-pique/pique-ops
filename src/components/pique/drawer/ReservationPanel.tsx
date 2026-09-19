@@ -5,6 +5,7 @@ import { Spine } from "@/components/pique/Spine";
 import { StatusPill, IconBtn } from "@/components/pique/primitives";
 import { statusPillFor } from "@/lib/pique-ui/status-pill";
 import { useDrawer } from "./DrawerContext";
+import { HospitableLink } from "@/components/pique/HospitableLink";
 
 export function ReservationPanel({ data }: { data: ReservationDrawerData }) {
   const { openTicket, back, close, hasBack } = useDrawer();
@@ -76,8 +77,11 @@ export function ReservationPanel({ data }: { data: ReservationDrawerData }) {
 
         {data.thread && (
           <div className="card">
-            <h3>
-              Conversation <span className="mono">Hospitable</span>
+            <h3 style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span>
+                Conversation <span className="mono">Hospitable</span>
+              </span>
+              <HospitableLink href={data.hospitableUrl} label="Open thread in Hospitable" />
             </h3>
             <div className="thread">
               {data.thread.map((m, i) => (

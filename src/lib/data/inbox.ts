@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { OPEN_STATUSES } from "@/lib/pique-ui/mappings";
+import { hospitableThreadUrl } from "@/lib/pique-ui/hospitable";
 
 export interface InboxRow {
   reservationId: string;
@@ -9,6 +10,7 @@ export interface InboxRow {
   preview: string;
   unanswered: boolean;
   sentAt: string;
+  hospitableUrl: string | null;
 }
 
 const RECENT_MESSAGE_SAMPLE = 400;
@@ -21,7 +23,7 @@ export async function getInboxRows(): Promise<InboxRow[]> {
     supabase
       .from("messages")
       .select(
-        `id, direction, body, sent_at, reservation_id,
+        `id, direction, body, sent_at, reservation_id, raw_hospitable_data,
          reservation:reservations(guest:guests(full_name), property:properties(property_name, public_name))`,
       )
       .not("reservation_id", "is", null)
@@ -61,6 +63,7 @@ export async function getInboxRows(): Promise<InboxRow[]> {
       preview: (m.body ?? "").slice(0, 90) + ((m.body?.length ?? 0) > 90 ? "…" : ""),
       unanswered: openUnansweredTicketByRes.has(m.reservation_id),
       sentAt: m.sent_at ?? new Date(0).toISOString(),
+      hospitableUrl: hospitableThreadUrl((m.raw_hospitable_data as { conversation_id?: string } | null)?.conversation_id),
     });
 
     if (rows.length >= MAX_ROWS) break;

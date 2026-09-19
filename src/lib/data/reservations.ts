@@ -3,6 +3,7 @@ import { todayLocal, bucketFor, type Bucket, type ReservationStage } from "@/lib
 import { computeStages, type StageTicketInfo } from "@/lib/pique-ui/spine";
 import { ticketTagClass, ticketTypeLabel, OPEN_STATUSES, isHiddenTicketType } from "@/lib/pique-ui/mappings";
 import type { StageState } from "@/lib/pique-ui/mappings";
+import { hospitableThreadUrl } from "@/lib/pique-ui/hospitable";
 
 export interface ReservationCard {
   id: string;
@@ -154,6 +155,7 @@ export interface ReservationDrawerData {
     subs: { label: string; value: number | null }[];
   } | null;
   thread: { direction: string; body: string; sentAt: string; isAuto: boolean }[] | null;
+  hospitableUrl: string | null;
 }
 
 export async function getReservationDrawerData(id: string): Promise<ReservationDrawerData | null> {
@@ -241,6 +243,9 @@ export async function getReservationDrawerData(id: string): Promise<ReservationD
           ],
         }
       : null,
+    hospitableUrl: hospitableThreadUrl(
+      (messages?.[0]?.raw_hospitable_data as { conversation_id?: string } | null)?.conversation_id,
+    ),
     thread: messages?.length
       ? messages.map((m) => ({
           direction: m.direction ?? "inbound",
