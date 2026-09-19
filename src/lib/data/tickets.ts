@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { OPEN_STATUSES, ticketTagClass, ticketTypeLabel, typesForTagClass } from "@/lib/pique-ui/mappings";
-import { ticketTitle, dueText } from "@/lib/pique-ui/ticket-display";
+import { ticketTitle, unansweredMessageTitle, dueText } from "@/lib/pique-ui/ticket-display";
 import { STAGE_KEYS, STAGE_LABELS_LG } from "@/lib/pique-ui/mappings";
 import { formatShortDate } from "@/lib/pique-ui/dates";
 
@@ -46,16 +46,22 @@ type RawTicketRow = {
   assignee: { display_name: string | null } | null;
 };
 
-function toQueueRow(t: RawTicketRow): QueueRow {
+function toQueueRow(t: RawTicketRow, messageBody?: string | null): QueueRow {
   const due = dueText(t);
+  const guestName = t.reservation?.guest?.full_name ?? t.guest_name;
+  const title =
+    t.type === "unanswered_message"
+      ? unansweredMessageTitle(guestName, messageBody ?? null)
+      : ticketTitle({ type: t.type, metadata: (t.metadata as Record<string, unknown>) ?? {} });
+
   return {
     id: t.id,
     type: t.type,
     typeLabel: ticketTypeLabel(t.type),
     tagClass: ticketTagClass(t.type),
-    title: ticketTitle({ type: t.type, metadata: (t.metadata as Record<string, unknown>) ?? {} }),
+    title,
     propertyName: t.property?.public_name ?? t.property?.property_name ?? "Unknown property",
-    guestName: t.reservation?.guest?.full_name ?? t.guest_name,
+    guestName,
     dates: t.reservation ? `${formatShortDate(t.reservation.check_in)}–${formatShortDate(t.reservation.check_out)}` : null,
     stageLabel: t.stage ? STAGE_LABELS_LG[STAGE_KEYS.indexOf(t.stage as (typeof STAGE_KEYS)[number])] : "Any stage",
     ownerName: t.assignee?.display_name ?? "Unassigned",
@@ -111,7 +117,35 @@ export async function getQueueData(opts: { tagClass: string; segment: "open" | "
     return (a.due_at ?? a.created_at) < (b.due_at ?? b.created_at) ? -1 : 1;
   });
 
-  return { rows: filtered.map(toQueueRow), countsByTagClass, totalOpen: all.length };
+  const messageBodyById = await fetchUnansweredMessageBodies(supabase, filtered);
+
+  return { rows: filtered.map((t) => toQueueRow(t, messageBodyById.get(t.id))), countsByTagClass, totalOpen: all.length };
+}
+
+/** unanswered_message tickets only store hospitable_message_id in metadata (not the text) - join it back to messages for a real title instead of a generic one. */
+async function fetchUnansweredMessageBodies(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tickets: RawTicketRow[],
+): Promise<Map<string, string>> {
+  const byHospitableId = new Map<string, string>(); // hospitable_message_id -> ticket id
+  for (const t of tickets) {
+    if (t.type !== "unanswered_message") continue;
+    const hid = t.metadata?.hospitable_message_id;
+    if (typeof hid === "string") byHospitableId.set(hid, t.id);
+  }
+  if (byHospitableId.size === 0) return new Map();
+
+  const { data: messages } = await supabase
+    .from("messages")
+    .select("hospitable_message_id, body")
+    .in("hospitable_message_id", [...byHospitableId.keys()]);
+
+  const result = new Map<string, string>();
+  for (const m of messages ?? []) {
+    const ticketId = m.hospitable_message_id ? byHospitableId.get(m.hospitable_message_id) : undefined;
+    if (ticketId && m.body) result.set(ticketId, m.body);
+  }
+  return result;
 }
 
 export async function getNeedsHumanNow(limit = 6): Promise<QueueRow[]> {
@@ -181,12 +215,24 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
   const { computeStages } = await import("@/lib/pique-ui/spine");
   const { bucketFor } = await import("@/lib/pique-ui/dates");
 
+  const guestName = t.reservation?.guest?.full_name ?? t.guest_name;
+  let title: string;
+  if (t.type === "unanswered_message") {
+    const hid = (t.metadata as Record<string, unknown> | null)?.hospitable_message_id;
+    const { data: msg } = typeof hid === "string"
+      ? await supabase.from("messages").select("body").eq("hospitable_message_id", hid).maybeSingle()
+      : { data: null };
+    title = unansweredMessageTitle(guestName, msg?.body ?? null);
+  } else {
+    title = ticketTitle({ type: t.type, metadata: (t.metadata as Record<string, unknown>) ?? {} });
+  }
+
   return {
     id: t.id,
     type: t.type,
     typeLabel: ticketTypeLabel(t.type),
     tagClass: ticketTagClass(t.type),
-    title: ticketTitle({ type: t.type, metadata: (t.metadata as Record<string, unknown>) ?? {} }),
+    title,
     stageLabel: t.stage ? STAGE_LABELS_LG[STAGE_KEYS.indexOf(t.stage as (typeof STAGE_KEYS)[number])] : "Any stage",
     ownerName: t.assignee?.display_name ?? "Unassigned",
     due: dueText(t),

@@ -2,6 +2,22 @@ import { ticketTypeLabel } from "./mappings";
 
 type Metadata = Record<string, unknown>;
 
+/**
+ * Unanswered-message tickets don't carry guest_name or the message body in
+ * their own columns (the shadow-mirror trigger only copied ids/Slack refs) -
+ * both are joined in separately by the caller. Prefer the real message text
+ * when we have it; fall back to guest name; fall back to a generic label
+ * only when we truly know nothing.
+ */
+export function unansweredMessageTitle(guestName: string | null, messageBody: string | null): string {
+  if (messageBody?.trim()) {
+    const snippet = messageBody.length > 70 ? `${messageBody.slice(0, 70)}…` : messageBody;
+    return guestName ? `${guestName}: “${snippet}”` : `“${snippet}”`;
+  }
+  if (guestName) return `${guestName} needs a reply`;
+  return "Guest message needs a reply";
+}
+
 /** Tickets have no free-text title column by design (PRD §5: type-specific fields live in metadata). Derive a readable one per type from what each shadow-mirror trigger actually stores. */
 export function ticketTitle(t: { type: string; metadata: Metadata }): string {
   const m = t.metadata ?? {};
