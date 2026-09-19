@@ -127,6 +127,11 @@ export function AskPique() {
           <b>Ask Pique</b>
           <span>Reads the database to answer. Never writes, always shows the query.</span>
         </div>
+        {turns.length > 0 && (
+          <button type="button" className="ask-clear" onClick={() => setTurns([])} disabled={busy}>
+            Clear
+          </button>
+        )}
         <span className="kbd">⌘K</span>
       </div>
 

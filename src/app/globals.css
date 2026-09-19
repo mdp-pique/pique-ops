@@ -344,6 +344,9 @@ h1,h2,h3{font-family:var(--font-outfit),var(--font-manrope),system-ui,sans-serif
 .ask-id b{display:block;font-family:var(--font-outfit);font-size:15px;font-weight:600}
 .ask-id span{display:block;font-size:11.5px;color:var(--ink-3)}
 .kbd{font-family:var(--font-plex-mono);font-size:10px;padding:4px 7px;border-radius:7px;background:var(--surface-2);border:1px solid var(--line-2);color:var(--ink-3)}
+.ask-clear{font-size:11px;font-weight:600;padding:5px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line-2);color:var(--ink-2);margin-right:8px}
+.ask-clear:hover{border-color:var(--accent);color:var(--accent)}
+.ask-clear:disabled{opacity:.5}
 
 .chat{display:flex;flex-direction:column;gap:16px;max-height:430px;overflow-y:auto;scroll-behavior:smooth;position:relative}
 .cmsg.u{align-self:flex-end;max-width:82%;background:var(--accent);color:var(--accent-ink);padding:10px 14px;border-radius:16px;border-bottom-right-radius:6px;font-size:13.5px}
