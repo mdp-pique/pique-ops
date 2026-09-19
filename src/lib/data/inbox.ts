@@ -3,6 +3,7 @@ import { OPEN_STATUSES } from "@/lib/pique-ui/mappings";
 
 export interface InboxRow {
   reservationId: string;
+  ticketId: string | null;
   guestName: string;
   propertyName: string;
   preview: string;
@@ -28,7 +29,7 @@ export async function getInboxRows(): Promise<InboxRow[]> {
       .limit(RECENT_MESSAGE_SAMPLE),
     supabase
       .from("tickets")
-      .select("reservation_id")
+      .select("id, reservation_id")
       .eq("type", "unanswered_message")
       .in("status", OPEN_STATUSES as unknown as string[])
       .not("reservation_id", "is", null),
@@ -43,7 +44,7 @@ export async function getInboxRows(): Promise<InboxRow[]> {
   // inbound message alone isn't enough (e.g. a "thanks!" or an emoji that
   // Claude already judged doesn't need a reply), so this stays in sync
   // with what Queue/Today count instead of guessing from message direction.
-  const openUnansweredResIds = new Set((openUnansweredTickets ?? []).map((t) => t.reservation_id));
+  const openUnansweredTicketByRes = new Map((openUnansweredTickets ?? []).map((t) => [t.reservation_id, t.id]));
 
   const seen = new Set<string>();
   const rows: InboxRow[] = [];
@@ -54,10 +55,11 @@ export async function getInboxRows(): Promise<InboxRow[]> {
 
     rows.push({
       reservationId: m.reservation_id,
+      ticketId: openUnansweredTicketByRes.get(m.reservation_id) ?? null,
       guestName: m.reservation?.guest?.full_name ?? "Unknown guest",
       propertyName: m.reservation?.property?.public_name ?? m.reservation?.property?.property_name ?? "Unknown property",
       preview: (m.body ?? "").slice(0, 90) + ((m.body?.length ?? 0) > 90 ? "…" : ""),
-      unanswered: openUnansweredResIds.has(m.reservation_id),
+      unanswered: openUnansweredTicketByRes.has(m.reservation_id),
       sentAt: m.sent_at ?? new Date(0).toISOString(),
     });
 

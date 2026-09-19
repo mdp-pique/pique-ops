@@ -5,7 +5,7 @@ import type { TicketDrawerData } from "@/lib/data/tickets";
 import { Spine } from "@/components/pique/Spine";
 import { Tag, StatusPill, Btn, IconBtn } from "@/components/pique/primitives";
 import { useDrawer } from "./DrawerContext";
-import { assignTicketToMe, addTicketComment, rollOverTicket } from "./actions";
+import { assignTicketToMe, addTicketComment, rollOverTicket, markUnansweredMessageResolved } from "./actions";
 
 export function TicketPanel({ data }: { data: TicketDrawerData }) {
   const { openRes, back, close, hasBack } = useDrawer();
@@ -125,6 +125,11 @@ export function TicketPanel({ data }: { data: TicketDrawerData }) {
             Comment
           </Btn>
           {data.tagClass === "maint" && <Btn onClick={() => startTransition(() => rollOverTicket(data.id))}>Roll over</Btn>}
+          {data.type === "unanswered_message" && data.status !== "resolved" && (
+            <Btn variant="primary" onClick={() => startTransition(() => markUnansweredMessageResolved(data.id))}>
+              Mark answered
+            </Btn>
+          )}
         </div>
         <input
           value={comment}

@@ -44,6 +44,55 @@ export async function addTicketComment(ticketId: string, body: string) {
   revalidatePath("/", "layout");
 }
 
+/**
+ * Manual "mark answered" for unanswered_message tickets - the Slack-checkmark
+ * equivalent inside the app. Must also resolve the underlying
+ * unanswered_message_alerts row (via the admin client - that table has no
+ * authenticated write policy, only service_role), or the still-open alert
+ * would keep the n8n follow-up workflow escalating something staff already
+ * handled here. Safe to run twice: the alerts update is a no-op once
+ * resolved_at is already set.
+ */
+export async function markUnansweredMessageResolved(ticketId: string) {
+  const { supabase, user } = await requireUser();
+
+  const { data: ticket } = await supabase
+    .from("tickets")
+    .select("id, status, metadata")
+    .eq("id", ticketId)
+    .eq("type", "unanswered_message")
+    .maybeSingle();
+
+  if (!ticket || ticket.status === "resolved") return;
+
+  await supabase
+    .from("tickets")
+    .update({ status: "resolved", closed_at: new Date().toISOString() })
+    .eq("id", ticketId);
+
+  await supabase.from("ticket_events").insert({
+    ticket_id: ticketId,
+    event_type: "status_change",
+    actor_id: user.id,
+    from_value: ticket.status,
+    to_value: "resolved",
+    note: "Marked answered manually",
+  });
+
+  const hospitableMessageId = (ticket.metadata as Record<string, unknown> | null)?.hospitable_message_id;
+  if (typeof hospitableMessageId === "string") {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const admin = createAdminClient();
+    await admin
+      .from("unanswered_message_alerts")
+      .update({ resolved_at: new Date().toISOString(), resolved_by: "manual" })
+      .eq("hospitable_message_id", hospitableMessageId)
+      .is("resolved_at", null);
+  }
+
+  revalidatePath("/", "layout");
+}
+
 export async function rollOverTicket(ticketId: string) {
   // Rollover automation (PRD §8) isn't built yet - this is a placeholder so the
   // button in the spec's Actions row doesn't silently do nothing forever.
