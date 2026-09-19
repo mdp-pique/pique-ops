@@ -347,7 +347,7 @@ h1,h2,h3{font-family:var(--font-outfit),var(--font-manrope),system-ui,sans-serif
 
 .chat{display:flex;flex-direction:column;gap:16px;max-height:430px;overflow-y:auto;scroll-behavior:smooth;position:relative}
 .cmsg.u{align-self:flex-end;max-width:82%;background:var(--accent);color:var(--accent-ink);padding:10px 14px;border-radius:16px;border-bottom-right-radius:6px;font-size:13.5px}
-.cmsg.b{align-self:stretch;display:flex;flex-direction:column;gap:10px}
+.cmsg.b{align-self:stretch;display:flex;flex-direction:column;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:16px;border-bottom-left-radius:6px;padding:14px 16px}
 .steps{display:flex;flex-wrap:wrap;gap:6px}
 .step{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-plex-mono);font-size:10px;padding:4px 8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-3)}
 .step .dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
