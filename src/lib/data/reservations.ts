@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { todayLocal, type Bucket } from "@/lib/pique-ui/dates";
 import { computeStages, type StageTicketInfo } from "@/lib/pique-ui/spine";
-import { ticketTagClass, ticketTypeLabel, OPEN_STATUSES } from "@/lib/pique-ui/mappings";
+import { ticketTagClass, ticketTypeLabel, OPEN_STATUSES, isHiddenTicketType } from "@/lib/pique-ui/mappings";
 import type { StageState } from "@/lib/pique-ui/mappings";
 
 export interface ReservationCard {
@@ -85,7 +85,7 @@ async function attachTicketsAndReviews(
 
   const ticketsByRes = new Map<string, NonNullable<typeof tickets>>();
   for (const t of tickets ?? []) {
-    if (!t.reservation_id) continue;
+    if (!t.reservation_id || isHiddenTicketType(t.type)) continue;
     const arr = ticketsByRes.get(t.reservation_id) ?? [];
     arr.push(t);
     ticketsByRes.set(t.reservation_id, arr);
@@ -189,14 +189,16 @@ export async function getReservationDrawerData(id: string): Promise<ReservationD
 
   const { ticketTitle, dueText } = await import("@/lib/pique-ui/ticket-display");
 
-  const stageTickets: StageTicketInfo[] = (tickets ?? []).map((t) => ({
+  const visibleTickets = (tickets ?? []).filter((t) => !isHiddenTicketType(t.type));
+
+  const stageTickets: StageTicketInfo[] = visibleTickets.map((t) => ({
     stage: t.stage,
     status: t.status,
     priority: t.priority,
     sla_breached: t.sla_breached,
   }));
 
-  const openTickets = (tickets ?? [])
+  const openTickets = visibleTickets
     .filter((t) => (OPEN_STATUSES as readonly string[]).includes(t.status))
     .map((t) => ({
       id: t.id,

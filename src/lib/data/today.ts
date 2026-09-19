@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { OPEN_STATUSES } from "@/lib/pique-ui/mappings";
+import { OPEN_STATUSES, isHiddenTicketType } from "@/lib/pique-ui/mappings";
 import { todayLocal } from "@/lib/pique-ui/dates";
 
 export interface TodaySummary {
@@ -29,7 +29,7 @@ export async function getTodaySummary(): Promise<TodaySummary> {
   if (aErr) console.error("getTodaySummary arrivals:", aErr);
   if (cErr) console.error("getTodaySummary current:", cErr);
 
-  const tickets = openTickets ?? [];
+  const tickets = (openTickets ?? []).filter((t) => !isHiddenTicketType(t.type));
   const resWithOpenTicket = new Set(tickets.filter((t) => t.reservation_id).map((t) => t.reservation_id));
   const arrivalIds = new Set((arrivals ?? []).map((r) => r.id));
   const currentIds = new Set((currentRes ?? []).map((r) => r.id));

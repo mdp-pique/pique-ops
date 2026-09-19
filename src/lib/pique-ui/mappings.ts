@@ -33,6 +33,13 @@ export function ticketTagClass(type: string): string {
   return TAG_CLASS_BY_TYPE[type] ?? "msg";
 }
 
+/** Cleaning ops isn't ready to surface in the app yet - hide these ticket types everywhere until we decide otherwise. */
+const HIDDEN_TICKET_TYPES = new Set(["cleaner_late_noshow"]);
+
+export function isHiddenTicketType(type: string): boolean {
+  return HIDDEN_TICKET_TYPES.has(type);
+}
+
 export function typesForTagClass(cls: string): string[] {
   return Object.entries(TAG_CLASS_BY_TYPE)
     .filter(([, c]) => c === cls)
@@ -70,7 +77,6 @@ export function ticketTypeLabel(type: string): string {
 export const QUEUE_TYPE_FILTERS = [
   { key: "all", label: "All" },
   { key: "maint", label: "Maintenance" },
-  { key: "clean", label: "Cleaning" },
   { key: "review", label: "Reviews" },
   { key: "vet", label: "Vetting" },
   { key: "msg", label: "Messages" },

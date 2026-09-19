@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { OPEN_STATUSES, ticketTagClass, ticketTypeLabel, typesForTagClass } from "@/lib/pique-ui/mappings";
+import { OPEN_STATUSES, ticketTagClass, ticketTypeLabel, typesForTagClass, isHiddenTicketType } from "@/lib/pique-ui/mappings";
 import { ticketTitle, unansweredMessageTitle, dueText } from "@/lib/pique-ui/ticket-display";
 import { STAGE_KEYS, STAGE_LABELS_LG } from "@/lib/pique-ui/mappings";
 import { formatShortDate } from "@/lib/pique-ui/dates";
@@ -91,7 +91,7 @@ export async function getQueueData(opts: { tagClass: string; segment: "open" | "
     return { rows: [], countsByTagClass: {}, totalOpen: 0 };
   }
 
-  const all = (data ?? []) as unknown as RawTicketRow[];
+  const all = (data ?? []).filter((t) => !isHiddenTicketType(t.type)) as unknown as RawTicketRow[];
 
   const countsByTagClass: Record<string, number> = { all: all.length };
   for (const t of all) {
@@ -208,7 +208,7 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
       .eq("ticket_id", id)
       .order("created_at", { ascending: false }),
     t.reservation_id
-      ? supabase.from("tickets").select("stage, status, priority, sla_breached").eq("reservation_id", t.reservation_id)
+      ? supabase.from("tickets").select("type, stage, status, priority, sla_breached").eq("reservation_id", t.reservation_id)
       : Promise.resolve({ data: null }),
   ]);
 
@@ -249,7 +249,12 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
       : null,
     metadata: (t.metadata as Record<string, unknown>) ?? {},
     reservationStages: t.reservation
-      ? computeStages(t.reservation.check_in, t.reservation.check_out, siblingTickets ?? [], bucketFor(t.reservation.check_in, t.reservation.check_out))
+      ? computeStages(
+          t.reservation.check_in,
+          t.reservation.check_out,
+          (siblingTickets ?? []).filter((s) => !isHiddenTicketType(s.type)),
+          bucketFor(t.reservation.check_in, t.reservation.check_out),
+        )
       : [],
     items: (items ?? []).map((i) => ({ id: i.id, label: i.label, isDone: i.is_done })),
     events: (events ?? []).map((e) => ({ id: e.id, at: e.created_at, text: describeEvent(e) })),
