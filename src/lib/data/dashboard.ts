@@ -67,6 +67,7 @@ export async function getPortfolioSpine(): Promise<SpineNode[]> {
 
   const accountabilityRows = (accountability.data ?? []).filter((t) => !isHiddenTicketType(t.type));
   const accountResIds = new Set(accountabilityRows.filter((t) => t.reservation_id).map((t) => t.reservation_id as string));
+  const accountFlagged = accountabilityRows.filter((t) => FLAG_TYPES.account.includes(t.type)).length;
 
   const [bookFlag, checkinFlag, stayFlag, checkoutFlag, turnoverFlag] = await Promise.all([
     countOpenTicketsFor(supabase, bookedIds, FLAG_TYPES.book),
@@ -91,7 +92,7 @@ export async function getPortfolioSpine(): Promise<SpineNode[]> {
     { key: "stay", label: "Stay", count: stayIds.length, sub: "in house", flagged: stayFlag },
     { key: "checkout", label: "Check-out", count: checkoutIds.length, sub: "departing", flagged: checkoutFlag },
     { key: "turnover", label: "Turnover", count: turnoverIds.length, sub: "cleaning", flagged: turnoverFlag },
-    { key: "account", label: "Account", count: accountResIds.size, sub: "post-stay", flagged: accountabilityRows.length },
+    { key: "account", label: "Account", count: accountResIds.size, sub: "post-stay", flagged: accountFlagged },
   ];
 }
 

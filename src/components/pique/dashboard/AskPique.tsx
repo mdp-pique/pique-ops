@@ -30,6 +30,10 @@ function ResultTable({ step }: { step: AskPiqueStep }) {
   if (!step.rows || step.rows.length === 0) return null;
   const columns = Object.keys(step.rows[0]);
 
+  // A single row with a single value is already stated in the prose answer -
+  // showing a whole table for it is just visual clutter, not new information.
+  if (step.rows.length === 1 && columns.length === 1) return null;
+
   return (
     <div className="tw">
       <table className="atab">
@@ -133,8 +137,10 @@ export function AskPique() {
               <div className="cmsg u">{t.question}</div>
               <div className="cmsg b">
                 {t.pending && (
-                  <div className="answer" style={{ color: "var(--ink-3)" }}>
-                    Thinking…
+                  <div className="thinking" aria-label="Thinking">
+                    <span className="thinking-dot" />
+                    <span className="thinking-dot" />
+                    <span className="thinking-dot" />
                   </div>
                 )}
                 {!t.pending && t.steps && t.steps.length > 0 && (
