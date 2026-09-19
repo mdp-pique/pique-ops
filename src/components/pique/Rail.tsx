@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 const NAV = [
@@ -59,7 +60,9 @@ export function Rail({ initials }: { initials: string }) {
 
   return (
     <aside className="rail">
-      <div className="logo">P</div>
+      <Link href="/" className="logo" aria-label="Pique Properties">
+        <Image src="/pique-logo.png" alt="" width={44} height={44} priority />
+      </Link>
       <nav className="nav" aria-label="Sections">
         {NAV.map((item) => {
           const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);

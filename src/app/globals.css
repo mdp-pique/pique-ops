@@ -72,7 +72,8 @@ h1,h2,h3{font-family:var(--font-outfit),var(--font-manrope),system-ui,sans-serif
   display:flex; flex-direction:column; align-items:center; gap:8px;
   border-right:1px solid var(--line);
 }
-.logo{width:44px;height:44px;border-radius:16px;background:linear-gradient(135deg,var(--accent),#7FB2FF);display:grid;place-items:center;color:#fff;font-family:var(--font-outfit);font-weight:700;font-size:17px;box-shadow:0 10px 24px -8px var(--accent-glow);margin-bottom:12px}
+.logo{width:44px;height:44px;border-radius:50%;overflow:hidden;display:grid;place-items:center;box-shadow:0 10px 24px -8px var(--accent-glow);margin-bottom:12px}
+.logo img{width:100%;height:100%;object-fit:cover}
 .nav{display:flex;flex-direction:column;gap:6px;width:100%}
 .nav button, .nav a{
   display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px;border-radius:16px;color:var(--ink-3);font-size:11px;font-weight:600;width:100%;transition:background .18s,color .18s;text-decoration:none
