@@ -260,17 +260,44 @@ h1,h2,h3{font-family:var(--font-outfit),var(--font-manrope),system-ui,sans-serif
 .hnode .flag{position:absolute;top:-3px;right:-5px;min-width:22px;padding:2px 6px;border-radius:999px;font-size:10px;font-weight:700;color:#fff;background:var(--warn);border:2px solid var(--surface);text-align:center}
 .hnode.crit .flag{background:var(--crit)}
 
+/* Idle "alive" sweep along the spine - a highlight travels left to right
+   along the connector, briefly ringing each node as it passes. Hovering
+   the spine stops it so the real numbers/labels aren't fighting for
+   attention while someone's actually reading them. Skipped entirely under
+   prefers-reduced-motion rather than just paused, since it's decorative. */
+@media (prefers-reduced-motion: no-preference){
+  @keyframes hspine-sweep{0%{background-position:-45% 0}100%{background-position:145% 0}}
+  @keyframes hspine-sweep-v{0%{background-position:0 -45%}100%{background-position:0 145%}}
+  @keyframes hnode-pulse{0%,92%,100%{box-shadow:0 0 0 0 transparent}4%{box-shadow:0 0 0 7px var(--ok-soft)}}
+
+  .hspine::after{content:"";position:absolute;left:8.333%;right:8.333%;top:38px;height:2px;pointer-events:none;
+    background:linear-gradient(90deg,transparent,var(--ok) 45%,var(--ok) 55%,transparent);
+    background-size:45% 100%;background-repeat:no-repeat;
+    animation:hspine-sweep 5s linear infinite;transition:opacity .2s}
+  .hspine:hover::after{opacity:0}
+
+  .hnode .ring::after{content:"";position:absolute;inset:-2px;border-radius:50%;pointer-events:none;animation:hnode-pulse 5s linear infinite}
+  .hnode:nth-child(1) .ring::after{animation-delay:1.0s}
+  .hnode:nth-child(2) .ring::after{animation-delay:1.5s}
+  .hnode:nth-child(3) .ring::after{animation-delay:2.1s}
+  .hnode:nth-child(4) .ring::after{animation-delay:2.6s}
+  .hnode:nth-child(5) .ring::after{animation-delay:3.2s}
+  .hnode:nth-child(6) .ring::after{animation-delay:3.7s}
+  .hspine:hover .hnode .ring::after{animation-play-state:paused;box-shadow:0 0 0 0 transparent}
+}
+
 @media (max-width:760px){
   .hspine{gap:4px}
   .hnode .ring{width:58px;height:58px}
   .hnode .n{font-size:19px}
   .hnode .lbl{font-size:9.5px}
   .hnode .sub{display:none}
-  .hspine::before{top:29px}
+  .hspine::before,.hspine::after{top:29px}
 }
 @media (max-width:560px){
   .hspine{grid-template-columns:1fr;gap:0}
-  .hspine::before{left:27px;right:auto;top:38px;bottom:38px;width:2px;height:auto}
+  .hspine::before,.hspine::after{left:27px;right:auto;top:38px;bottom:38px;width:2px;height:auto}
+  .hspine::after{background:linear-gradient(180deg,transparent,var(--ok) 45%,var(--ok) 55%,transparent);background-size:100% 45%;animation-name:hspine-sweep-v}
   .hnode{flex-direction:row;align-items:center;gap:16px;padding:9px 0;text-align:left}
   .hnode .ring{width:56px;height:56px;flex-shrink:0}
   .hnode .txt{align-items:flex-start}
