@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { todayLocal, type Bucket } from "@/lib/pique-ui/dates";
+import { todayLocal, bucketFor, type Bucket, type ReservationStage } from "@/lib/pique-ui/dates";
 import { computeStages, type StageTicketInfo } from "@/lib/pique-ui/spine";
 import { ticketTagClass, ticketTypeLabel, OPEN_STATUSES, isHiddenTicketType } from "@/lib/pique-ui/mappings";
 import type { StageState } from "@/lib/pique-ui/mappings";
@@ -19,20 +19,26 @@ export interface ReservationCard {
 
 const BUCKET_LIMIT = 60;
 
-export async function getReservationBucketCounts(): Promise<Record<Bucket, number>> {
+export async function getReservationBucketCounts(): Promise<Record<ReservationStage, number>> {
   const supabase = await createClient();
   const today = todayLocal();
 
-  const [future, current, past] = await Promise.all([
+  const [booked, checkingin, staying, checkedout] = await Promise.all([
     supabase.from("reservations").select("id", { count: "exact", head: true }).gt("check_in", today),
-    supabase.from("reservations").select("id", { count: "exact", head: true }).lte("check_in", today).gt("check_out", today),
+    supabase.from("reservations").select("id", { count: "exact", head: true }).eq("check_in", today),
+    supabase.from("reservations").select("id", { count: "exact", head: true }).lt("check_in", today).gt("check_out", today),
     supabase.from("reservations").select("id", { count: "exact", head: true }).lte("check_out", today),
   ]);
 
-  return { future: future.count ?? 0, current: current.count ?? 0, past: past.count ?? 0 };
+  return {
+    booked: booked.count ?? 0,
+    checkingin: checkingin.count ?? 0,
+    staying: staying.count ?? 0,
+    checkedout: checkedout.count ?? 0,
+  };
 }
 
-export async function getReservationCards(bucket: Bucket): Promise<ReservationCard[]> {
+export async function getReservationCards(stage: ReservationStage): Promise<ReservationCard[]> {
   const supabase = await createClient();
   const today = todayLocal();
 
@@ -44,10 +50,12 @@ export async function getReservationCards(bucket: Bucket): Promise<ReservationCa
        guest:guests(full_name)`,
     );
 
-  if (bucket === "future") {
+  if (stage === "booked") {
     query = query.gt("check_in", today).order("check_in", { ascending: true });
-  } else if (bucket === "current") {
-    query = query.lte("check_in", today).gt("check_out", today).order("check_out", { ascending: true });
+  } else if (stage === "checkingin") {
+    query = query.eq("check_in", today).order("check_out", { ascending: true });
+  } else if (stage === "staying") {
+    query = query.lt("check_in", today).gt("check_out", today).order("check_out", { ascending: true });
   } else {
     query = query.lte("check_out", today).order("check_out", { ascending: false });
   }
@@ -59,7 +67,7 @@ export async function getReservationCards(bucket: Bucket): Promise<ReservationCa
   }
   if (!reservations?.length) return [];
 
-  return attachTicketsAndReviews(reservations, bucket);
+  return attachTicketsAndReviews(reservations);
 }
 
 async function attachTicketsAndReviews(
@@ -70,7 +78,6 @@ async function attachTicketsAndReviews(
     property: { property_name: string | null; public_name: string | null; city: string | null } | null;
     guest: { full_name: string | null } | null;
   }[],
-  bucket: Bucket,
 ): Promise<ReservationCard[]> {
   const supabase = await createClient();
   const ids = reservations.map((r) => r.id);
@@ -103,6 +110,7 @@ async function attachTicketsAndReviews(
     }));
 
     const rating = reviewByRes.get(r.id);
+    const bucket = bucketFor(r.check_in, r.check_out);
 
     return {
       id: r.id,

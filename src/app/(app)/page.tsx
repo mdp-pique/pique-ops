@@ -11,7 +11,7 @@ export default async function TodayPage() {
   const [summary, needsHuman, current] = await Promise.all([
     getTodaySummary(),
     getNeedsHumanNow(6),
-    getReservationCards("current"),
+    getReservationCards("staying"),
   ]);
 
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
@@ -24,14 +24,14 @@ export default async function TodayPage() {
         <Tile href="/queue" variant="warn" eyebrow="Open tickets" value={summary.openTicketCount} label={`${summary.breachedCount} past SLA`} />
         <Tile href="/queue?type=msg" variant="crit" eyebrow="Unanswered" value={summary.unansweredCount} label="guest messages" />
         <Tile
-          href="/reservations?bucket=future"
+          href="/reservations?bucket=booked"
           variant="accent"
           eyebrow="Arriving"
           value={summary.arrivalsCount}
           label={`next 7 days – ${summary.arrivalsFlaggedCount} flagged`}
         />
         <Tile
-          href="/reservations?bucket=current"
+          href="/reservations?bucket=staying"
           variant="ok"
           eyebrow="In stay"
           value={summary.inStayCount}
@@ -52,7 +52,7 @@ export default async function TodayPage() {
 
       <div className="section-h">
         <h2>In stay right now</h2>
-        <Link href="/reservations?bucket=current">All current</Link>
+        <Link href="/reservations?bucket=staying">All staying</Link>
       </div>
       <div className="grid">
         {current.slice(0, 8).map((card) => (
