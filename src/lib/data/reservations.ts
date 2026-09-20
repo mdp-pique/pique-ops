@@ -24,17 +24,19 @@ export async function getReservationBucketCounts(): Promise<Record<ReservationSt
   const supabase = await createClient();
   const today = todayLocal();
 
-  const [booked, checkingin, staying, checkedout] = await Promise.all([
+  const [booked, checkingin, staying, checkingout, checkedout] = await Promise.all([
     supabase.from("reservations").select("id", { count: "exact", head: true }).gt("check_in", today),
     supabase.from("reservations").select("id", { count: "exact", head: true }).eq("check_in", today),
     supabase.from("reservations").select("id", { count: "exact", head: true }).lt("check_in", today).gt("check_out", today),
-    supabase.from("reservations").select("id", { count: "exact", head: true }).lte("check_out", today),
+    supabase.from("reservations").select("id", { count: "exact", head: true }).eq("check_out", today),
+    supabase.from("reservations").select("id", { count: "exact", head: true }).lt("check_out", today),
   ]);
 
   return {
     booked: booked.count ?? 0,
     checkingin: checkingin.count ?? 0,
     staying: staying.count ?? 0,
+    checkingout: checkingout.count ?? 0,
     checkedout: checkedout.count ?? 0,
   };
 }
@@ -57,8 +59,10 @@ export async function getReservationCards(stage: ReservationStage): Promise<Rese
     query = query.eq("check_in", today).order("check_out", { ascending: true });
   } else if (stage === "staying") {
     query = query.lt("check_in", today).gt("check_out", today).order("check_out", { ascending: true });
+  } else if (stage === "checkingout") {
+    query = query.eq("check_out", today).order("check_in", { ascending: true });
   } else {
-    query = query.lte("check_out", today).order("check_out", { ascending: false });
+    query = query.lt("check_out", today).order("check_out", { ascending: false });
   }
 
   const { data: reservations, error } = await query.limit(BUCKET_LIMIT);

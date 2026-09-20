@@ -11,15 +11,8 @@ export function bucketFor(checkIn: string, checkOut: string, today = todayLocal(
   return "current";
 }
 
-/** Finer-grained lifecycle stage for the Reservations screen's top-level filter - splits the old "current" bucket into arriving-today vs already-in-stay. */
-export type ReservationStage = "booked" | "checkingin" | "staying" | "checkedout";
-
-export function reservationStageFor(checkIn: string, checkOut: string, today = todayLocal()): ReservationStage {
-  if (checkIn > today) return "booked";
-  if (checkIn === today) return "checkingin";
-  if (checkOut <= today) return "checkedout";
-  return "staying";
-}
+/** Finer-grained lifecycle stage for the Reservations screen's top-level filter - splits the old "current" bucket into arriving-today, in-stay, and departing-today, and keeps historical checkouts separate from today's. */
+export type ReservationStage = "booked" | "checkingin" | "staying" | "checkingout" | "checkedout";
 
 /** Which of book/checkin/stay/checkout is "now" for a current-bucket reservation. */
 export function currentStageIndex(checkIn: string, checkOut: string, today = todayLocal()): number {

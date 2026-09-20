@@ -10,6 +10,7 @@ const HINTS: Record<ReservationStage, string> = {
   booked: "Pre-arrival: vetting, ID, pets, pack-n-play, codes.",
   checkingin: "Arriving today - make sure access, messages, and pre-arrival items are clear.",
   staying: "Stay stage: messages, maintenance, access.",
+  checkingout: "Departing today - anything unresolved before they leave.",
   checkedout: "Accountability stage: reviews, removal cases, claims, cleaner attribution.",
 };
 
@@ -17,11 +18,12 @@ const STAGE_LABELS: Record<ReservationStage, string> = {
   booked: "Booked",
   checkingin: "Checking in",
   staying: "Staying",
+  checkingout: "Checking out",
   checkedout: "Checked out",
 };
 
 function parseStage(value: string | undefined): ReservationStage {
-  if (value === "booked" || value === "checkingin" || value === "checkedout" || value === "staying") return value;
+  if (value === "booked" || value === "checkingin" || value === "checkedout" || value === "staying" || value === "checkingout") return value;
   return DEFAULT_STAGE;
 }
 
@@ -59,6 +61,7 @@ export default async function ReservationsPage({
             { key: "booked", label: STAGE_LABELS.booked, count: counts.booked },
             { key: "checkingin", label: STAGE_LABELS.checkingin, count: counts.checkingin },
             { key: "staying", label: STAGE_LABELS.staying, count: counts.staying },
+            { key: "checkingout", label: STAGE_LABELS.checkingout, count: counts.checkingout },
             { key: "checkedout", label: STAGE_LABELS.checkedout, count: counts.checkedout },
           ]}
           hrefFor={(key) => {
