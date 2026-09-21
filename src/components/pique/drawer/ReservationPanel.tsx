@@ -7,21 +7,14 @@ import { statusPillFor } from "@/lib/pique-ui/status-pill";
 import { useDrawer } from "./DrawerContext";
 import { HospitableLink } from "@/components/pique/HospitableLink";
 
-export function ReservationPanel({ data }: { data: ReservationDrawerData }) {
-  const { openTicket, back, close, hasBack } = useDrawer();
+export function ReservationPanel({ data, onSelectTicket }: { data: ReservationDrawerData; onSelectTicket: (ticketId: string) => void }) {
+  const { close } = useDrawer();
   const pill = statusPillFor(data.bucket, data.stages);
 
   return (
     <>
       <div className="d-top">
         <div className="crumbs">
-          {hasBack && (
-            <IconBtn label="Back" onClick={back}>
-              <svg viewBox="0 0 24 24">
-                <path d="M15 6l-6 6 6 6" />
-              </svg>
-            </IconBtn>
-          )}
           <span>Reservation</span>
           <span>&rsaquo;</span>
           <b>{data.propertyName}</b>
@@ -67,7 +60,7 @@ export function ReservationPanel({ data }: { data: ReservationDrawerData }) {
                     {t.typeLabel} &middot; {t.ownerName} &middot; {t.dueText}
                   </div>
                 </div>
-                <button className="go" onClick={() => openTicket(t.id)}>
+                <button className="go" onClick={() => onSelectTicket(t.id)}>
                   Open
                 </button>
               </div>

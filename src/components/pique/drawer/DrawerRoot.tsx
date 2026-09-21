@@ -8,36 +8,77 @@ import { TicketPanel } from "./TicketPanel";
 import type { ReservationDrawerData } from "@/lib/data/reservations";
 import type { TicketDrawerData } from "@/lib/data/tickets";
 
-type Loaded =
-  | { kind: "res"; data: ReservationDrawerData }
-  | { kind: "ticket"; data: TicketDrawerData }
-  | null;
+type Tab = "ticket" | "res";
 
+/**
+ * A ticket and its reservation are shown as tabs of ONE drawer, not two
+ * separate panels you navigate between - a ticket has at most one
+ * reservation, so there's never more than this one pair to hold at a time
+ * (confirmed: every place in the app that opens a ticket or reservation
+ * does so as a single fresh open, never a multi-level drill-down). Picking
+ * a ticket off "Open on this reservation" flips the active tab locally
+ * instead of pushing a new panel, so the Reservation tab is always one
+ * click away and there's no back-arrow to hunt for.
+ */
 export function DrawerRoot() {
   const { panel, close } = useDrawer();
-  const [loaded, setLoaded] = useState<Loaded>(null);
+  const [ticket, setTicket] = useState<TicketDrawerData | null>(null);
+  const [res, setRes] = useState<ReservationDrawerData | null>(null);
+  const [tab, setTab] = useState<Tab>("ticket");
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  // A fresh open from outside the drawer (Queue, Inbox, a reservation
+  // bubble, Live Activity...) is a different identity than whatever pair
+  // was showing before - reset during render (React's own pattern for
+  // "adjusting state when a prop changes"), not as a side effect.
+  const panelKey = panel ? `${panel.kind}:${panel.id}` : null;
+  const seenKeyRef = useRef<string | null>(null);
+  if (panelKey !== seenKeyRef.current) {
+    seenKeyRef.current = panelKey;
+    setTab(panel?.kind ?? "ticket");
+    setTicket(null);
+    setRes(null);
+  }
 
   useEffect(() => {
     if (!panel) return;
     let cancelled = false;
-    (async () => {
-      if (panel.kind === "res") {
-        const data = await fetchReservationPanel(panel.id);
-        if (!cancelled && data) setLoaded({ kind: "res", data });
-      } else {
-        const data = await fetchTicketPanel(panel.id);
-        if (!cancelled && data) setLoaded({ kind: "ticket", data });
-      }
-    })();
+    if (panel.kind === "ticket") {
+      fetchTicketPanel(panel.id).then((data) => {
+        if (!cancelled) setTicket(data);
+      });
+    } else {
+      fetchReservationPanel(panel.id).then((data) => {
+        if (!cancelled) setRes(data);
+      });
+    }
     return () => {
       cancelled = true;
     };
   }, [panel]);
 
+  // Once a ticket is loaded, prefetch its reservation (if any) so switching
+  // to that tab is instant instead of a fresh load.
+  useEffect(() => {
+    if (!ticket?.reservationId) return;
+    let cancelled = false;
+    fetchReservationPanel(ticket.reservationId).then((data) => {
+      if (!cancelled) setRes(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ticket?.reservationId]);
+
+  const selectTicket = (ticketId: string) => {
+    setTab("ticket");
+    setTicket(null);
+    fetchTicketPanel(ticketId).then((data) => setTicket(data));
+  };
+
   useEffect(() => {
     if (panel) bodyRef.current?.querySelector(".d-body")?.scrollTo({ top: 0 });
-  }, [panel]);
+  }, [panel, tab]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -48,13 +89,24 @@ export function DrawerRoot() {
   }, [panel, close]);
 
   const isOpen = !!panel;
+  const showTabs = !!ticket?.reservationId;
 
   return (
     <>
       <div className={`scrim ${isOpen ? "open" : ""}`} onClick={close} />
       <aside className={`drawer ${isOpen ? "open" : ""}`} aria-hidden={!isOpen} role="dialog" aria-label="Detail" ref={bodyRef}>
-        {loaded?.kind === "res" && <ReservationPanel data={loaded.data} />}
-        {loaded?.kind === "ticket" && <TicketPanel data={loaded.data} />}
+        {showTabs && (
+          <div className="d-tabs">
+            <button className={tab === "ticket" ? "active" : ""} onClick={() => setTab("ticket")}>
+              Ticket
+            </button>
+            <button className={tab === "res" ? "active" : ""} onClick={() => setTab("res")}>
+              Reservation
+            </button>
+          </div>
+        )}
+        {tab === "res" && res && <ReservationPanel data={res} onSelectTicket={selectTicket} />}
+        {tab === "ticket" && ticket && <TicketPanel data={ticket} onOpenReservation={() => setTab("res")} />}
       </aside>
     </>
   );

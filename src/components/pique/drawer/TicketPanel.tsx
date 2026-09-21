@@ -8,8 +8,8 @@ import { useDrawer } from "./DrawerContext";
 import { assignTicketToMe, addTicketComment, rollOverTicket, markUnansweredMessageResolved } from "./actions";
 import { ReviewRemovalPanel } from "./ReviewRemovalPanel";
 
-export function TicketPanel({ data }: { data: TicketDrawerData }) {
-  const { openRes, back, close, hasBack } = useDrawer();
+export function TicketPanel({ data, onOpenReservation }: { data: TicketDrawerData; onOpenReservation?: () => void }) {
+  const { close } = useDrawer();
   const [, startTransition] = useTransition();
   const [comment, setComment] = useState("");
 
@@ -22,13 +22,6 @@ export function TicketPanel({ data }: { data: TicketDrawerData }) {
     <>
       <div className="d-top">
         <div className="crumbs">
-          {hasBack && (
-            <IconBtn label="Back" onClick={back}>
-              <svg viewBox="0 0 24 24">
-                <path d="M15 6l-6 6 6 6" />
-              </svg>
-            </IconBtn>
-          )}
           <span>{data.typeLabel}</span>
           <span>&rsaquo;</span>
           <b>{data.reservationSummary?.propertyName ?? "—"}</b>
@@ -55,7 +48,7 @@ export function TicketPanel({ data }: { data: TicketDrawerData }) {
           <button
             className="card"
             style={{ textAlign: "left", cursor: "pointer", width: "100%" }}
-            onClick={() => data.reservationId && openRes(data.reservationId)}
+            onClick={() => data.reservationId && onOpenReservation?.()}
           >
             <h3>
               Reservation{" "}

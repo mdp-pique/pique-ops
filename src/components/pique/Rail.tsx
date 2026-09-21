@@ -29,7 +29,7 @@ const NAV = [
   },
   {
     href: "/queue",
-    label: "Queue",
+    label: "Tickets",
     icon: (
       <svg viewBox="0 0 24 24">
         <path d="M4 6h16M4 12h10M4 18h7" />

@@ -31,7 +31,7 @@ export default async function QueuePage({
 
   return (
     <>
-      <TopBar title="Queue" subtitle="Every open item across every reservation. Same tickets, different lens." />
+      <TopBar title="Tickets" subtitle="Every open item across every reservation. Same tickets, different lens." />
       <div className="toolbar">
         <div className="chips" role="group" aria-label="Ticket type">
           {QUEUE_TYPE_FILTERS.map((f) => (

@@ -72,7 +72,7 @@ export default async function DashboardPage() {
 
       <div className="section-h">
         <h2>Needs a human now</h2>
-        <Link href="/queue">Open queue</Link>
+        <Link href="/queue">Open tickets</Link>
       </div>
       <div className="list">
         {needsHuman.length === 0 && <div className="card">Nothing needs a human right now.</div>}
