@@ -22,6 +22,13 @@ export interface ReviewRemovalContext {
   }[];
 }
 
+/** review_flag tickets only carry a reservation_id (from review_flags.reservation_uuid), not a review_id directly - resolve it so the removal panel can load the same way it does from a review_removal_case ticket's metadata.review_id. */
+export async function getReviewIdForReservation(reservationId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("reviews").select("id").eq("reservation_id", reservationId).maybeSingle();
+  return data?.id ?? null;
+}
+
 /** Same shape as the n8n review-removal monitor's "Fetch Reviews" query, but for one review on demand instead of a time-windowed scan. */
 export async function getReviewRemovalContext(reviewId: string): Promise<ReviewRemovalContext | null> {
   const supabase = await createClient();

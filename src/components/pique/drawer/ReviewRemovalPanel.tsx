@@ -4,7 +4,14 @@ import { useEffect, useState, useTransition } from "react";
 import { Btn } from "@/components/pique/primitives";
 import { VIOLATION_HINTS, type DraftResult } from "@/lib/ai/reviewRemoval";
 import type { ReviewRemovalContext } from "@/lib/data/reviews";
-import { fetchReviewContext, generateDraft, saveDraftAttempt } from "./reviewRemovalActions";
+import {
+  fetchReviewContext,
+  fetchReviewContextForReservation,
+  generateDraft,
+  saveDraftAttempt,
+  suppressReviewFlag,
+  logManualAttempt,
+} from "./reviewRemovalActions";
 
 const TEXTAREA_STYLE: React.CSSProperties = {
   width: "100%",
@@ -18,7 +25,32 @@ const TEXTAREA_STYLE: React.CSSProperties = {
   resize: "vertical",
 };
 
-export function ReviewRemovalPanel({ ticketId, reviewId }: { ticketId: string; reviewId: string }) {
+const MANUAL_STATUS_OPTIONS: { value: "sent" | "rejected" | "removed"; label: string }[] = [
+  { value: "sent", label: "Sent - awaiting response" },
+  { value: "rejected", label: "Airbnb rejected it" },
+  { value: "removed", label: "Airbnb removed the review" },
+];
+
+/**
+ * Handles the review-removal flow for both ticket types that can end up
+ * here: a review_flag ticket (undecided - hasn't been sent anywhere yet) and
+ * a review_removal_case ticket (already has at least one attempt on file).
+ * For a still-undecided flag, `flagReviewFlagsId` gates the rest of the
+ * panel behind a Don't appeal / Start appeal choice; for a case ticket
+ * (flagReviewFlagsId undefined) the drafting tools are shown right away.
+ */
+export function ReviewRemovalPanel({
+  ticketId,
+  reviewId: reviewIdProp,
+  reservationId,
+  flagReviewFlagsId,
+}: {
+  ticketId: string;
+  reviewId?: string;
+  reservationId?: string | null;
+  flagReviewFlagsId?: number;
+}) {
+  const isFlag = flagReviewFlagsId != null;
   const [ctx, setCtx] = useState<ReviewRemovalContext | null>(null);
   const [loadingCtx, setLoadingCtx] = useState(true);
   const [hints, setHints] = useState<string[]>([]);
@@ -29,9 +61,18 @@ export function ReviewRemovalPanel({ ticketId, reviewId }: { ticketId: string; r
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [started, setStarted] = useState(!isFlag);
+  const [suppressed, setSuppressed] = useState(false);
+  const [showManualLog, setShowManualLog] = useState(false);
+  const [manualDraft, setManualDraft] = useState("");
+  const [manualStatus, setManualStatus] = useState<"sent" | "rejected" | "removed">("sent");
+  const [manualResponse, setManualResponse] = useState("");
+  const [manualSaved, setManualSaved] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
-    fetchReviewContext(reviewId)
+    const load = reviewIdProp ? fetchReviewContext(reviewIdProp) : reservationId ? fetchReviewContextForReservation(reservationId) : Promise.resolve(null);
+    load
       .then((c) => {
         if (!cancelled) setCtx(c);
       })
@@ -41,11 +82,13 @@ export function ReviewRemovalPanel({ ticketId, reviewId }: { ticketId: string; r
     return () => {
       cancelled = true;
     };
-  }, [reviewId]);
+  }, [reviewIdProp, reservationId]);
 
+  const reviewId = ctx?.reviewId;
   const toggleHint = (key: string) => setHints((h) => (h.includes(key) ? h.filter((x) => x !== key) : [...h, key]));
 
   const runGenerate = (isRevision: boolean) => {
+    if (!reviewId) return;
     setError(null);
     startTransition(async () => {
       try {
@@ -69,7 +112,7 @@ export function ReviewRemovalPanel({ ticketId, reviewId }: { ticketId: string; r
   };
 
   const markCreated = () => {
-    if (!draft) return;
+    if (!draft || !reviewId) return;
     startTransition(async () => {
       await saveDraftAttempt(ticketId, reviewId, {
         isViolation: draft.isViolation,
@@ -80,9 +123,41 @@ export function ReviewRemovalPanel({ ticketId, reviewId }: { ticketId: string; r
     });
   };
 
+  const dontAppeal = () => {
+    if (flagReviewFlagsId == null) return;
+    startTransition(async () => {
+      await suppressReviewFlag(ticketId, flagReviewFlagsId);
+      setSuppressed(true);
+    });
+  };
+
+  const submitManualLog = () => {
+    if (!reviewId || !manualDraft.trim()) return;
+    startTransition(async () => {
+      await logManualAttempt(ticketId, reviewId, {
+        draftEmail: manualDraft.trim(),
+        status: manualStatus,
+        airbnbResponse: manualResponse.trim() || undefined,
+      });
+      setManualSaved(true);
+      setShowManualLog(false);
+      setManualDraft("");
+      setManualResponse("");
+    });
+  };
+
+  if (suppressed) {
+    return (
+      <div className="card">
+        <h3>Review removal</h3>
+        <div className="d" style={{ color: "var(--ok)" }}>Marked as not pursuing removal. This ticket is closed.</div>
+      </div>
+    );
+  }
+
   return (
     <div className="card">
-      <h3>Draft removal request</h3>
+      <h3>{isFlag && !started ? "Review flagged - decide" : "Draft removal request"}</h3>
 
       {loadingCtx ? (
         <div style={{ color: "var(--ink-3)", fontSize: 12.5 }}>Loading review…</div>
@@ -102,91 +177,153 @@ export function ReviewRemovalPanel({ ticketId, reviewId }: { ticketId: string; r
             </div>
           )}
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-            {VIOLATION_HINTS.map((h) => (
-              <button
-                key={h.key}
-                type="button"
-                className="chip"
-                aria-pressed={hints.includes(h.key)}
-                onClick={() => toggleHint(h.key)}
-              >
-                {h.label}
-              </button>
-            ))}
-          </div>
+          {isFlag && !started ? (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Btn variant="primary" onClick={() => setStarted(true)}>
+                Start the appeal
+              </Btn>
+              <Btn onClick={dontAppeal} disabled={isPending}>
+                {isPending ? "Saving…" : "Don't appeal"}
+              </Btn>
+            </div>
+          ) : (
+            <>
+              {manualSaved && (
+                <div className="d" style={{ marginBottom: 10, color: "var(--ok)" }}>
+                  Logged{isFlag ? " - this flag ticket is now closed, tracked on its own review removal ticket." : "."}
+                </div>
+              )}
 
-          <textarea
-            value={extraContext}
-            onChange={(e) => setExtraContext(e.target.value)}
-            placeholder="Anything staff know that isn't in the messages (e.g. a phone call, a side conversation)…"
-            rows={3}
-            style={TEXTAREA_STYLE}
-          />
-
-          {error && <div style={{ color: "var(--crit)", fontSize: 12.5, marginTop: 6 }}>{error}</div>}
-
-          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <Btn variant="primary" onClick={() => runGenerate(false)}>
-              {isPending && !draft ? "Drafting…" : draft ? "Start over" : "Generate draft"}
-            </Btn>
-          </div>
-
-          {draft && (
-            <div style={{ marginTop: 14 }}>
-              <div className="mono" style={{ marginBottom: 6, color: draft.isViolation ? "var(--accent)" : "var(--ink-3)" }}>
-                {draft.isViolation ? draft.violationTypes : "No violation found"}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                {VIOLATION_HINTS.map((h) => (
+                  <button
+                    key={h.key}
+                    type="button"
+                    className="chip"
+                    aria-pressed={hints.includes(h.key)}
+                    onClick={() => toggleHint(h.key)}
+                  >
+                    {h.label}
+                  </button>
+                ))}
               </div>
-
-              {!draft.isViolation && draft.reasoning && (
-                <div className="d" style={{ marginBottom: 10 }}>
-                  {draft.reasoning}
-                </div>
-              )}
-
-              {draft.isViolation && (
-                <textarea
-                  value={draft.draftEmail}
-                  onChange={(e) => setDraft(draft ? { ...draft, draftEmail: e.target.value } : draft)}
-                  rows={12}
-                  style={TEXTAREA_STYLE}
-                />
-              )}
-              {draft.isViolation && draft.attachments && draft.attachments !== "N/A" && (
-                <div className="d" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
-                  <b>Suggested attachments:</b>
-                  {"\n"}
-                  {draft.attachments}
-                </div>
-              )}
 
               <textarea
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
-                placeholder={
-                  draft.isViolation
-                    ? "What should change? (leave blank to just try a different angle)"
-                    : "Disagree? Add context and try again (e.g. what actually happened)…"
-                }
-                rows={2}
-                style={{ ...TEXTAREA_STYLE, marginTop: 10 }}
+                value={extraContext}
+                onChange={(e) => setExtraContext(e.target.value)}
+                placeholder="Anything staff know that isn't in the messages (e.g. a phone call, a side conversation)…"
+                rows={3}
+                style={TEXTAREA_STYLE}
               />
 
+              {error && <div style={{ color: "var(--crit)", fontSize: 12.5, marginTop: 6 }}>{error}</div>}
+
               <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                <Btn onClick={() => runGenerate(true)}>{isPending ? "Redrafting…" : "Regenerate with feedback"}</Btn>
-                {draft.isViolation && <Btn onClick={copyDraft}>Copy draft</Btn>}
-                <Btn variant="primary" onClick={markCreated}>
-                  {saved ? "Saved ✓" : "Mark as created"}
+                <Btn variant="primary" onClick={() => runGenerate(false)}>
+                  {isPending && !draft ? "Drafting…" : draft ? "Start over" : "Generate draft"}
+                </Btn>
+                <Btn onClick={() => setShowManualLog((v) => !v)}>
+                  {showManualLog ? "Cancel" : "Already sent something for this?"}
                 </Btn>
               </div>
-              {saved && (
-                <div className="d" style={{ marginTop: 6, color: "var(--ok)" }}>
-                  {draft.isViolation
-                    ? "Logged as an attempt on this ticket. Send it via Gmail, then track any Airbnb response here manually for now."
-                    : "Logged on this ticket as a no-violation attempt."}
+
+              {showManualLog && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+                  <div className="d" style={{ marginBottom: 8, color: "var(--ink-3)" }}>
+                    Paste what was already sent to Airbnb, so it&apos;s on file for this review.
+                  </div>
+                  <textarea
+                    value={manualDraft}
+                    onChange={(e) => setManualDraft(e.target.value)}
+                    placeholder="Paste the removal request that was already sent…"
+                    rows={6}
+                    style={TEXTAREA_STYLE}
+                  />
+                  <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <select
+                      value={manualStatus}
+                      onChange={(e) => setManualStatus(e.target.value as typeof manualStatus)}
+                      style={{ borderRadius: 10, border: "1px solid var(--line-2)", background: "var(--surface-solid)", color: "var(--ink)", padding: "7px 10px", font: "inherit", fontSize: 13 }}
+                    >
+                      {MANUAL_STATUS_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <textarea
+                    value={manualResponse}
+                    onChange={(e) => setManualResponse(e.target.value)}
+                    placeholder="Airbnb's response, if any (optional)…"
+                    rows={2}
+                    style={{ ...TEXTAREA_STYLE, marginTop: 8 }}
+                  />
+                  <div style={{ marginTop: 8 }}>
+                    <Btn variant="primary" onClick={submitManualLog} disabled={isPending || !manualDraft.trim()}>
+                      {isPending ? "Saving…" : "Log this attempt"}
+                    </Btn>
+                  </div>
                 </div>
               )}
-            </div>
+
+              {draft && (
+                <div style={{ marginTop: 14 }}>
+                  <div className="mono" style={{ marginBottom: 6, color: draft.isViolation ? "var(--accent)" : "var(--ink-3)" }}>
+                    {draft.isViolation ? draft.violationTypes : "No violation found"}
+                  </div>
+
+                  {!draft.isViolation && draft.reasoning && (
+                    <div className="d" style={{ marginBottom: 10 }}>
+                      {draft.reasoning}
+                    </div>
+                  )}
+
+                  {draft.isViolation && (
+                    <textarea
+                      value={draft.draftEmail}
+                      onChange={(e) => setDraft(draft ? { ...draft, draftEmail: e.target.value } : draft)}
+                      rows={12}
+                      style={TEXTAREA_STYLE}
+                    />
+                  )}
+                  {draft.isViolation && draft.attachments && draft.attachments !== "N/A" && (
+                    <div className="d" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
+                      <b>Suggested attachments:</b>
+                      {"\n"}
+                      {draft.attachments}
+                    </div>
+                  )}
+
+                  <textarea
+                    value={feedback}
+                    onChange={(e) => setFeedback(e.target.value)}
+                    placeholder={
+                      draft.isViolation
+                        ? "What should change? (leave blank to just try a different angle)"
+                        : "Disagree? Add context and try again (e.g. what actually happened)…"
+                    }
+                    rows={2}
+                    style={{ ...TEXTAREA_STYLE, marginTop: 10 }}
+                  />
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                    <Btn onClick={() => runGenerate(true)}>{isPending ? "Redrafting…" : "Regenerate with feedback"}</Btn>
+                    {draft.isViolation && <Btn onClick={copyDraft}>Copy draft</Btn>}
+                    <Btn variant="primary" onClick={markCreated}>
+                      {saved ? "Saved ✓" : "Mark as created"}
+                    </Btn>
+                  </div>
+                  {saved && (
+                    <div className="d" style={{ marginTop: 6, color: "var(--ok)" }}>
+                      {draft.isViolation
+                        ? `Logged as an attempt on this ticket. Send it via Gmail, then track any Airbnb response here manually for now.${isFlag ? " This flag ticket is now closed." : ""}`
+                        : "Logged on this ticket as a no-violation attempt."}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </>
       )}

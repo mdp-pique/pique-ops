@@ -95,6 +95,10 @@ export function TicketPanel({ data }: { data: TicketDrawerData }) {
           <ReviewRemovalPanel ticketId={data.id} reviewId={data.metadata.review_id} />
         )}
 
+        {data.type === "review_flag" && typeof data.metadata.review_flags_id === "number" && (
+          <ReviewRemovalPanel ticketId={data.id} reservationId={data.reservationId} flagReviewFlagsId={data.metadata.review_flags_id} />
+        )}
+
         {data.items.length > 0 && (
           <div className="card">
             <h3>
