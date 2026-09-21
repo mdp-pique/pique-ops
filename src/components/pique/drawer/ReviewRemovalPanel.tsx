@@ -12,6 +12,7 @@ import {
   suppressReviewFlag,
   logManualAttempt,
 } from "./reviewRemovalActions";
+import { claimTicketIfUnassigned } from "./actions";
 
 const TEXTAREA_STYLE: React.CSSProperties = {
   width: "100%",
@@ -44,11 +45,13 @@ export function ReviewRemovalPanel({
   reviewId: reviewIdProp,
   reservationId,
   flagReviewFlagsId,
+  onMutated,
 }: {
   ticketId: string;
   reviewId?: string;
   reservationId?: string | null;
   flagReviewFlagsId?: number;
+  onMutated?: () => void;
 }) {
   const isFlag = flagReviewFlagsId != null;
   const [ctx, setCtx] = useState<ReviewRemovalContext | null>(null);
@@ -120,6 +123,7 @@ export function ReviewRemovalPanel({
         draftEmail: draft.draftEmail,
       });
       setSaved(true);
+      onMutated?.();
     });
   };
 
@@ -128,6 +132,15 @@ export function ReviewRemovalPanel({
     startTransition(async () => {
       await suppressReviewFlag(ticketId, flagReviewFlagsId);
       setSuppressed(true);
+      onMutated?.();
+    });
+  };
+
+  const startAppeal = () => {
+    setStarted(true);
+    startTransition(async () => {
+      await claimTicketIfUnassigned(ticketId);
+      onMutated?.();
     });
   };
 
@@ -143,6 +156,7 @@ export function ReviewRemovalPanel({
       setShowManualLog(false);
       setManualDraft("");
       setManualResponse("");
+      onMutated?.();
     });
   };
 
@@ -179,7 +193,7 @@ export function ReviewRemovalPanel({
 
           {isFlag && !started ? (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <Btn variant="primary" onClick={() => setStarted(true)}>
+              <Btn variant="primary" onClick={startAppeal}>
                 Start the appeal
               </Btn>
               <Btn onClick={dontAppeal} disabled={isPending}>

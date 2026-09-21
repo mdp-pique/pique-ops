@@ -5,18 +5,33 @@ import type { TicketDrawerData } from "@/lib/data/tickets";
 import { Spine } from "@/components/pique/Spine";
 import { Tag, StatusPill, Btn, IconBtn } from "@/components/pique/primitives";
 import { useDrawer } from "./DrawerContext";
-import { assignTicketToMe, addTicketComment, rollOverTicket, markUnansweredMessageResolved } from "./actions";
+import { assignTicket, addTicketComment, rollOverTicket, markUnansweredMessageResolved } from "./actions";
 import { ReviewRemovalPanel } from "./ReviewRemovalPanel";
 
-export function TicketPanel({ data, onOpenReservation }: { data: TicketDrawerData; onOpenReservation?: () => void }) {
+export function TicketPanel({
+  data,
+  onOpenReservation,
+  onMutated,
+}: {
+  data: TicketDrawerData;
+  onOpenReservation?: () => void;
+  onMutated?: () => void;
+}) {
   const { close } = useDrawer();
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
   const [comment, setComment] = useState("");
 
   const timeline = [
     ...data.comments.map((c) => ({ kind: "comment" as const, at: c.at, actor: c.author, text: c.body })),
     ...data.events.map((e) => ({ kind: "event" as const, at: e.at, actor: "System", text: e.text })),
   ].sort((a, b) => (a.at < b.at ? 1 : -1));
+
+  const runAction = (action: () => Promise<unknown>) => {
+    startTransition(async () => {
+      await action();
+      onMutated?.();
+    });
+  };
 
   return (
     <>
@@ -39,7 +54,32 @@ export function TicketPanel({ data, onOpenReservation }: { data: TicketDrawerDat
           </Tag>
           <h2>{data.title}</h2>
           <div className="m">
-            <StatusPill variant="neutral">{data.ownerName}</StatusPill>
+            <select
+              value={data.assigneeId ?? ""}
+              disabled={isPending}
+              onChange={(e) => {
+                const id = e.target.value || null;
+                const name = data.assignableUsers.find((u) => u.id === id)?.name;
+                runAction(() => assignTicket(data.id, id, name));
+              }}
+              style={{
+                borderRadius: 999,
+                border: "1px solid var(--line-2)",
+                background: "var(--surface-2)",
+                color: "var(--ink)",
+                font: "inherit",
+                fontSize: 12.5,
+                fontWeight: 600,
+                padding: "6px 10px",
+              }}
+            >
+              <option value="">Unassigned</option>
+              {data.assignableUsers.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
             <StatusPill variant={data.due.late ? "crit" : "neutral"}>{data.due.text}</StatusPill>
           </div>
         </div>
@@ -85,11 +125,16 @@ export function TicketPanel({ data, onOpenReservation }: { data: TicketDrawerDat
         </div>
 
         {data.type === "review_removal_case" && typeof data.metadata.review_id === "string" && (
-          <ReviewRemovalPanel ticketId={data.id} reviewId={data.metadata.review_id} />
+          <ReviewRemovalPanel ticketId={data.id} reviewId={data.metadata.review_id} onMutated={onMutated} />
         )}
 
         {data.type === "review_flag" && typeof data.metadata.review_flags_id === "number" && (
-          <ReviewRemovalPanel ticketId={data.id} reservationId={data.reservationId} flagReviewFlagsId={data.metadata.review_flags_id} />
+          <ReviewRemovalPanel
+            ticketId={data.id}
+            reservationId={data.reservationId}
+            flagReviewFlagsId={data.metadata.review_flags_id}
+            onMutated={onMutated}
+          />
         )}
 
         {data.items.length > 0 && (
@@ -112,23 +157,18 @@ export function TicketPanel({ data, onOpenReservation }: { data: TicketDrawerDat
         )}
 
         <div className="actions">
-          <Btn variant="primary" onClick={() => startTransition(() => assignTicketToMe(data.id))}>
-            Assign to me
-          </Btn>
-          <Btn>Add photo</Btn>
-          <Btn
-            onClick={() => {
-              const body = comment.trim();
-              if (!body) return;
-              setComment("");
-              startTransition(() => addTicketComment(data.id, body));
-            }}
-          >
+          <Btn onClick={() => {
+            const body = comment.trim();
+            if (!body) return;
+            setComment("");
+            runAction(() => addTicketComment(data.id, body));
+          }}>
             Comment
           </Btn>
-          {data.tagClass === "maint" && <Btn onClick={() => startTransition(() => rollOverTicket(data.id))}>Roll over</Btn>}
+          <Btn>Add photo</Btn>
+          {data.tagClass === "maint" && <Btn onClick={() => runAction(() => rollOverTicket(data.id))}>Roll over</Btn>}
           {data.type === "unanswered_message" && data.status !== "resolved" && (
-            <Btn variant="primary" onClick={() => startTransition(() => markUnansweredMessageResolved(data.id))}>
+            <Btn variant="primary" onClick={() => runAction(() => markUnansweredMessageResolved(data.id))}>
               Mark answered
             </Btn>
           )}

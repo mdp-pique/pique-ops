@@ -161,6 +161,8 @@ export interface TicketDrawerData {
   title: string;
   stageLabel: string;
   ownerName: string;
+  assigneeId: string | null;
+  assignableUsers: { id: string; name: string }[];
   due: { text: string; late: boolean };
   status: string;
   reservationId: string | null;
@@ -184,7 +186,7 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
   const { data: t, error } = await supabase
     .from("tickets")
     .select(
-      `id, type, stage, status, priority, sla_breached, due_at, created_at, guest_name, metadata, reservation_id,
+      `id, type, stage, status, priority, sla_breached, due_at, created_at, guest_name, metadata, reservation_id, assignee_id,
        property:properties(property_name, public_name, city),
        reservation:reservations(check_in, check_out, guest:guests(full_name)),
        assignee:profiles!tickets_assignee_id_fkey(display_name)`,
@@ -195,7 +197,7 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
   if (error) console.error("getTicketDrawerData:", error);
   if (!t) return null;
 
-  const [{ data: items }, { data: events }, { data: comments }, { data: siblingTickets }] = await Promise.all([
+  const [{ data: items }, { data: events }, { data: comments }, { data: siblingTickets }, { data: assignableProfiles }] = await Promise.all([
     supabase.from("ticket_items").select("id, label, is_done").eq("ticket_id", id).order("sort_order"),
     supabase
       .from("ticket_events")
@@ -210,6 +212,7 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
     t.reservation_id
       ? supabase.from("tickets").select("type, stage, status, priority, sla_breached").eq("reservation_id", t.reservation_id)
       : Promise.resolve({ data: null }),
+    supabase.from("profiles").select("id, display_name").order("display_name"),
   ]);
 
   const { computeStages } = await import("@/lib/pique-ui/spine");
@@ -235,6 +238,8 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
     title,
     stageLabel: t.stage ? STAGE_LABELS_LG[STAGE_KEYS.indexOf(t.stage as (typeof STAGE_KEYS)[number])] : "Any stage",
     ownerName: t.assignee?.display_name ?? "Unassigned",
+    assigneeId: t.assignee_id,
+    assignableUsers: (assignableProfiles ?? []).map((p) => ({ id: p.id, name: p.display_name ?? "Unnamed" })),
     due: dueText(t),
     status: t.status,
     reservationId: t.reservation_id,

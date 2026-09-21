@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { requireUser } from "./actions";
+import { requireUser, claimTicketIfUnassigned } from "./actions";
 import { getReviewRemovalContext, getReviewIdForReservation, type ReviewRemovalContext } from "@/lib/data/reviews";
 import { generateReviewRemovalDraft, type DraftRequest, type DraftResult } from "@/lib/ai/reviewRemoval";
 import type { Database } from "@/lib/supabase/database.types";
@@ -52,6 +52,7 @@ async function resolveIfReviewFlagTicket(supabase: SupabaseClient<Database>, tic
  */
 export async function suppressReviewFlag(ticketId: string, reviewFlagsId: number) {
   const { supabase, user } = await requireUser();
+  await claimTicketIfUnassigned(ticketId);
 
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const admin = createAdminClient();
@@ -82,6 +83,7 @@ export async function logManualAttempt(
   input: { draftEmail: string; status: "sent" | "rejected" | "removed"; airbnbResponse?: string },
 ) {
   const { supabase, user } = await requireUser();
+  await claimTicketIfUnassigned(ticketId);
 
   const ctx = await getReviewRemovalContext(reviewId);
   if (!ctx) throw new Error("Review not found");
@@ -135,6 +137,7 @@ export async function saveDraftAttempt(
   result: { isViolation: boolean; violationTypes: string; draftEmail: string },
 ) {
   const { supabase, user } = await requireUser();
+  await claimTicketIfUnassigned(ticketId);
 
   const ctx = await getReviewRemovalContext(reviewId);
   if (!ctx) throw new Error("Review not found");

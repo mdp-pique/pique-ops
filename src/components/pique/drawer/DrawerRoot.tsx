@@ -76,6 +76,14 @@ export function DrawerRoot() {
     fetchTicketPanel(ticketId).then((data) => setTicket(data));
   };
 
+  // Re-fetch the currently-open ticket after any action mutates it (assign,
+  // comment, decide on a review, etc.) - the drawer holds its own copy of the
+  // data locally now, so nothing else would pick up the change.
+  const refreshTicket = () => {
+    if (!ticket) return;
+    fetchTicketPanel(ticket.id).then((data) => setTicket(data));
+  };
+
   useEffect(() => {
     if (panel) bodyRef.current?.querySelector(".d-body")?.scrollTo({ top: 0 });
   }, [panel, tab]);
@@ -106,7 +114,9 @@ export function DrawerRoot() {
           </div>
         )}
         {tab === "res" && res && <ReservationPanel data={res} onSelectTicket={selectTicket} />}
-        {tab === "ticket" && ticket && <TicketPanel data={ticket} onOpenReservation={() => setTab("res")} />}
+        {tab === "ticket" && ticket && (
+          <TicketPanel data={ticket} onOpenReservation={() => setTab("res")} onMutated={refreshTicket} />
+        )}
       </aside>
     </>
   );

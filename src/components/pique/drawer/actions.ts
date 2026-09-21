@@ -20,8 +20,33 @@ export async function requireUser() {
   return { supabase, user };
 }
 
-export async function assignTicketToMe(ticketId: string) {
+/** Sets the ticket's assignee to anyone in the company, or clears it (assigneeId null = Unassigned). assigneeName is just for a readable history note - the caller already has the name from the same list it rendered the picker from. */
+export async function assignTicket(ticketId: string, assigneeId: string | null, assigneeName?: string) {
   const { supabase, user } = await requireUser();
+
+  await supabase.from("tickets").update({ assignee_id: assigneeId }).eq("id", ticketId);
+  await supabase.from("ticket_events").insert({
+    ticket_id: ticketId,
+    event_type: "assignment",
+    actor_id: user.id,
+    to_value: assigneeId,
+    note:
+      assigneeId == null
+        ? "Unassigned"
+        : assigneeId === user.id
+          ? "Self-assigned"
+          : `Assigned to ${assigneeName ?? "someone"}`,
+  });
+
+  revalidatePath("/", "layout");
+}
+
+/** Auto-assign on taking an action (e.g. starting a review-removal decision) - claims the ticket only if nobody already owns it, never overriding an existing assignee. */
+export async function claimTicketIfUnassigned(ticketId: string) {
+  const { supabase, user } = await requireUser();
+
+  const { data: ticket } = await supabase.from("tickets").select("assignee_id").eq("id", ticketId).maybeSingle();
+  if (!ticket || ticket.assignee_id) return;
 
   await supabase.from("tickets").update({ assignee_id: user.id }).eq("id", ticketId);
   await supabase.from("ticket_events").insert({
@@ -29,7 +54,7 @@ export async function assignTicketToMe(ticketId: string) {
     event_type: "assignment",
     actor_id: user.id,
     to_value: user.id,
-    note: "Self-assigned",
+    note: "Auto-assigned by acting on this ticket",
   });
 
   revalidatePath("/", "layout");
