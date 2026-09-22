@@ -154,6 +154,8 @@ export function ReviewRemovalPanel({
   const [manualStatus, setManualStatus] = useState<"sent" | "rejected" | "removed">("sent");
   const [manualResponse, setManualResponse] = useState("");
   const [manualSaved, setManualSaved] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const pendingFileInputRef = useRef<HTMLInputElement>(null);
 
   const loadCtx = () => {
     const load = reviewIdProp ? fetchReviewContext(reviewIdProp) : reservationId ? fetchReviewContextForReservation(reservationId) : Promise.resolve(null);
@@ -180,6 +182,7 @@ export function ReviewRemovalPanel({
 
   const runGenerate = (isRevision: boolean) => {
     if (!reviewId) return;
+    if (!isRevision && pendingFiles.length === 0 && !window.confirm("Generate this draft with no evidence attached?")) return;
     setError(null);
     startTransition(async () => {
       try {
@@ -202,14 +205,23 @@ export function ReviewRemovalPanel({
     if (draft?.draftEmail) navigator.clipboard.writeText(draft.draftEmail);
   };
 
+  const uploadPendingFiles = async (draftId: string) => {
+    if (pendingFiles.length === 0) return;
+    const formData = new FormData();
+    for (const f of pendingFiles) formData.append("files", f);
+    await uploadAttemptAttachments(ticketId, draftId, formData);
+    setPendingFiles([]);
+  };
+
   const markCreated = () => {
     if (!draft || !reviewId) return;
     startTransition(async () => {
-      await saveDraftAttempt(ticketId, reviewId, {
+      const { draftId } = await saveDraftAttempt(ticketId, reviewId, {
         isViolation: draft.isViolation,
         violationTypes: draft.violationTypes,
         draftEmail: draft.draftEmail,
       });
+      await uploadPendingFiles(draftId);
       setSaved(true);
       await loadCtx();
       onMutated?.();
@@ -236,11 +248,12 @@ export function ReviewRemovalPanel({
   const submitManualLog = () => {
     if (!reviewId || !manualDraft.trim()) return;
     startTransition(async () => {
-      await logManualAttempt(ticketId, reviewId, {
+      const { draftId } = await logManualAttempt(ticketId, reviewId, {
         draftEmail: manualDraft.trim(),
         status: manualStatus,
         airbnbResponse: manualResponse.trim() || undefined,
       });
+      await uploadPendingFiles(draftId);
       setManualSaved(true);
       setShowManualLog(false);
       setManualDraft("");
@@ -299,7 +312,7 @@ export function ReviewRemovalPanel({
             <>
               {manualSaved && (
                 <div className="d" style={{ marginBottom: 10, color: "var(--ok)" }}>
-                  Logged{isFlag ? " - this flag ticket is now closed, tracked on its own review removal ticket." : "."} Add evidence for it above, under prior attempts.
+                  Logged{isFlag ? " - this flag ticket is now closed, tracked on its own review removal ticket." : "."} You can attach more evidence to it anytime under prior attempts.
                 </div>
               )}
 
@@ -325,6 +338,44 @@ export function ReviewRemovalPanel({
                 style={TEXTAREA_STYLE}
               />
 
+              <div style={{ marginTop: 10 }}>
+                <button type="button" className="chip" onClick={() => pendingFileInputRef.current?.click()}>
+                  + Attach evidence
+                </button>
+                <input
+                  ref={pendingFileInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    if (e.target.files?.length) setPendingFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                    e.target.value = "";
+                  }}
+                />
+                {pendingFiles.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                    {pendingFiles.map((f, i) => (
+                      <span
+                        key={i}
+                        className="chip"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                      >
+                        {f.name}
+                        <button
+                          type="button"
+                          onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                          style={{ color: "var(--ink-3)", fontWeight: 700 }}
+                          aria-label={`Remove ${f.name}`}
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {error && <div style={{ color: "var(--crit)", fontSize: 12.5, marginTop: 6 }}>{error}</div>}
 
               <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
@@ -339,7 +390,7 @@ export function ReviewRemovalPanel({
               {showManualLog && (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
                   <div className="d" style={{ marginBottom: 8, color: "var(--ink-3)" }}>
-                    Paste what was already sent to Airbnb, so it&apos;s on file for this review. You can attach evidence to it afterward, under prior attempts.
+                    Paste what was already sent to Airbnb, so it&apos;s on file for this review. Use &ldquo;Attach evidence&rdquo; above to include anything gathered for it.
                   </div>
                   <textarea
                     value={manualDraft}
@@ -426,7 +477,7 @@ export function ReviewRemovalPanel({
                   {saved && (
                     <div className="d" style={{ marginTop: 6, color: "var(--ok)" }}>
                       {draft.isViolation
-                        ? `Logged as an attempt on this ticket. Send it via Gmail, then track any Airbnb response here manually for now.${isFlag ? " This flag ticket is now closed." : ""} Add evidence for it above, under prior attempts.`
+                        ? `Logged as an attempt on this ticket. Send it via Gmail, then track any Airbnb response here manually for now.${isFlag ? " This flag ticket is now closed." : ""} You can attach more evidence to it anytime under prior attempts.`
                         : "Logged on this ticket as a no-violation attempt."}
                     </div>
                   )}
