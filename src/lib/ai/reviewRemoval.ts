@@ -12,11 +12,17 @@ export const VIOLATION_HINTS = [
   { key: "content_policy", label: "Content policy" },
 ] as const;
 
+export interface EvidenceAttachment {
+  url: string;
+  kind: string;
+}
+
 export interface DraftRequest {
   violationHints: string[];
   extraContext: string;
   priorDraft?: string;
   feedback?: string;
+  attachments?: EvidenceAttachment[];
 }
 
 export interface DraftResult {
@@ -78,7 +84,9 @@ DOES NOT QUALIFY for removal: star rating disagreement alone, subjective opinion
 
 Flag EVERY check that applies. A review can violate multiple grounds simultaneously.
 
-Weigh the TEAM INPUT section below as trustworthy factual input from the people who actually hosted this guest - it may include facts that never made it into the message thread. But still verify it against the evidence available and don't invent specifics that aren't in the review, private feedback, conversation, or team input.`;
+Weigh the TEAM INPUT section below as trustworthy factual input from the people who actually hosted this guest - it may include facts that never made it into the message thread. But still verify it against the evidence available and don't invent specifics that aren't in the review, private feedback, conversation, or team input.
+
+If evidence photos or documents are attached to this message, actually look at them - a photo showing property damage, a screenshot of the listing's disclosed deposit clause, or a screenshot of the guest's review/profile is direct evidence, not just a filename. Reference specifically what an attached photo or document shows when it supports a violation (e.g. "the attached photo shows visible damage to X" or "the attached listing screenshot confirms the deposit was disclosed"). Never claim an attachment shows something it doesn't.`;
 
 const OUTPUT_FORMAT = `== OUTPUT FORMAT — respond with exactly these sections, in this order, nothing else. ==
 
@@ -86,7 +94,7 @@ VERDICT: DID NOT VIOLATE or POLICY VIOLATION
 VIOLATION_TYPES: [comma-separated violation names, or "DID NOT VIOLATE" if none]
 REASONING: [if DID NOT VIOLATE: 2-3 sentences on which policies were checked and why none apply. If POLICY VIOLATION: skip this line entirely.]
 DRAFT_EMAIL:
-[If DID NOT VIOLATE: write "N/A". If POLICY VIOLATION: the full removal request email, MINIMUM 2,000 and MAXIMUM 2,500 characters. One numbered section per violation type found, each citing the exact Airbnb article and quoting specific evidence from the review/conversation. Open with "I am writing to formally request the removal of a review left by [guest name] for reservation [reservation ID/confirmation code]..." and close with a request for prompt removal.]
+[If DID NOT VIOLATE: write "N/A". If POLICY VIOLATION: the full removal request email. HARD REQUIREMENT: between 2,000 and 2,500 characters total (Airbnb's removal-request submission has a practical length limit - staying in this range is not optional, count as you write and trim or expand to land inside it). One numbered section per violation type found, each citing the exact Airbnb article and quoting specific evidence from the review/conversation/attached evidence. Open with "I am writing to formally request the removal of a review left by [guest name] for reservation [reservation ID/confirmation code]..." and close with a request for prompt removal.]
 ATTACHMENTS:
 [Bullet list of specific evidence the host should attach, tailored to the violations found. "N/A" if DID NOT VIOLATE.]`;
 
@@ -118,6 +126,7 @@ ${ctx.conversation}
 TEAM INPUT:
 Suspected violation type(s): ${hints}
 Additional context from staff (may include facts not in the messages above): ${req.extraContext.trim() || "(none given)"}
+${req.attachments?.length ? `\nEvidence attached below: ${req.attachments.length} file(s). Look at each one - see the rubric's note on using attached evidence.` : ""}
 ${revisePart}
 
 ---
@@ -154,15 +163,38 @@ function parseResponse(text: string): DraftResult {
   };
 }
 
+/** Photos go in as an image block by URL - Claude fetches the signed URL itself, no need to download it here. PDFs need base64 (no URL source type for documents), so those are fetched and encoded here. */
+async function buildEvidenceBlocks(attachments: EvidenceAttachment[]): Promise<Anthropic.ContentBlockParam[]> {
+  const blocks: Anthropic.ContentBlockParam[] = [];
+  for (const a of attachments) {
+    if (a.kind === "photo") {
+      blocks.push({ type: "image", source: { type: "url", url: a.url } });
+    } else {
+      const res = await fetch(a.url);
+      if (!res.ok) continue;
+      const data = Buffer.from(await res.arrayBuffer()).toString("base64");
+      blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data } });
+    }
+  }
+  return blocks;
+}
+
 export async function generateReviewRemovalDraft(ctx: ReviewRemovalContext, req: DraftRequest): Promise<DraftResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
 
   const client = new Anthropic({ apiKey });
+  const evidenceBlocks = req.attachments?.length ? await buildEvidenceBlocks(req.attachments) : [];
+
   const message = await client.messages.create({
     model: "claude-sonnet-5",
     max_tokens: 2000,
-    messages: [{ role: "user", content: buildPrompt(ctx, req) }],
+    messages: [
+      {
+        role: "user",
+        content: [...evidenceBlocks, { type: "text", text: buildPrompt(ctx, req) }],
+      },
+    ],
   });
 
   const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("\n");

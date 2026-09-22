@@ -207,3 +207,65 @@ export async function uploadAttemptAttachments(ticketId: string, reviewRemovalDr
 
   revalidatePath("/", "layout");
 }
+
+const SIGNED_URL_TTL_SECONDS = 3600;
+
+export interface PendingAttachment {
+  id: string;
+  url: string;
+  kind: string;
+  name: string;
+}
+
+/**
+ * Evidence selected before an attempt exists yet, so the AI can actually see
+ * it while drafting (not just file it away after the fact). Uploaded right
+ * away with no review_removal_draft_id set - a real ticket_attachments row
+ * from the start, just not yet claimed by an attempt. attachPendingToAttempt
+ * re-parents it once the draft/log is saved; deletePendingAttachment removes
+ * it if the staff member changes their mind before saving.
+ */
+export async function uploadPendingAttachment(ticketId: string, formData: FormData): Promise<PendingAttachment[]> {
+  const { supabase, user } = await requireUser();
+
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  const results: PendingAttachment[] = [];
+
+  for (const file of files) {
+    const path = `${ticketId}/pending/${crypto.randomUUID()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("ticket-attachments").upload(path, file);
+    if (uploadError) continue;
+
+    const kind = file.type.startsWith("image/") ? "photo" : "document";
+    const { data: row, error } = await supabase
+      .from("ticket_attachments")
+      .insert({ ticket_id: ticketId, storage_path: path, kind, uploaded_by: user.id })
+      .select("id")
+      .single();
+    if (error || !row) continue;
+
+    const { data: signed } = await supabase.storage.from("ticket-attachments").createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+    if (!signed?.signedUrl) continue;
+
+    results.push({ id: row.id, url: signed.signedUrl, kind, name: file.name });
+  }
+
+  return results;
+}
+
+/** Claims already-uploaded pending evidence for the attempt that just got saved, instead of re-uploading it. */
+export async function attachPendingToAttempt(attachmentIds: string[], reviewRemovalDraftId: string) {
+  if (attachmentIds.length === 0) return;
+  const { supabase } = await requireUser();
+  await supabase.from("ticket_attachments").update({ review_removal_draft_id: reviewRemovalDraftId }).in("id", attachmentIds);
+  revalidatePath("/", "layout");
+}
+
+/** Removes a pending evidence upload the staff member deselected before saving any attempt. */
+export async function deletePendingAttachment(attachmentId: string) {
+  const { supabase } = await requireUser();
+  const { data: row } = await supabase.from("ticket_attachments").select("storage_path").eq("id", attachmentId).maybeSingle();
+  if (!row) return;
+  await supabase.storage.from("ticket-attachments").remove([row.storage_path]);
+  await supabase.from("ticket_attachments").delete().eq("id", attachmentId);
+}

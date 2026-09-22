@@ -12,6 +12,10 @@ import {
   suppressReviewFlag,
   logManualAttempt,
   uploadAttemptAttachments,
+  uploadPendingAttachment,
+  attachPendingToAttempt,
+  deletePendingAttachment,
+  type PendingAttachment,
 } from "./reviewRemovalActions";
 import { claimTicketIfUnassigned } from "./actions";
 
@@ -154,7 +158,8 @@ export function ReviewRemovalPanel({
   const [manualStatus, setManualStatus] = useState<"sent" | "rejected" | "removed">("sent");
   const [manualResponse, setManualResponse] = useState("");
   const [manualSaved, setManualSaved] = useState(false);
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
   const pendingFileInputRef = useRef<HTMLInputElement>(null);
 
   const loadCtx = () => {
@@ -182,7 +187,7 @@ export function ReviewRemovalPanel({
 
   const runGenerate = (isRevision: boolean) => {
     if (!reviewId) return;
-    if (!isRevision && pendingFiles.length === 0 && !window.confirm("Generate this draft with no evidence attached?")) return;
+    if (!isRevision && pendingAttachments.length === 0 && !window.confirm("Generate this draft with no evidence attached?")) return;
     setError(null);
     startTransition(async () => {
       try {
@@ -191,6 +196,7 @@ export function ReviewRemovalPanel({
           extraContext,
           priorDraft: isRevision ? draft?.draftEmail : undefined,
           feedback: isRevision ? feedback : undefined,
+          attachments: pendingAttachments.map((a) => ({ url: a.url, kind: a.kind })),
         });
         setDraft(result);
         setSaved(false);
@@ -205,12 +211,10 @@ export function ReviewRemovalPanel({
     if (draft?.draftEmail) navigator.clipboard.writeText(draft.draftEmail);
   };
 
-  const uploadPendingFiles = async (draftId: string) => {
-    if (pendingFiles.length === 0) return;
-    const formData = new FormData();
-    for (const f of pendingFiles) formData.append("files", f);
-    await uploadAttemptAttachments(ticketId, draftId, formData);
-    setPendingFiles([]);
+  const claimPendingAttachments = async (draftId: string) => {
+    if (pendingAttachments.length === 0) return;
+    await attachPendingToAttempt(pendingAttachments.map((a) => a.id), draftId);
+    setPendingAttachments([]);
   };
 
   const markCreated = () => {
@@ -221,7 +225,7 @@ export function ReviewRemovalPanel({
         violationTypes: draft.violationTypes,
         draftEmail: draft.draftEmail,
       });
-      await uploadPendingFiles(draftId);
+      await claimPendingAttachments(draftId);
       setSaved(true);
       await loadCtx();
       onMutated?.();
@@ -253,7 +257,7 @@ export function ReviewRemovalPanel({
         status: manualStatus,
         airbnbResponse: manualResponse.trim() || undefined,
       });
-      await uploadPendingFiles(draftId);
+      await claimPendingAttachments(draftId);
       setManualSaved(true);
       setShowManualLog(false);
       setManualDraft("");
@@ -339,8 +343,13 @@ export function ReviewRemovalPanel({
               />
 
               <div style={{ marginTop: 10 }}>
-                <button type="button" className="chip" onClick={() => pendingFileInputRef.current?.click()}>
-                  + Attach evidence
+                <button
+                  type="button"
+                  className="chip"
+                  disabled={isUploadingEvidence}
+                  onClick={() => pendingFileInputRef.current?.click()}
+                >
+                  {isUploadingEvidence ? "Uploading…" : "+ Attach evidence"}
                 </button>
                 <input
                   ref={pendingFileInputRef}
@@ -349,24 +358,38 @@ export function ReviewRemovalPanel({
                   multiple
                   hidden
                   onChange={(e) => {
-                    if (e.target.files?.length) setPendingFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                    const files = e.target.files;
+                    if (!files || files.length === 0) return;
+                    const formData = new FormData();
+                    for (const f of Array.from(files)) formData.append("files", f);
                     e.target.value = "";
+                    setIsUploadingEvidence(true);
+                    uploadPendingAttachment(ticketId, formData)
+                      .then((uploaded) => setPendingAttachments((prev) => [...prev, ...uploaded]))
+                      .finally(() => setIsUploadingEvidence(false));
                   }}
                 />
-                {pendingFiles.length > 0 && (
+                {pendingAttachments.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                    {pendingFiles.map((f, i) => (
+                    {pendingAttachments.map((a) => (
                       <span
-                        key={i}
+                        key={a.id}
                         className="chip"
                         style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                       >
-                        {f.name}
+                        {a.kind === "photo" ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={a.url} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: "cover" }} />
+                        ) : null}
+                        {a.name}
                         <button
                           type="button"
-                          onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                          onClick={() => {
+                            setPendingAttachments((prev) => prev.filter((p) => p.id !== a.id));
+                            deletePendingAttachment(a.id);
+                          }}
                           style={{ color: "var(--ink-3)", fontWeight: 700 }}
-                          aria-label={`Remove ${f.name}`}
+                          aria-label={`Remove ${a.name}`}
                         >
                           &times;
                         </button>
@@ -440,12 +463,25 @@ export function ReviewRemovalPanel({
                   )}
 
                   {draft.isViolation && (
-                    <textarea
-                      value={draft.draftEmail}
-                      onChange={(e) => setDraft(draft ? { ...draft, draftEmail: e.target.value } : draft)}
-                      rows={12}
-                      style={TEXTAREA_STYLE}
-                    />
+                    <>
+                      <textarea
+                        value={draft.draftEmail}
+                        onChange={(e) => setDraft(draft ? { ...draft, draftEmail: e.target.value } : draft)}
+                        rows={12}
+                        style={TEXTAREA_STYLE}
+                      />
+                      <div
+                        className="d"
+                        style={{
+                          marginTop: 4,
+                          textAlign: "right",
+                          color:
+                            draft.draftEmail.length < 2000 || draft.draftEmail.length > 2500 ? "var(--crit)" : "var(--ink-3)",
+                        }}
+                      >
+                        {draft.draftEmail.length.toLocaleString()} / 2,000–2,500 characters
+                      </div>
+                    </>
                   )}
                   {draft.isViolation && draft.attachments && draft.attachments !== "N/A" && (
                     <div className="d" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
