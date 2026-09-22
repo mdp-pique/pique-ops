@@ -81,7 +81,7 @@ export async function logManualAttempt(
   ticketId: string,
   reviewId: string,
   input: { draftEmail: string; status: "sent" | "rejected" | "removed"; airbnbResponse?: string },
-) {
+): Promise<{ draftId: string }> {
   const { supabase, user } = await requireUser();
   await claimTicketIfUnassigned(ticketId);
 
@@ -90,19 +90,24 @@ export async function logManualAttempt(
 
   const nextAttempt = (ctx.priorAttempts.at(-1)?.attemptNumber ?? 0) + 1;
 
-  await supabase.from("review_removal_drafts").insert({
-    review_id: reviewId,
-    guest_name: ctx.guestName,
-    property_name: ctx.propertyName,
-    review_rating: ctx.reviewRating,
-    review_text: ctx.reviewText,
-    violation_types: "logged manually",
-    draft_email: input.draftEmail,
-    airbnb_response: input.airbnbResponse || null,
-    slack_thread_ts: "",
-    attempt_number: nextAttempt,
-    status: input.status,
-  });
+  const { data: draft, error } = await supabase
+    .from("review_removal_drafts")
+    .insert({
+      review_id: reviewId,
+      guest_name: ctx.guestName,
+      property_name: ctx.propertyName,
+      review_rating: ctx.reviewRating,
+      review_text: ctx.reviewText,
+      violation_types: "logged manually",
+      draft_email: input.draftEmail,
+      airbnb_response: input.airbnbResponse || null,
+      slack_thread_ts: "",
+      attempt_number: nextAttempt,
+      status: input.status,
+    })
+    .select("id")
+    .single();
+  if (error || !draft) throw new Error("Failed to log attempt");
 
   await supabase.from("ticket_comments").insert({
     ticket_id: ticketId,
@@ -113,6 +118,7 @@ export async function logManualAttempt(
   await resolveIfReviewFlagTicket(supabase, ticketId);
 
   revalidatePath("/", "layout");
+  return { draftId: draft.id };
 }
 
 export async function generateDraft(reviewId: string, req: DraftRequest): Promise<DraftResult> {
@@ -135,7 +141,7 @@ export async function saveDraftAttempt(
   ticketId: string,
   reviewId: string,
   result: { isViolation: boolean; violationTypes: string; draftEmail: string },
-) {
+): Promise<{ draftId: string }> {
   const { supabase, user } = await requireUser();
   await claimTicketIfUnassigned(ticketId);
 
@@ -144,18 +150,23 @@ export async function saveDraftAttempt(
 
   const nextAttempt = (ctx.priorAttempts.at(-1)?.attemptNumber ?? 0) + 1;
 
-  await supabase.from("review_removal_drafts").insert({
-    review_id: reviewId,
-    guest_name: ctx.guestName,
-    property_name: ctx.propertyName,
-    review_rating: ctx.reviewRating,
-    review_text: ctx.reviewText,
-    violation_types: result.violationTypes,
-    draft_email: result.draftEmail,
-    slack_thread_ts: "",
-    attempt_number: nextAttempt,
-    status: result.isViolation ? "pending" : "no_violation",
-  });
+  const { data: draft, error } = await supabase
+    .from("review_removal_drafts")
+    .insert({
+      review_id: reviewId,
+      guest_name: ctx.guestName,
+      property_name: ctx.propertyName,
+      review_rating: ctx.reviewRating,
+      review_text: ctx.reviewText,
+      violation_types: result.violationTypes,
+      draft_email: result.draftEmail,
+      slack_thread_ts: "",
+      attempt_number: nextAttempt,
+      status: result.isViolation ? "pending" : "no_violation",
+    })
+    .select("id")
+    .single();
+  if (error || !draft) throw new Error("Failed to save draft");
 
   await supabase.from("ticket_comments").insert({
     ticket_id: ticketId,
@@ -164,6 +175,35 @@ export async function saveDraftAttempt(
   });
 
   await resolveIfReviewFlagTicket(supabase, ticketId);
+
+  revalidatePath("/", "layout");
+  return { draftId: draft.id };
+}
+
+/**
+ * Evidence/photos for one specific removal attempt, so it "stays with the
+ * first and second appeal" as new rounds happen, rather than living as one
+ * undifferentiated pile on the ticket. Best-effort per file - one bad
+ * upload doesn't fail the rest.
+ */
+export async function uploadAttemptAttachments(ticketId: string, reviewRemovalDraftId: string, formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+
+  for (const file of files) {
+    const path = `${ticketId}/${reviewRemovalDraftId}/${crypto.randomUUID()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("ticket-attachments").upload(path, file);
+    if (uploadError) continue;
+
+    await supabase.from("ticket_attachments").insert({
+      ticket_id: ticketId,
+      review_removal_draft_id: reviewRemovalDraftId,
+      storage_path: path,
+      kind: file.type.startsWith("image/") ? "photo" : "document",
+      uploaded_by: user.id,
+    });
+  }
 
   revalidatePath("/", "layout");
 }

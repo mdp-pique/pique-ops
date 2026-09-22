@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import type { TicketDrawerData } from "@/lib/data/tickets";
 import { Spine } from "@/components/pique/Spine";
 import { Tag, StatusPill, Btn, IconBtn } from "@/components/pique/primitives";
 import { useDrawer } from "./DrawerContext";
-import { assignTicket, addTicketComment, rollOverTicket, markUnansweredMessageResolved } from "./actions";
+import { assignTicket, addTicketComment, rollOverTicket, markUnansweredMessageResolved, uploadTicketAttachment } from "./actions";
 import { ReviewRemovalPanel } from "./ReviewRemovalPanel";
 
 export function TicketPanel({
@@ -20,6 +20,7 @@ export function TicketPanel({
   const { close } = useDrawer();
   const [isPending, startTransition] = useTransition();
   const [comment, setComment] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const timeline = [
     ...data.comments.map((c) => ({ kind: "comment" as const, at: c.at, actor: c.author, text: c.body })),
@@ -73,9 +74,11 @@ export function TicketPanel({
                 padding: "6px 10px",
               }}
             >
-              <option value="">Unassigned</option>
+              <option value="" style={{ background: "var(--surface-solid)", color: "var(--ink)" }}>
+                Unassigned
+              </option>
               {data.assignableUsers.map((u) => (
-                <option key={u.id} value={u.id}>
+                <option key={u.id} value={u.id} style={{ background: "var(--surface-solid)", color: "var(--ink)" }}>
                   {u.name}
                 </option>
               ))}
@@ -137,6 +140,32 @@ export function TicketPanel({
           />
         )}
 
+        {data.attachments.length > 0 && (
+          <div className="card">
+            <h3>Attachments</h3>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {data.attachments.map((a) => (
+                <a
+                  key={a.id}
+                  href={a.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ display: "block", width: 72, height: 72, borderRadius: 10, overflow: "hidden", border: "1px solid var(--line-2)" }}
+                >
+                  {a.kind === "photo" ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={a.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", fontSize: 11, color: "var(--ink-3)" }}>
+                      File
+                    </div>
+                  )}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
         {data.items.length > 0 && (
           <div className="card">
             <h3>
@@ -165,7 +194,22 @@ export function TicketPanel({
           }}>
             Comment
           </Btn>
-          <Btn>Add photo</Btn>
+          <Btn onClick={() => fileInputRef.current?.click()}>Add photo</Btn>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            multiple
+            hidden
+            onChange={(e) => {
+              const files = e.target.files;
+              if (!files || files.length === 0) return;
+              const formData = new FormData();
+              for (const f of Array.from(files)) formData.append("files", f);
+              e.target.value = "";
+              runAction(() => uploadTicketAttachment(data.id, formData));
+            }}
+          />
           {data.tagClass === "maint" && <Btn onClick={() => runAction(() => rollOverTicket(data.id))}>Roll over</Btn>}
           {data.type === "unanswered_message" && data.status !== "resolved" && (
             <Btn variant="primary" onClick={() => runAction(() => markUnansweredMessageResolved(data.id))}>

@@ -178,7 +178,11 @@ export interface TicketDrawerData {
   items: { id: string; label: string; isDone: boolean }[];
   events: { id: string; at: string; text: string }[];
   comments: { id: string; at: string; author: string; body: string }[];
+  attachments: { id: string; url: string; kind: string }[];
 }
+
+const ATTACHMENT_BUCKET = "ticket-attachments";
+const SIGNED_URL_TTL_SECONDS = 3600;
 
 export async function getTicketDrawerData(id: string): Promise<TicketDrawerData | null> {
   const supabase = await createClient();
@@ -197,7 +201,8 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
   if (error) console.error("getTicketDrawerData:", error);
   if (!t) return null;
 
-  const [{ data: items }, { data: events }, { data: comments }, { data: siblingTickets }, { data: assignableProfiles }] = await Promise.all([
+  const [{ data: items }, { data: events }, { data: comments }, { data: siblingTickets }, { data: assignableProfiles }, { data: attachmentRows }] =
+    await Promise.all([
     supabase.from("ticket_items").select("id, label, is_done").eq("ticket_id", id).order("sort_order"),
     supabase
       .from("ticket_events")
@@ -213,7 +218,24 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
       ? supabase.from("tickets").select("type, stage, status, priority, sla_breached").eq("reservation_id", t.reservation_id)
       : Promise.resolve({ data: null }),
     supabase.from("profiles").select("id, display_name").order("display_name"),
+    supabase
+      .from("ticket_attachments")
+      .select("id, storage_path, kind")
+      .eq("ticket_id", id)
+      .is("review_removal_draft_id", null)
+      .order("created_at", { ascending: false }),
   ]);
+
+  const { data: signedAttachments } = attachmentRows?.length
+    ? await supabase.storage.from(ATTACHMENT_BUCKET).createSignedUrls(
+        attachmentRows.map((a) => a.storage_path),
+        SIGNED_URL_TTL_SECONDS,
+      )
+    : { data: null };
+  const signedUrlByPath = new Map((signedAttachments ?? []).filter((s) => s.signedUrl).map((s) => [s.path, s.signedUrl!]));
+  const attachments = (attachmentRows ?? [])
+    .map((a) => ({ id: a.id, url: signedUrlByPath.get(a.storage_path), kind: a.kind }))
+    .filter((a): a is { id: string; url: string; kind: string } => !!a.url);
 
   const { computeStages } = await import("@/lib/pique-ui/spine");
   const { bucketFor } = await import("@/lib/pique-ui/dates");
@@ -269,6 +291,7 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
       author: c.author?.display_name ?? "Someone",
       body: c.body,
     })),
+    attachments,
   };
 }
 

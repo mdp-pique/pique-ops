@@ -45,15 +45,18 @@ export function ReservationPanel({ data, onSelectTicket }: { data: ReservationDr
 
         <div className="card">
           <h3>
-            Open on this reservation <span className="mono">{data.openTickets.length} item{data.openTickets.length === 1 ? "" : "s"}</span>
+            Tickets on this reservation{" "}
+            <span className="mono">
+              {data.tickets.filter((t) => t.isOpen).length} open &middot; {data.tickets.length} total
+            </span>
           </h3>
-          {data.openTickets.length === 0 ? (
+          {data.tickets.length === 0 ? (
             <div className="d" style={{ color: "var(--ink-3)" }}>
-              Nothing open. Clean run.
+              Nothing on file. Clean run.
             </div>
           ) : (
-            data.openTickets.map((t) => (
-              <div className="issue" key={t.id}>
+            data.tickets.map((t) => (
+              <div className="issue" key={t.id} style={t.isOpen ? undefined : { opacity: 0.6 }}>
                 <div>
                   <div className="t">{t.title}</div>
                   <div className="d">

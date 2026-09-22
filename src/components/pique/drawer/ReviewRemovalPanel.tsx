@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Btn } from "@/components/pique/primitives";
 import { VIOLATION_HINTS, type DraftResult } from "@/lib/ai/reviewRemoval";
 import type { ReviewRemovalContext } from "@/lib/data/reviews";
@@ -11,6 +11,7 @@ import {
   saveDraftAttempt,
   suppressReviewFlag,
   logManualAttempt,
+  uploadAttemptAttachments,
 } from "./reviewRemovalActions";
 import { claimTicketIfUnassigned } from "./actions";
 
@@ -31,6 +32,88 @@ const MANUAL_STATUS_OPTIONS: { value: "sent" | "rejected" | "removed"; label: st
   { value: "rejected", label: "Airbnb rejected it" },
   { value: "removed", label: "Airbnb removed the review" },
 ];
+
+type Attempt = ReviewRemovalContext["priorAttempts"][number];
+
+/** One past (or just-saved) attempt: its own status, draft text, and evidence - evidence stays scoped to whichever round it was gathered for, not lumped in one pile across every appeal. */
+function AttemptRow({ attempt, ticketId, onUploaded }: { attempt: Attempt; ticketId: string; onUploaded: () => void }) {
+  const [isPending, startTransition] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const upload = (files: FileList) => {
+    const formData = new FormData();
+    for (const f of Array.from(files)) formData.append("files", f);
+    startTransition(async () => {
+      await uploadAttemptAttachments(ticketId, attempt.id, formData);
+      onUploaded();
+    });
+  };
+
+  return (
+    <div style={{ padding: "10px 0", borderTop: "1px solid var(--line)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <b style={{ fontSize: 12.5 }}>
+          Attempt #{attempt.attemptNumber} &middot; {attempt.status}
+        </b>
+        <span className="d" style={{ color: "var(--ink-3)" }}>
+          {new Date(attempt.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+        </span>
+      </div>
+      {attempt.draftEmail && (
+        <details style={{ marginTop: 6 }}>
+          <summary style={{ cursor: "pointer", color: "var(--accent)", fontSize: 12 }}>View text</summary>
+          <div className="d" style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>
+            {attempt.draftEmail}
+          </div>
+        </details>
+      )}
+
+      {attempt.attachments.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+          {attempt.attachments.map((a) => (
+            <a
+              key={a.id}
+              href={a.url}
+              target="_blank"
+              rel="noreferrer"
+              style={{ display: "block", width: 56, height: 56, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line-2)" }}
+            >
+              {a.kind === "photo" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={a.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", fontSize: 10, color: "var(--ink-3)" }}>
+                  File
+                </div>
+              )}
+            </a>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="chip"
+        style={{ marginTop: 8 }}
+        disabled={isPending}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        {isPending ? "Uploading…" : "+ Add evidence"}
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        multiple
+        hidden
+        onChange={(e) => {
+          if (e.target.files?.length) upload(e.target.files);
+          e.target.value = "";
+        }}
+      />
+    </div>
+  );
+}
 
 /**
  * Handles the review-removal flow for both ticket types that can end up
@@ -71,6 +154,11 @@ export function ReviewRemovalPanel({
   const [manualStatus, setManualStatus] = useState<"sent" | "rejected" | "removed">("sent");
   const [manualResponse, setManualResponse] = useState("");
   const [manualSaved, setManualSaved] = useState(false);
+
+  const loadCtx = () => {
+    const load = reviewIdProp ? fetchReviewContext(reviewIdProp) : reservationId ? fetchReviewContextForReservation(reservationId) : Promise.resolve(null);
+    return load.then((c) => setCtx(c));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +211,7 @@ export function ReviewRemovalPanel({
         draftEmail: draft.draftEmail,
       });
       setSaved(true);
+      await loadCtx();
       onMutated?.();
     });
   };
@@ -156,6 +245,7 @@ export function ReviewRemovalPanel({
       setShowManualLog(false);
       setManualDraft("");
       setManualResponse("");
+      await loadCtx();
       onMutated?.();
     });
   };
@@ -186,9 +276,14 @@ export function ReviewRemovalPanel({
           </div>
 
           {ctx.priorAttempts.length > 0 && (
-            <div className="d" style={{ marginBottom: 10, color: "var(--ink-3)" }}>
-              {ctx.priorAttempts.length} prior attempt{ctx.priorAttempts.length === 1 ? "" : "s"} on file
-            </div>
+            <details style={{ marginBottom: 10 }}>
+              <summary style={{ cursor: "pointer", color: "var(--ink-3)", fontSize: 12.5 }}>
+                {ctx.priorAttempts.length} prior attempt{ctx.priorAttempts.length === 1 ? "" : "s"} on file
+              </summary>
+              {ctx.priorAttempts.map((a) => (
+                <AttemptRow key={a.id} attempt={a} ticketId={ticketId} onUploaded={loadCtx} />
+              ))}
+            </details>
           )}
 
           {isFlag && !started ? (
@@ -204,7 +299,7 @@ export function ReviewRemovalPanel({
             <>
               {manualSaved && (
                 <div className="d" style={{ marginBottom: 10, color: "var(--ok)" }}>
-                  Logged{isFlag ? " - this flag ticket is now closed, tracked on its own review removal ticket." : "."}
+                  Logged{isFlag ? " - this flag ticket is now closed, tracked on its own review removal ticket." : "."} Add evidence for it above, under prior attempts.
                 </div>
               )}
 
@@ -244,7 +339,7 @@ export function ReviewRemovalPanel({
               {showManualLog && (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
                   <div className="d" style={{ marginBottom: 8, color: "var(--ink-3)" }}>
-                    Paste what was already sent to Airbnb, so it&apos;s on file for this review.
+                    Paste what was already sent to Airbnb, so it&apos;s on file for this review. You can attach evidence to it afterward, under prior attempts.
                   </div>
                   <textarea
                     value={manualDraft}
@@ -331,7 +426,7 @@ export function ReviewRemovalPanel({
                   {saved && (
                     <div className="d" style={{ marginTop: 6, color: "var(--ok)" }}>
                       {draft.isViolation
-                        ? `Logged as an attempt on this ticket. Send it via Gmail, then track any Airbnb response here manually for now.${isFlag ? " This flag ticket is now closed." : ""}`
+                        ? `Logged as an attempt on this ticket. Send it via Gmail, then track any Airbnb response here manually for now.${isFlag ? " This flag ticket is now closed." : ""} Add evidence for it above, under prior attempts.`
                         : "Logged on this ticket as a no-violation attempt."}
                     </div>
                   )}

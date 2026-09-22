@@ -144,7 +144,7 @@ export interface ReservationDrawerData {
   guestName: string;
   bucket: Bucket;
   stages: StageState[];
-  openTickets: {
+  tickets: {
     id: string;
     type: string;
     typeLabel: string;
@@ -152,6 +152,7 @@ export interface ReservationDrawerData {
     stage: string | null;
     ownerName: string;
     dueText: string;
+    isOpen: boolean;
   }[];
   review: {
     stars: number;
@@ -184,10 +185,11 @@ export async function getReservationDrawerData(id: string): Promise<ReservationD
     supabase
       .from("tickets")
       .select(
-        `id, type, stage, status, priority, sla_breached, due_at, created_at, metadata,
+        `id, type, stage, status, priority, sla_breached, due_at, created_at, closed_at, metadata,
          assignee:profiles!tickets_assignee_id_fkey(display_name)`,
       )
-      .eq("reservation_id", id),
+      .eq("reservation_id", id)
+      .order("created_at", { ascending: false }),
     supabase
       .from("reviews")
       .select("overall_rating, cleanliness_rating, communication_rating, checkin_rating, accuracy_rating, value_rating, review_text")
@@ -212,17 +214,26 @@ export async function getReservationDrawerData(id: string): Promise<ReservationD
     sla_breached: t.sla_breached,
   }));
 
-  const openTickets = visibleTickets
-    .filter((t) => (OPEN_STATUSES as readonly string[]).includes(t.status))
-    .map((t) => ({
-      id: t.id,
-      type: t.type,
-      typeLabel: ticketTypeLabel(t.type),
-      title: ticketTitle(t as { type: string; metadata: Record<string, unknown> }),
-      stage: t.stage,
-      ownerName: t.assignee?.display_name ?? "Unassigned",
-      dueText: dueText(t).text,
-    }));
+  // Every ticket tied to this reservation, not just the open ones - a
+  // resolved review case or a fixed maintenance issue is still part of
+  // "everything that happened here" and shouldn't vanish once it's done.
+  // Open items sort first (each group by most recent), so what still needs
+  // attention stays on top.
+  const allTickets = visibleTickets
+    .map((t) => {
+      const isOpen = (OPEN_STATUSES as readonly string[]).includes(t.status);
+      return {
+        id: t.id,
+        type: t.type,
+        typeLabel: ticketTypeLabel(t.type),
+        title: ticketTitle(t as { type: string; metadata: Record<string, unknown> }),
+        stage: t.stage,
+        ownerName: t.assignee?.display_name ?? "Unassigned",
+        dueText: isOpen ? dueText(t).text : t.closed_at ? `Resolved ${new Date(t.closed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "Resolved",
+        isOpen,
+      };
+    })
+    .sort((a, b) => Number(b.isOpen) - Number(a.isOpen));
 
   return {
     id: r.id,
@@ -233,7 +244,7 @@ export async function getReservationDrawerData(id: string): Promise<ReservationD
     guestName: r.guest?.full_name ?? "Unknown guest",
     bucket,
     stages: computeStages(r.check_in, r.check_out, stageTickets, bucket),
-    openTickets,
+    tickets: allTickets,
     review: review
       ? {
           stars: Math.round(review.overall_rating ?? 0),

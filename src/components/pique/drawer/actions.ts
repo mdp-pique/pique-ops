@@ -118,6 +118,28 @@ export async function markUnansweredMessageResolved(ticketId: string) {
   revalidatePath("/", "layout");
 }
 
+/** General ticket-level photo/document upload (the "Add photo" action) - not tied to any specific review-removal attempt, just filed against the ticket. */
+export async function uploadTicketAttachment(ticketId: string, formData: FormData) {
+  const { supabase, user } = await requireUser();
+
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+
+  for (const file of files) {
+    const path = `${ticketId}/${crypto.randomUUID()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("ticket-attachments").upload(path, file);
+    if (uploadError) continue;
+
+    await supabase.from("ticket_attachments").insert({
+      ticket_id: ticketId,
+      storage_path: path,
+      kind: file.type.startsWith("image/") ? "photo" : "document",
+      uploaded_by: user.id,
+    });
+  }
+
+  revalidatePath("/", "layout");
+}
+
 export async function rollOverTicket(ticketId: string) {
   // Rollover automation (PRD §8) isn't built yet - this is a placeholder so the
   // button in the spec's Actions row doesn't silently do nothing forever.

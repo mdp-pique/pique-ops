@@ -2504,6 +2504,7 @@ export type Database = {
           created_at: string
           id: string
           kind: string
+          review_removal_draft_id: string | null
           storage_path: string
           ticket_id: string
           uploaded_by: string | null
@@ -2512,6 +2513,7 @@ export type Database = {
           created_at?: string
           id?: string
           kind: string
+          review_removal_draft_id?: string | null
           storage_path: string
           ticket_id: string
           uploaded_by?: string | null
@@ -2520,11 +2522,19 @@ export type Database = {
           created_at?: string
           id?: string
           kind?: string
+          review_removal_draft_id?: string | null
           storage_path?: string
           ticket_id?: string
           uploaded_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "ticket_attachments_review_removal_draft_id_fkey"
+            columns: ["review_removal_draft_id"]
+            isOneToOne: false
+            referencedRelation: "review_removal_drafts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "ticket_attachments_ticket_id_fkey"
             columns: ["ticket_id"]
