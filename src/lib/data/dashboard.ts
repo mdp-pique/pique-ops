@@ -160,7 +160,8 @@ export async function getTrends(): Promise<{ rating: Sparkline; openTickets: Spa
       .from("reviews")
       .select("review_date, overall_rating, cleanliness_rating")
       .gte("review_date", since13mo.toISOString().slice(0, 10))
-      .not("review_date", "is", null),
+      .not("review_date", "is", null)
+      .is("removed_at", null),
     supabase.from("tickets").select("type, created_at, closed_at").gte("created_at", new Date(Date.now() - 15 * 86400000).toISOString()),
   ]);
 

@@ -92,7 +92,7 @@ async function attachTicketsAndReviews(
       .from("tickets")
       .select("reservation_id, type, stage, status, priority, sla_breached")
       .in("reservation_id", ids),
-    supabase.from("reviews").select("reservation_id, overall_rating").in("reservation_id", ids),
+    supabase.from("reviews").select("reservation_id, overall_rating").in("reservation_id", ids).is("removed_at", null),
   ]);
 
   const ticketsByRes = new Map<string, NonNullable<typeof tickets>>();

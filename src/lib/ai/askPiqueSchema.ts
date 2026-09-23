@@ -76,6 +76,7 @@ Thin grouping row that messages and calls attach to.
 - id uuid, hospitable_review_id text, property_id uuid not null, reservation_id uuid, guest_id uuid
 - overall_rating, cleanliness_rating, accuracy_rating, checkin_rating, communication_rating, location_rating, value_rating numeric (typically 1-5 or 1-10 depending on channel)
 - review_text text, reviewer_name text, host_response text, review_date date, booking_source text
+- removed_at timestamptz, null unless Airbnb has confirmed the review was taken down (staff mark this manually once removal is confirmed, e.g. after a review_removal_drafts attempt succeeds - Hospitable's sync never clears it). ALWAYS filter removed_at is null for any rating average/count query - a removed review is no longer live on Airbnb and must not count toward current ratings.
 
 ### profiles
 Internal staff/app users, id is the auth.users FK.

@@ -2164,6 +2164,7 @@ export type Database = {
           overall_rating: number | null
           property_id: string
           raw_hospitable_data: Json | null
+          removed_at: string | null
           reservation_id: string | null
           response_date: string | null
           review_date: string | null
@@ -2188,6 +2189,7 @@ export type Database = {
           overall_rating?: number | null
           property_id: string
           raw_hospitable_data?: Json | null
+          removed_at?: string | null
           reservation_id?: string | null
           response_date?: string | null
           review_date?: string | null
@@ -2212,6 +2214,7 @@ export type Database = {
           overall_rating?: number | null
           property_id?: string
           raw_hospitable_data?: Json | null
+          removed_at?: string | null
           reservation_id?: string | null
           response_date?: string | null
           review_date?: string | null
