@@ -235,7 +235,7 @@ export function ReviewRemovalPanel({
   const dontAppeal = () => {
     if (flagReviewFlagsId == null) return;
     startTransition(async () => {
-      await suppressReviewFlag(ticketId, flagReviewFlagsId);
+      await suppressReviewFlag(ticketId);
       setSuppressed(true);
       onMutated?.();
     });

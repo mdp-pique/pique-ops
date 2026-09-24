@@ -50,8 +50,21 @@ async function resolveIfReviewFlagTicket(supabase: SupabaseClient<Database>, tic
  * review_flags has no authenticated write policy, only service_role - same
  * pattern as markUnansweredMessageResolved.
  */
-export async function suppressReviewFlag(ticketId: string, reviewFlagsId: number) {
+export async function suppressReviewFlag(ticketId: string) {
   const { supabase, user } = await requireUser();
+
+  // Derived server-side from the ticket's trigger-set external_ref, never
+  // taken from the client - the admin client below bypasses RLS.
+  const { data: ticket } = await supabase
+    .from("tickets")
+    .select("external_ref")
+    .eq("id", ticketId)
+    .eq("type", "review_flag")
+    .maybeSingle();
+  const match = ticket?.external_ref?.match(/^review_flag:(\d+)$/);
+  if (!match) throw new Error("Not a review flag ticket");
+  const reviewFlagsId = Number(match[1]);
+
   await claimTicketIfUnassigned(ticketId);
 
   const { createAdminClient } = await import("@/lib/supabase/admin");
