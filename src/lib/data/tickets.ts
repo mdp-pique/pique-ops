@@ -282,6 +282,7 @@ export interface TicketDrawerData {
   targetAt: string | null;
   dueAt: string | null;
   status: string;
+  propertyName: string | null;
   reservationId: string | null;
   reservationSummary: {
     guestName: string;
@@ -392,6 +393,7 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
     targetAt: t.target_at,
     dueAt: t.due_at,
     status: t.status,
+    propertyName: t.property?.public_name ?? t.property?.property_name ?? null,
     reservationId: t.reservation_id,
     reservationSummary: t.reservation
       ? {

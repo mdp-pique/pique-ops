@@ -62,6 +62,27 @@ export function ReservationPanel({ data, onSelectTicket }: { data: ReservationDr
           <Spine stages={data.stages} lg />
         </div>
 
+        {data.propertyIssues.length > 0 && (
+          <div className="card known-issues">
+            <h3>
+              Known issues at this property <span className="mono">{data.propertyIssues.length} open</span>
+            </h3>
+            {data.propertyIssues.map((t) => (
+              <div className="issue" key={t.id}>
+                <div>
+                  <div className="t">{t.title}</div>
+                  <div className="d">
+                    {t.typeLabel} &middot; {t.dueText}
+                  </div>
+                </div>
+                <button className="go" onClick={() => onSelectTicket(t.id)}>
+                  Open
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="card">
           <h3>
             <span>

@@ -229,6 +229,8 @@ Per property: open tickets, latest smart-lock status from Hospitable (`get-prope
 ### 7.5 Reservation timeline
 The screen that makes this an ops platform rather than a ticket queue. One reservation, six stages left to right (Book -> Check-in -> Stay -> Check-out -> Turnover -> Accountability), with the tickets and conversation events for that reservation pinned to their stage. Green when nothing is open, colored by the worst open ticket otherwise. This is the "Reservation Spine" diagram, made live. Status of the guest vetting check, the clean (and who did it), any maintenance, the review and its subscores, any removal case, and any claim are all visible here without leaving the page.
 
+**Property-level tickets** (no reservation - e.g. a broken dryer, preventive maintenance) belong to the property, not to whichever guest reported them. They show on every current and upcoming stay at that property under "Known issues at this property", so whoever's stay they land on sees them. Maintenance tickets default to property-level; only attach a reservation when the guest caused it or it's a claim.
+
 Tickets on a reservation are **grouped by the same domain sections as §7.1** (Reviews, Maintenance, Claims, Requests), open first, resolved kept for history. Opening one gives the same type-specific tools as opening it from its section - one place to handle a ticket, reachable two ways. "Everything about this stay is here" is the test.
 
 ### 7.8 Manual ticket creation

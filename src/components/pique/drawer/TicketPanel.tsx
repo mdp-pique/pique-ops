@@ -107,7 +107,7 @@ export function TicketPanel({
         <div className="crumbs">
           <span>{data.typeLabel}</span>
           <span>&rsaquo;</span>
-          <b>{data.reservationSummary?.propertyName ?? "—"}</b>
+          <b>{data.reservationSummary?.propertyName ?? data.propertyName ?? "—"}</b>
         </div>
         <IconBtn label="Close" onClick={close}>
           <svg viewBox="0 0 24 24">

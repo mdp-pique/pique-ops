@@ -161,6 +161,8 @@ export interface ReservationDrawerData {
   } | null;
   thread: { direction: string; body: string; sentAt: string; isAuto: boolean }[] | null;
   hospitableUrl: string | null;
+  /** Open property-level tickets (no reservation) - e.g. a broken dryer affects whoever is staying. */
+  propertyIssues: { id: string; title: string; typeLabel: string; dueText: string }[];
 }
 
 export async function getReservationDrawerData(id: string): Promise<ReservationDrawerData | null> {
@@ -168,7 +170,7 @@ export async function getReservationDrawerData(id: string): Promise<ReservationD
   const { data: r, error } = await supabase
     .from("reservations")
     .select(
-      `id, check_in, check_out,
+      `id, check_in, check_out, property_id,
        property:properties(property_name, public_name, city),
        guest:guests(full_name)`,
     )
@@ -181,7 +183,7 @@ export async function getReservationDrawerData(id: string): Promise<ReservationD
   const { bucketFor } = await import("@/lib/pique-ui/dates");
   const bucket = bucketFor(r.check_in, r.check_out);
 
-  const [{ data: tickets }, { data: review }, { data: messages }] = await Promise.all([
+  const [{ data: tickets }, { data: review }, { data: messages }, { data: propertyTickets }] = await Promise.all([
     supabase
       .from("tickets")
       .select(
@@ -201,6 +203,16 @@ export async function getReservationDrawerData(id: string): Promise<ReservationD
       .eq("reservation_id", id)
       .order("sent_at", { ascending: true })
       .limit(30),
+    bucket === "past"
+      ? Promise.resolve({ data: [] as { id: string; type: string; metadata: unknown; due_at: string | null; sla_breached: boolean; created_at: string }[] })
+      : supabase
+          .from("tickets")
+          .select("id, type, metadata, due_at, sla_breached, created_at")
+          .eq("property_id", r.property_id)
+          .is("reservation_id", null)
+          .in("status", OPEN_STATUSES as unknown as string[])
+          .order("due_at", { ascending: true, nullsFirst: false })
+          .limit(10),
   ]);
 
   const { ticketTitle, dueText } = await import("@/lib/pique-ui/ticket-display");
@@ -258,6 +270,14 @@ export async function getReservationDrawerData(id: string): Promise<ReservationD
           ],
         }
       : null,
+    propertyIssues: (propertyTickets ?? [])
+      .filter((t) => !isHiddenTicketType(t.type))
+      .map((t) => ({
+        id: t.id,
+        title: ticketTitle({ type: t.type, metadata: (t.metadata as Record<string, unknown>) ?? {} }),
+        typeLabel: ticketTypeLabel(t.type),
+        dueText: dueText(t).text,
+      })),
     hospitableUrl: hospitableThreadUrl(
       (messages?.[0]?.raw_hospitable_data as { conversation_id?: string } | null)?.conversation_id,
     ),
