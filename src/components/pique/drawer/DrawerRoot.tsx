@@ -162,7 +162,7 @@ export function DrawerRoot() {
         {panel?.kind === "new" && <NewTicketPanel key={panel.nonce} prefill={panel.prefill} onCreated={openTicket} />}
         {!isNew && tab === "res" && res && <ReservationPanel data={res} onSelectTicket={selectTicket} />}
         {!isNew && tab === "ticket" && ticket && (
-          <TicketPanel data={ticket} onOpenReservation={() => setTab("res")} onMutated={refreshTicket} />
+          <TicketPanel key={ticket.id} data={ticket} onOpenReservation={() => setTab("res")} onMutated={refreshTicket} />
         )}
       </aside>
     </>

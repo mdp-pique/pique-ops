@@ -71,11 +71,18 @@ export function TicketPanel({
   const details = Object.entries(data.metadata).filter(([k]) => !(spec && k === "title"));
   const undone = data.items.filter((i) => !i.isDone).length;
 
-  const changeStatus = (status: string) => {
-    if (status === "resolved" && undone > 0 && !window.confirm(`${undone} checklist item${undone === 1 ? " is" : "s are"} not done. Resolve anyway?`)) return;
+  const [confirmResolve, setConfirmResolve] = useState(false);
+  const openItems = data.items.filter((i) => !i.isDone);
+
+  const changeStatus = (status: string, completeOpenItems = false) => {
+    if (status === "resolved" && openItems.length > 0 && !confirmResolve) {
+      setConfirmResolve(true);
+      return;
+    }
+    setConfirmResolve(false);
     setStatusError(null);
     startTransition(async () => {
-      const result = await setTicketStatus(data.id, status);
+      const result = await setTicketStatus(data.id, status, { completeOpenItems });
       if (result.error) setStatusError(result.error);
       onMutated?.();
     });
@@ -158,12 +165,72 @@ export function TicketPanel({
               ))}
             </div>
           )}
+          {confirmResolve && openItems.length > 0 && (
+            <div className="confirm-box" role="alertdialog" aria-labelledby="confirm-resolve-title">
+              <p id="confirm-resolve-title">
+                <b>
+                  {openItems.length} item{openItems.length === 1 ? " isn't" : "s aren't"} checked off:
+                </b>{" "}
+                {openItems.map((i) => i.label).join(" · ")}
+              </p>
+              <div className="actions">
+                <Btn variant="primary" disabled={isPending} onClick={() => changeStatus("resolved", true)}>
+                  Check {openItems.length === 1 ? "it" : "them all"} off and resolve
+                </Btn>
+                <Btn disabled={isPending} onClick={() => changeStatus("resolved", false)}>
+                  Resolve without {openItems.length === 1 ? "it" : "them"}
+                </Btn>
+                <Btn onClick={() => setConfirmResolve(false)}>Cancel</Btn>
+              </div>
+            </div>
+          )}
           {statusError && (
             <p className="form-err" role="alert">
               {statusError}
             </p>
           )}
         </div>
+
+        {(data.items.length > 0 || spec) && (
+          <div className="card">
+            <h3>
+              Checklist{" "}
+              <span className="mono">
+                {data.items.length - undone}/{data.items.length}
+              </span>
+            </h3>
+            <ul className="items">
+              {data.items.map((i) => (
+                <li key={i.id} className={i.isDone ? "done" : ""}>
+                  <button
+                    role="checkbox"
+                    aria-checked={i.isDone}
+                    disabled={isPending}
+                    onClick={() => runAction(() => toggleTicketItem(data.id, i.id, !i.isDone))}
+                  >
+                    <i />
+                    <span>{i.label}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <form
+              className="add-item"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const label = newItem.trim();
+                if (!label) return;
+                setNewItem("");
+                runAction(() => addTicketItem(data.id, label));
+              }}
+            >
+              <input value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder="Add an item…" aria-label="New checklist item" />
+              <Btn type="submit" disabled={isPending || !newItem.trim()}>
+                Add
+              </Btn>
+            </form>
+          </div>
+        )}
 
         {data.clock && (
           <div className="card clock-card">
@@ -292,46 +359,6 @@ export function TicketPanel({
           </div>
         )}
 
-        {(data.items.length > 0 || spec) && (
-          <div className="card">
-            <h3>
-              Checklist{" "}
-              <span className="mono">
-                {data.items.length - undone}/{data.items.length}
-              </span>
-            </h3>
-            <ul className="items">
-              {data.items.map((i) => (
-                <li key={i.id} className={i.isDone ? "done" : ""}>
-                  <button
-                    role="checkbox"
-                    aria-checked={i.isDone}
-                    disabled={isPending}
-                    onClick={() => runAction(() => toggleTicketItem(data.id, i.id, !i.isDone))}
-                  >
-                    <i />
-                    <span>{i.label}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <form
-              className="add-item"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const label = newItem.trim();
-                if (!label) return;
-                setNewItem("");
-                runAction(() => addTicketItem(data.id, label));
-              }}
-            >
-              <input value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder="Add an item…" aria-label="New checklist item" />
-              <Btn type="submit" disabled={isPending || !newItem.trim()}>
-                Add
-              </Btn>
-            </form>
-          </div>
-        )}
 
         <div className="actions">
           <Btn onClick={() => {

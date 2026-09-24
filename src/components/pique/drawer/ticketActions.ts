@@ -182,7 +182,11 @@ export async function createManualTicket(input: CreateTicketInput): Promise<{ id
 const SETTABLE_STATUSES = new Set(["open", "in_progress", "blocked", "resolved"]);
 
 /** Only for manually creatable types - automation-mirrored tickets get their status from their source table. */
-export async function setTicketStatus(ticketId: string, status: string): Promise<{ error?: string }> {
+export async function setTicketStatus(
+  ticketId: string,
+  status: string,
+  opts: { completeOpenItems?: boolean } = {},
+): Promise<{ error?: string }> {
   const { supabase, user } = await requireUser();
   if (!SETTABLE_STATUSES.has(status)) return { error: "Invalid status." };
 
@@ -193,12 +197,26 @@ export async function setTicketStatus(ticketId: string, status: string): Promise
 
   let note: string | undefined;
   if (status === "resolved") {
-    const { count } = await supabase
-      .from("ticket_items")
-      .select("id", { count: "exact", head: true })
-      .eq("ticket_id", ticketId)
-      .eq("is_done", false);
-    if (count) note = `Resolved with ${count} checklist item${count === 1 ? "" : "s"} not done`;
+    const { data: open } = await supabase.from("ticket_items").select("id, label").eq("ticket_id", ticketId).eq("is_done", false);
+    if (open?.length) {
+      const labels = open.map((i) => i.label).join(", ");
+      if (opts.completeOpenItems) {
+        await supabase
+          .from("ticket_items")
+          .update({ is_done: true, done_by: user.id, done_at: new Date().toISOString() })
+          .eq("ticket_id", ticketId)
+          .eq("is_done", false);
+        await supabase.from("ticket_events").insert({
+          ticket_id: ticketId,
+          event_type: "item_done",
+          actor_id: user.id,
+          to_value: "true",
+          note: `Checked off on resolve: ${labels}`,
+        });
+      } else {
+        note = `Resolved with ${open.length} checklist item${open.length === 1 ? "" : "s"} left open: ${labels}`;
+      }
+    }
   }
 
   await supabase
