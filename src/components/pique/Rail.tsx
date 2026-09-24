@@ -30,6 +30,17 @@ const NAV = [
     ),
   },
   {
+    href: "/calendar",
+    label: "Calendar",
+    icon: (
+      <svg viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="17" rx="3" />
+        <path d="M3 9h18M8 2v4M16 2v4" />
+        <path d="M7.5 13h.01M12 13h.01M16.5 13h.01M7.5 17h.01M12 17h.01" strokeWidth="2.6" />
+      </svg>
+    ),
+  },
+  {
     href: "/properties",
     label: "Properties",
     icon: (
@@ -146,11 +157,11 @@ export function Rail({ initials, ticketCounts }: { initials: string; ticketCount
         <Image src="/pique-logo.png" alt="" width={44} height={44} priority />
       </Link>
       <nav className="nav" aria-label="Sections">
-        {NAV.slice(0, 2).map((item) => (
+        {NAV.slice(0, 3).map((item) => (
           <NavLink key={item.href} item={item} pathname={pathname} />
         ))}
         <TicketsNav pathname={pathname} counts={ticketCounts} />
-        {NAV.slice(2).map((item) => (
+        {NAV.slice(3).map((item) => (
           <NavLink key={item.href} item={item} pathname={pathname} />
         ))}
       </nav>

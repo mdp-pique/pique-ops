@@ -239,6 +239,15 @@ Staff can create any ticket type by hand ("+ New ticket" globally, and "+ Add" f
 ### 7.6 Dashboard
 Counts by type and SLA state; unanswered conversations; missed calls awaiting callback; review-removal cases by attempt stage; claims approaching filing deadline; locks offline. One reserved tile for Phase 2: trailing-12-month account rating vs the 4.8 Superhost threshold.
 
+### 7.9 Calendar (requested by Katrina and Michael, 2026-09-24)
+`/calendar`: a week view of day-to-day work - who's scheduled for cleans, quality controls and maintenance, plus reservations by day - with layers you toggle on and off (remembered per person, in the browser). Read-only; click a ticket or reservation to open its drawer.
+
+- **Built (Phase 1, live):** layers Reservations (check-ins/outs, same-day turnovers), Cleans (Connecteam shifts from `cleaning_shift_check`, read server-side because that table is service-role only; flags not clocked in / draft / unassigned), Maintenance (title + assignee), Customer service (requests, claims, messages), Reviews (off by default - backlog). Open tickets sit on their due day; closed ones on the day they were closed.
+- **Overdue row:** open tickets whose due date has passed leave their old day and carry into one row above the week, split into a card per layer (count, how late the oldest is, tap to see the oldest five, link to the section's Behind list). Respects the layer toggles. `cleaner_late_noshow` stays hidden like everywhere else in the app.
+- **Next - Phase 2, upcoming cleans + QC:** `cleaning_shift_check` only holds *today's* shifts (the no-show checker writes them day-of), so future days show "Not synced yet". Needs a new read-only n8n sync of the next 14 days of Connecteam shifts into a new table (additive; the no-show workflow is untouched). Quality-control inspections get their own layer from the same sync once we know how QC is scheduled in Connecteam (no QC jobs found in `cleaning_job_map`).
+- **Next - Phase 3, recurring tasks:** anything that repeats on a schedule - preventative maintenance (filters, hot tubs, detectors) and chores like Monday garbage pickup. A `recurring_tasks` table (property, what, interval/weekday, default assignee/team) that creates a ticket ahead of each occurrence, so it gets a clock, an owner and shows on the calendar.
+- **Open questions for Katrina:** month view needed? filter by area/person? how is QC scheduled today? list of recurring tasks and intervals.
+
 ---
 
 ## 8. Ticketing - core mechanics
