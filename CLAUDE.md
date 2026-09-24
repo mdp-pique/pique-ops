@@ -38,7 +38,7 @@ Beyond unanswered-message alerts (above), three more existing automated flows ar
 
 ## Parking form → `vehicle_registration` tickets — as of 2026-09-24
 
-The GHL form "213 FML Parking Registration" already posts to Slack from a GHL workflow (unchanged). A webhook action added to that GHL workflow calls the new n8n workflow `Pique-Parking-Form-To-Ticket` (id `8nKXAvhG1CVUKfIG`, webhook path `pique-parking-form`, requires `?key=` secret and `?property_id=`), which runs `select public.upsert_parking_ticket($1::uuid, $2::jsonb)` over the existing "Supabase Postgres" n8n credential - no service key in the workflow. All matching/upsert logic lives in that SQL function (migrations `20260924190000_*` and `20260924193000_*`); execute is revoked from public/anon/authenticated. Idempotent on `external_ref = 'parking:{reservation_id}'`.
+The GHL form "213 FML Parking Registration" already posts to Slack from a GHL workflow (unchanged). A webhook action added to that GHL workflow calls the new n8n workflow `Pique-Parking-Form-To-Ticket` (id `8nKXAvhG1CVUKfIG`, webhook path `pique-parking-form`, requires `?key=` secret and `?property_id=`), which runs `select public.upsert_parking_ticket($1::uuid, $2::jsonb)` over the existing "Supabase Postgres" n8n credential - no service key in the workflow. All matching/upsert logic lives in that SQL function (migrations `20260924190000_*`, `20260924193000_*`, `20260924200000_*`); execute is revoked from public/anon/authenticated. Idempotent on `external_ref = 'parking:{reservation_id}'`.
 
 ## `review_flag` tickets are now actionable in-app — as of 2026-09-21
 
