@@ -73,6 +73,7 @@ Roles are enforced with Supabase Row Level Security, not just hidden in the UI.
 - **Superhost risk scoring / rating prediction** - Phase 2 (AI layer). The data to compute a trailing-12-month account rating already exists in `reviews`; the dashboard in §7.5 reserves a slot for it.
 - **AI review of cleaning photos** - Phase 2.
 - **SOP chat widget for field staff** (in their own language, escalates to a ticket when it can't answer) - Phase 3, native app.
+- **Slack status bot ("scout")** - Phase 2, the delivery channel for §8.2 notifications. When a ticket turns Needs attention / Behind, DM its owner (or post in the relevant ops channel, e.g. maintenance) asking for status; write replies into the ticket history and tick checklist items the person confirms, so staff can keep work moving without opening the app. Needs a Slack bot token and `profiles.slack_user_id` filled in. Merges with the next item.
 - **Slack-reading assistant for tickets** - Phase 2. Read maintenance/claims discussion in Slack and ask clarifying questions in-thread ("is this about the claim on unit 213?") to attach the conversation to the right ticket. Depends on the domain sections (§7.1) existing first.
 
 ---
