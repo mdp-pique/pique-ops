@@ -36,6 +36,10 @@ Beyond unanswered-message alerts (above), three more existing automated flows ar
 
 **Explicitly not mirrored: `guest_vetting`/fraud-check.** `Pique-Guest-Fraud-Check` (id `VVicBoPrc7zVCI7r`) never persists its verdict to any table — both its stages terminate in Slack posts to `#fraud-check` only. There is no source-of-truth row to shadow-mirror from. Building `guest_vetting` tickets requires either (a) adding a new write to that *live* workflow (a production edit needing explicit sign-off, not an additive shadow-mirror — same bar as the eventual cutover below), or (b) skipping this ticket type for now. Left undecided/unbuilt until the team picks one.
 
+## Parking form → `vehicle_registration` tickets — as of 2026-09-24
+
+The GHL form "213 FML Parking Registration" already posts to Slack from a GHL workflow (unchanged). A webhook action added to that GHL workflow calls the new n8n workflow `Pique-Parking-Form-To-Ticket` (id `8nKXAvhG1CVUKfIG`, webhook path `pique-parking-form`, requires `?key=` secret and `?property_id=`), which runs `select public.upsert_parking_ticket($1::uuid, $2::jsonb)` over the existing "Supabase Postgres" n8n credential - no service key in the workflow. All matching/upsert logic lives in that SQL function (migrations `20260924190000_*` and `20260924193000_*`); execute is revoked from public/anon/authenticated. Idempotent on `external_ref = 'parking:{reservation_id}'`.
+
 ## `review_flag` tickets are now actionable in-app — as of 2026-09-21
 
 Previously `review_flag` tickets were read-only in the UI — nothing to click, no way to progress or close one from the app, which was confusing since they look identical to actionable `review_removal_case` tickets in the queue. Fixed additively, no changes to the existing `review_flags` table's own automation:

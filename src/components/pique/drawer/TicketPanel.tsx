@@ -158,7 +158,7 @@ export function TicketPanel({
               <dl style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 12px", margin: 0 }}>
                 {details.map(([k, v]) => (
                   <div key={k} style={{ display: "contents" }}>
-                    <dt style={{ color: "var(--ink-3)" }}>{fieldLabels.get(k) ?? k}</dt>
+                    <dt style={{ color: "var(--ink-3)" }}>{fieldLabels.get(k) ?? k.replace(/_/g, " ")}</dt>
                     <dd style={{ margin: 0, wordBreak: "break-word", whiteSpace: "pre-line" }}>{String(v)}</dd>
                   </div>
                 ))}
