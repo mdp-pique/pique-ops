@@ -7,6 +7,8 @@ import { getReviewRemovalContext, getReviewIdForReservation, type ReviewRemovalC
 import { generateReviewRemovalDraft, type DraftRequest, type DraftResult } from "@/lib/ai/reviewRemoval";
 import type { Database } from "@/lib/supabase/database.types";
 
+const SIGNED_URL_TTL_SECONDS = 3600;
+
 export async function fetchReviewContext(reviewId: string): Promise<ReviewRemovalContext | null> {
   await requireUser();
   return getReviewRemovalContext(reviewId);
@@ -134,13 +136,41 @@ export async function logManualAttempt(
   return { draftId: draft.id };
 }
 
-export async function generateDraft(reviewId: string, req: DraftRequest): Promise<DraftResult> {
-  await requireUser();
+/**
+ * Evidence is passed as attachment ids, never URLs: the server fetches PDFs
+ * itself, so a client-supplied URL would let a caller make the server fetch
+ * anything. Ids are scoped to this ticket and signed here.
+ */
+export async function generateDraft(
+  ticketId: string,
+  reviewId: string,
+  req: Omit<DraftRequest, "attachments"> & { attachmentIds?: string[] },
+): Promise<DraftResult> {
+  const { supabase } = await requireUser();
 
   const ctx = await getReviewRemovalContext(reviewId);
   if (!ctx) throw new Error("Review not found");
 
-  return generateReviewRemovalDraft(ctx, req);
+  const { attachmentIds, ...rest } = req;
+  let attachments: DraftRequest["attachments"] = [];
+  if (attachmentIds?.length) {
+    const { data: rows } = await supabase
+      .from("ticket_attachments")
+      .select("storage_path, kind")
+      .eq("ticket_id", ticketId)
+      .in("id", attachmentIds);
+    if (rows?.length) {
+      const { data: signed } = await supabase.storage
+        .from("ticket-attachments")
+        .createSignedUrls(rows.map((r) => r.storage_path), SIGNED_URL_TTL_SECONDS);
+      const urlByPath = new Map((signed ?? []).filter((x) => x.signedUrl).map((x) => [x.path, x.signedUrl]));
+      attachments = rows
+        .map((r) => ({ url: urlByPath.get(r.storage_path) ?? "", kind: r.kind }))
+        .filter((a) => a.url);
+    }
+  }
+
+  return generateReviewRemovalDraft(ctx, { ...rest, attachments });
 }
 
 /**
@@ -221,8 +251,6 @@ export async function uploadAttemptAttachments(ticketId: string, reviewRemovalDr
   revalidatePath("/", "layout");
 }
 
-const SIGNED_URL_TTL_SECONDS = 3600;
-
 export interface PendingAttachment {
   id: string;
   url: string;
@@ -266,18 +294,29 @@ export async function uploadPendingAttachment(ticketId: string, formData: FormDa
   return results;
 }
 
-/** Claims already-uploaded pending evidence for the attempt that just got saved, instead of re-uploading it. */
-export async function attachPendingToAttempt(attachmentIds: string[], reviewRemovalDraftId: string) {
+/** Claims already-uploaded pending evidence for the attempt that just got saved, instead of re-uploading it. Only this ticket's still-unclaimed uploads. */
+export async function attachPendingToAttempt(ticketId: string, attachmentIds: string[], reviewRemovalDraftId: string) {
   if (attachmentIds.length === 0) return;
   const { supabase } = await requireUser();
-  await supabase.from("ticket_attachments").update({ review_removal_draft_id: reviewRemovalDraftId }).in("id", attachmentIds);
+  await supabase
+    .from("ticket_attachments")
+    .update({ review_removal_draft_id: reviewRemovalDraftId })
+    .eq("ticket_id", ticketId)
+    .is("review_removal_draft_id", null)
+    .in("id", attachmentIds);
   revalidatePath("/", "layout");
 }
 
-/** Removes a pending evidence upload the staff member deselected before saving any attempt. */
-export async function deletePendingAttachment(attachmentId: string) {
+/** Removes a pending evidence upload the staff member deselected before saving any attempt - never one already filed with an attempt. */
+export async function deletePendingAttachment(ticketId: string, attachmentId: string) {
   const { supabase } = await requireUser();
-  const { data: row } = await supabase.from("ticket_attachments").select("storage_path").eq("id", attachmentId).maybeSingle();
+  const { data: row } = await supabase
+    .from("ticket_attachments")
+    .select("storage_path")
+    .eq("id", attachmentId)
+    .eq("ticket_id", ticketId)
+    .is("review_removal_draft_id", null)
+    .maybeSingle();
   if (!row) return;
   await supabase.storage.from("ticket-attachments").remove([row.storage_path]);
   await supabase.from("ticket_attachments").delete().eq("id", attachmentId);

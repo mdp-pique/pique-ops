@@ -349,7 +349,7 @@ Known problems in what's already built. Worked alongside new features, not defer
 |---|---|---|---|
 | 1 | `suppressReviewFlag` trusted a client-supplied `review_flags` id with the RLS-bypassing admin client - any staff account could suppress an arbitrary flag | High | **Fixed** 2026-09-24 (id now derived server-side from the ticket) |
 | 2 | Role-based RLS never implemented: every table grants full read/write to any signed-in profile regardless of `role` (§2, §6). Not reachable from outside the Workspace domain, but all roles can do everything | High | Open - changes existing policies, needs sign-off before applying |
-| 3 | Review-removal evidence attachments aren't re-checked against the ticket before being sent to Claude vision or re-parented to an attempt (`attachPendingToAttempt`) | Medium | Open |
+| 3 | Review-removal evidence attachments weren't re-checked against the ticket before being sent to Claude vision or re-parented to an attempt - and the server fetched client-supplied URLs for PDFs (a server-side request forgery risk) | Medium | **Fixed** 2026-09-24 (client sends attachment ids; server scopes them to the ticket and signs URLs itself; re-parent/delete scoped to the ticket's unclaimed uploads) |
 | 4 | TopBar search input does nothing (no handler) | Medium | Open |
 | 5 | Ticket/reservation drawer: focus doesn't move in on open, isn't restored on close, no focus trap (WCAG 2.4.3) | Medium | Open |
 | 6 | Drawer form fields (manual-log textarea, status select, comment box) rely on placeholder text, no accessible label (WCAG 1.3.1 / 4.1.2) | Medium | Partial - assignee and comment labelled, new-ticket form fully labelled; review-removal panel fields still open |

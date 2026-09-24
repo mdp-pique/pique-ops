@@ -191,12 +191,12 @@ export function ReviewRemovalPanel({
     setError(null);
     startTransition(async () => {
       try {
-        const result = await generateDraft(reviewId, {
+        const result = await generateDraft(ticketId, reviewId, {
           violationHints: hints,
           extraContext,
           priorDraft: isRevision ? draft?.draftEmail : undefined,
           feedback: isRevision ? feedback : undefined,
-          attachments: pendingAttachments.map((a) => ({ url: a.url, kind: a.kind })),
+          attachmentIds: pendingAttachments.map((a) => a.id),
         });
         setDraft(result);
         setSaved(false);
@@ -213,7 +213,7 @@ export function ReviewRemovalPanel({
 
   const claimPendingAttachments = async (draftId: string) => {
     if (pendingAttachments.length === 0) return;
-    await attachPendingToAttempt(pendingAttachments.map((a) => a.id), draftId);
+    await attachPendingToAttempt(ticketId, pendingAttachments.map((a) => a.id), draftId);
     setPendingAttachments([]);
   };
 
@@ -386,7 +386,7 @@ export function ReviewRemovalPanel({
                           type="button"
                           onClick={() => {
                             setPendingAttachments((prev) => prev.filter((p) => p.id !== a.id));
-                            deletePendingAttachment(a.id);
+                            deletePendingAttachment(ticketId, a.id);
                           }}
                           style={{ color: "var(--ink-3)", fontWeight: 700 }}
                           aria-label={`Remove ${a.name}`}
