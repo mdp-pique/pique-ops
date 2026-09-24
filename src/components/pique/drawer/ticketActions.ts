@@ -301,3 +301,29 @@ export async function globalSearch(query: string): Promise<{ reservations: Reser
       })),
   };
 }
+
+/** Manual override of a ticket's deadline (property-local date, noon). The clock trigger recomputes health. */
+export async function setTicketDueDate(ticketId: string, date: string): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+  if (!DATE_RE.test(date)) return { error: "Pick a valid date." };
+
+  const { data: ticket } = await supabase.from("tickets").select("due_at").eq("id", ticketId).maybeSingle();
+  if (!ticket) return { error: "Ticket not found." };
+
+  const dueAt = edmontonDateTimeToISO(date);
+  await supabase.from("tickets").update({ due_at: dueAt }).eq("id", ticketId);
+
+  const fmt = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Edmonton" }) : "none";
+  await supabase.from("ticket_events").insert({
+    ticket_id: ticketId,
+    event_type: "field_change",
+    actor_id: user.id,
+    from_value: ticket.due_at,
+    to_value: dueAt,
+    note: `Due date changed: ${fmt(ticket.due_at)} → ${fmt(dueAt)}`,
+  });
+
+  revalidatePath("/", "layout");
+  return {};
+}

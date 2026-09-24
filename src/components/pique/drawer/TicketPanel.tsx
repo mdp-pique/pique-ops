@@ -7,7 +7,7 @@ import { Tag, StatusPill, Btn, IconBtn } from "@/components/pique/primitives";
 import { useDrawer } from "./DrawerContext";
 import { assignTicket, addTicketComment, rollOverTicket, markUnansweredMessageResolved, uploadTicketAttachment } from "./actions";
 import { ReviewRemovalPanel } from "./ReviewRemovalPanel";
-import { setTicketStatus, toggleTicketItem, addTicketItem } from "./ticketActions";
+import { setTicketStatus, toggleTicketItem, addTicketItem, setTicketDueDate } from "./ticketActions";
 import { specFor } from "@/lib/pique-ui/domains";
 import { healthLabel, healthVariant, formatClockDate } from "@/lib/pique-ui/clock";
 
@@ -32,6 +32,40 @@ export function TicketPanel({
   const [comment, setComment] = useState("");
   const [newItem, setNewItem] = useState("");
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [editingDue, setEditingDue] = useState(false);
+  const [dueInput, setDueInput] = useState("");
+  const isOpenTicket = data.status !== "resolved" && data.status !== "closed";
+
+  const startEditDue = () => {
+    setDueInput(data.dueAt ? new Intl.DateTimeFormat("en-CA", { timeZone: "America/Edmonton" }).format(new Date(data.dueAt)) : "");
+    setEditingDue(true);
+  };
+
+  const saveDue = () => {
+    if (!dueInput) return;
+    startTransition(async () => {
+      const result = await setTicketDueDate(data.id, dueInput);
+      if (result.error) setStatusError(result.error);
+      setEditingDue(false);
+      onMutated?.();
+    });
+  };
+
+  const dueEditor = editingDue ? (
+    <form
+      className="add-item"
+      onSubmit={(e) => {
+        e.preventDefault();
+        saveDue();
+      }}
+    >
+      <input type="date" value={dueInput} onChange={(e) => setDueInput(e.target.value)} aria-label="New due date" required />
+      <Btn type="submit" variant="primary" disabled={isPending || !dueInput}>
+        Save
+      </Btn>
+      <Btn onClick={() => setEditingDue(false)}>Cancel</Btn>
+    </form>
+  ) : null;
   const spec = specFor(data.type);
   const fieldLabels = new Map(spec?.fields.map((f) => [f.key, f.label]) ?? []);
   const details = Object.entries(data.metadata).filter(([k]) => !(spec && k === "title"));
@@ -156,7 +190,27 @@ export function TicketPanel({
               <span>
                 Due <b>{formatClockDate(data.dueAt)}</b>
               </span>
+              {isOpenTicket && !editingDue && (
+                <button className="go" onClick={startEditDue}>
+                  Change due date
+                </button>
+              )}
             </div>
+            {dueEditor}
+          </div>
+        )}
+
+        {!data.clock && isOpenTicket && (
+          <div className="card clock-card">
+            <h3>
+              Clock <span className="mono">No due date</span>
+            </h3>
+            {!editingDue && (
+              <button className="go" onClick={startEditDue}>
+                Set a due date
+              </button>
+            )}
+            {dueEditor}
           </div>
         )}
 
