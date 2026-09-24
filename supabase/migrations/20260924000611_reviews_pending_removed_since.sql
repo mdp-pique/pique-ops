@@ -1,0 +1,2 @@
+alter table public.reviews add column if not exists pending_removed_since timestamptz;
+comment on column public.reviews.pending_removed_since is 'Set the first time the daily removal-detector finds this review missing from Hospitable''s live response. Only promoted to removed_at once it is STILL missing on a later run at least 12h afterward (two-strike confirmation, guards against one-off pagination/timing snapshot drift) - cleared back to null if a later run finds it live again.';
