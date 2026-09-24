@@ -242,6 +242,53 @@ Counts by type and SLA state; unanswered conversations; missed calls awaiting ca
 
 ---
 
+### 8.2 Clocks and health (decided 2026-09-24)
+
+Due dates alone (Asana/Trello style) only say a date passed. Pique's work runs against real deadlines - a claim's 14 days start when the guest checks out, not when someone gets around to opening a ticket - so every ticket carries a clock and a computed health, SLA-style, but strict and per type.
+
+**Every ticket has:**
+- `started_at` - when the clock started, anchored to the real event (checkout for claims and guest-review reminders; otherwise when the ticket was created / the source record appeared).
+- `due_at` - the deadline. Per type it is either **hard** (a platform cutoff or a guest arriving - miss it and it's gone) or **soft** (our own service level).
+- `target_at` - optional internal target *before* a hard deadline, so there is buffer (claim filed by day 7 of 14).
+- `health` - computed, never set by hand: **On track · Needs attention · Behind · Missed · Waiting**. Resolved tickets have none.
+
+**Health rules (first match wins):**
+1. Blocked on someone else, on a pausable soft clock → **Waiting** (the clock pauses; the due date moves out by the time spent waiting). Hard deadlines never pause.
+2. Past `due_at` → **Missed** if hard, **Behind** if soft.
+3. Past `target_at` → **Behind**.
+4. Inside the type's critical window with checklist items still open → **Behind**.
+5. Inside the type's warning window → **Needs attention**.
+6. **Progress vs time:** more than a third of the window used ahead of checklist completion (e.g. day 10 of 14 with 1 of 5 evidence items done) → **Needs attention**. This is the part generic tools can't do - the checklist already exists.
+7. Otherwise → **On track**.
+
+Health is recomputed whenever a ticket or its checklist changes, and every 15 minutes for the passage of time. Each change is written to the ticket's history (becoming Behind or Missed is logged as an escalation). `sla_breached` mirrors Behind/Missed so the existing Breached views keep working. Notifying the assignee (Needs attention) and the ops manager (Behind) is the next step once in-app notifications / Slack posting exist - until then the history entry and the section sort are the signal.
+
+**In the UI:** every row shows "Day X of Y" (or hours/minutes for short clocks) as a bar coloured by health, sections sort by health first, and the drawer shows started / target / due.
+
+**Per-type defaults** live in the `ticket_type_clocks` table (editable later without code). Draft numbers - mark up anything that's wrong:
+
+| Type | Clock starts | Due | Hard? | Internal target | Needs attention within | Behind within (items open) | Waiting pauses? |
+|---|---|---|---|---|---|---|---|
+| `review_flag` | flagged | +2 days | soft | - | 1 day | - | yes |
+| `review_removal_case` | each attempt sent | +5 days (follow up) | soft | - | 1 day | - | yes |
+| `review_removal_escalation` | created | +2 days | soft | - | 1 day | - | yes |
+| `review_action_item` | created | +7 days | soft | - | 2 days | - | yes |
+| `guest_review_reminder` | checkout | +14 days, 11pm | **hard** (Airbnb window) | day 10 | 4 days | 1 day | no |
+| `unanswered_message` | alert | +30 min | soft | - | 10 min | - | no |
+| `extension_request` | created | +2 hours | soft | - | 30 min | - | no |
+| `missed_call` | created | +1 hour | soft | - | 15 min | - | no |
+| `maintenance_ticket` | created | next check-in at the property, 3pm | **hard** | - | 1 day | 4 hours | no |
+| `maintenance_access` | created | day before the visit, 9am | **hard** | - | 1 day | 4 hours | no |
+| `property_security_check` | created | +12 hours | soft | - | 4 hours | - | no |
+| `claim_tracker` | checkout | AirCover +14 / Truvi +30 days, 11pm | **hard** | AirCover day 7 / Truvi day 15 | 7 days | 2 days | no |
+| `guest_block_report` | created | +1 day | soft | - | 4 hours | - | no |
+| `vehicle_registration` | created | check-in day, noon | **hard** | - | 1 day | 4 hours | no |
+| `pack_n_play`, `direct_booking_id_check`, `guest_vetting` | created | check-in day, noon | **hard** | - | 2 days | 1 day | no |
+| `pet_fee` | created | +2 days | soft | - | 1 day | - | yes |
+| cleaning types, `system_health` | created | +1 day | soft | - | 4 hours | - | no |
+
+A manually set due date always wins over the default.
+
 ## 9. Ticket type catalog
 
 `source` says whether a person or an automation creates it. `stage` is the default spine position. The section each type belongs to is in §7.1. Only `unanswered_message`, `cleaner_late_noshow`, `review_flag`, and `review_removal_case` are created today (§0.1).
