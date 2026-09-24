@@ -171,6 +171,17 @@ profiles
 ## 6. Auth & permissions
 
 - Google OAuth via Supabase Auth, domain-restricted.
+- **Proposed role model (2026-09-24, awaiting sign-off - replaces the five roles in §2):**
+
+  | Role | Who | Access |
+  |---|---|---|
+  | `owner` | Michael, Katrina | Everything, including roles and company-level settings |
+  | `admin` | MDP | Everything, including user management and clock rules |
+  | `ops_manager` | Laurice | All ops work, receives escalations; no user management |
+  | `team_member` | Everyone else on staff | Work tickets, reservations, inbox; no settings or user management |
+  | `property_owner` (later) | House owners | Read-only, only their own properties' reservations and tickets - no other owners' data, no guest contact details beyond what's needed |
+
+  Staff roles differ mostly in which settings and admin screens they see (enforced in the app and in admin server actions). The database-level wall that matters is `property_owner`: RLS limits them to rows whose `property_id` is in a new `property_owners (profile_id, property_id)` mapping. Rollout: (1) change the `profiles.role` constraint and map current roles (all `admin` today except Laurice = `ops_manager`), (2) replace the flat any-profile RLS policies with staff-role policies plus property-owner policies, (3) gate settings/admin screens by role. Steps 1-2 edit existing policies and the role list, so they need explicit sign-off (§15 #2).
 - `profiles.role` drives RLS policies. Cleaning roles see cleaning ticket types; finance sees claims and fees; CS sees tickets and conversations; ops_manager and admin see all. **Not yet enforced** - every table currently grants full access to any signed-in profile (§15).
 - No public surface. 100% internal.
 
