@@ -1,9 +1,10 @@
-# Pique Ops App - PRD v1.1
+# Pique Ops App - PRD v1.2
 ### Ticketing & Conversations (internal ops platform, Phase 1)
 
-**Status:** Build-ready draft. Written to be handed directly to Claude Code as the build spec.
+**Status:** Build spec, partially built. See §0.1 for what exists today before planning any work.
 **Owner:** MDP
-**Last updated:** 2026-09-18 - v1.1 adds the gaps found in a full review of the project conversation: maintenance tickets with rollover, checklist items, reservation stage/timeline view, dedup keys for automation-created tickets, the cleaning-table `reservation_id` fix, inbound-message intent classification, notifications spec, and build conventions. Wyze (self-hosted on the n8n VPS) and Robert (external, team ticket) decisions closed.
+**Last updated:** 2026-09-24 - v1.2 adds a reality-check of what's actually built (§0.1), replaces the single generic Queue with domain sections under a Tickets nav (§7.1), adds manual ticket creation (§7.8), adds the `review_flag` and `vehicle_registration` ticket types (§9), and adds a standing Open fixes list (§15) so audit findings aren't lost while new features are built.
+v1.1 (2026-09-18) added the gaps found in a full review of the project conversation: maintenance tickets with rollover, checklist items, reservation stage/timeline view, dedup keys for automation-created tickets, the cleaning-table `reservation_id` fix, inbound-message intent classification, notifications spec, and build conventions. Wyze (self-hosted on the n8n VPS) and Robert (external, team ticket) decisions closed.
 
 ---
 
@@ -16,6 +17,18 @@ It supersedes the phase ordering in the earlier "Reservation Spine" architecture
 Two rules that govern every decision below:
 1. Don't build a new table for data that already exists, and don't build two tables that do the same job.
 2. The unit of work is the reservation. Every ticket and conversation should be reachable from the reservation it belongs to.
+
+### 0.1 Where the build actually is (as of 2026-09-24)
+
+The architecture held up (generic `tickets` table, spine stages, Ask Pique), but only a narrow slice of the catalog is live. Plan from this, not from the milestone list alone.
+
+- **Ticket types actually created today (4):** `unanswered_message`, `cleaner_late_noshow`, `review_removal_case`, `review_flag`. All four come from exception-safe shadow-mirror triggers on existing automation tables (see CLAUDE.md). No other creation path exists yet - no manual creation UI, no GHL, no Gmail parsing, no Connecteam, no Wyze.
+- **Actionable in-app today:** `review_flag` (appeal / don't appeal) and `review_removal_case` (AI draft with evidence photos, manual log of past attempts), `unanswered_message` (mark answered). Everything else gets only the generic drawer (status, comments, checklist).
+- **Labels only, never created:** every other type in §9.
+- **Milestones:** M0 done. M1 mostly done - but role-based RLS was deferred and never implemented (§15), SLA breach and Slack posting not wired. M2 partial - 4 shadow-mirrors, no Slack reaction-to-ticket, `guest_vetting` blocked (fraud-check workflow never persists a verdict). M3 schema only (`calls` table exists, no GHL code). M4/M5/M6 not started.
+- **Beyond the PRD, built:** Dashboard as landing page (portfolio spine, KPI tiles, trends, live activity), Ask Pique (§7.7 equivalent, built as designed), automated daily detection of reviews removed from Airbnb (`reviews.removed_at` / `pending_removed_since`, two-strike confirmation, n8n `Pique-Detect-Removed-Reviews-Daily`).
+
+**Next build order (decided 2026-09-24):** manual ticket creation (§7.8) → Tickets nav with domain sections (§7.1) → Maintenance, Claims, Requests sections → Reviews experience polish. Open fixes (§15) are worked alongside, not after.
 
 ---
 
@@ -57,6 +70,7 @@ Roles are enforced with Supabase Row Level Security, not just hidden in the UI.
 - **Superhost risk scoring / rating prediction** - Phase 2 (AI layer). The data to compute a trailing-12-month account rating already exists in `reviews`; the dashboard in §7.5 reserves a slot for it.
 - **AI review of cleaning photos** - Phase 2.
 - **SOP chat widget for field staff** (in their own language, escalates to a ticket when it can't answer) - Phase 3, native app.
+- **Slack-reading assistant for tickets** - Phase 2. Read maintenance/claims discussion in Slack and ask clarifying questions in-thread ("is this about the claim on unit 213?") to attach the conversation to the right ticket. Depends on the domain sections (§7.1) existing first.
 
 ---
 
@@ -138,10 +152,12 @@ profiles
   id fk -> auth.users, role, display_name, slack_user_id nullable
 ```
 
-**Required changes to existing tables (carried over from the Reservation Spine doc - the one structural gap found in the database):**
-- Add `reservation_id uuid fk -> reservations, nullable` to `cleaning_form_submission`, `cleaning_shift_check`, and `cleaning_job_map`. Backfill by matching property + date to checkout. Without this, a cleanliness complaint in a review cannot be traced to the clean and the cleaner who did it - which was one of the first things asked for in this project.
+**As built (differences from the sketch above):** `messages` is the existing Hospitable-synced table extended in place with `conversation_id`, `intent`, `intent_confidence` - not a new table. `reviews` (existing, Hospitable-synced) is not in the sketch but carries product logic: `removed_at` (confirmed removed from Airbnb, excluded from every rating average) and `pending_removed_since` (first-miss marker for two-strike confirmation). `ticket_attachments` also has `review_removal_draft_id` so evidence stays with a specific appeal attempt.
 
-**Guest identity:** there is no `guests` table on purpose. Guests are identified through the reservation. When something arrives keyed only by a first name (an Airbnb email saying "Jessica's review won't be removed"), it is matched via the review text quoted in the email body against `reviews.text` -> `review_id` -> `reservation_id`. Name alone is never the key.
+**Required changes to existing tables (carried over from the Reservation Spine doc - the one structural gap found in the database):**
+- Add `reservation_id uuid fk -> reservations, nullable` to `cleaning_form_submission` and `cleaning_shift_check` (done). **Not** `cleaning_job_map` - it turned out to be a static job-to-property mapping, not per-occurrence. `cleaning_shift_check.reservation_id` is 0% populated so far; backfill still pending.
+
+**Guest identity:** a Hospitable-synced `guests` table already existed; reuse it, don't add another. Guests are still identified through the reservation. When something arrives keyed only by a first name (an Airbnb email saying "Jessica's review won't be removed"), it is matched via the review text quoted in the email body against `reviews.text` -> `review_id` -> `reservation_id`. Name alone is never the key.
 
 **Reservation spine:** every ticket and conversation carries `reservation_id` and tickets carry `stage`, so the per-reservation timeline (§7.5) is a query, not a separate table. The `reservation_timeline` pointer table from the earlier doc is not needed unless that query gets slow.
 
@@ -150,18 +166,33 @@ profiles
 ## 6. Auth & permissions
 
 - Google OAuth via Supabase Auth, domain-restricted.
-- `profiles.role` drives RLS policies. Cleaning roles see cleaning ticket types; finance sees claims and fees; CS sees tickets and conversations; ops_manager and admin see all.
+- `profiles.role` drives RLS policies. Cleaning roles see cleaning ticket types; finance sees claims and fees; CS sees tickets and conversations; ops_manager and admin see all. **Not yet enforced** - every table currently grants full access to any signed-in profile (§15).
 - No public surface. 100% internal.
 
 ---
 
 ## 7. Core product surfaces
 
-### 7.1 Queue
-The default screen. Filterable by type, status, assignee, property, stage, SLA state. "Mine", "Unassigned", "Breached" as one-tap views. This is what replaces scrolling Slack.
+### 7.1 Tickets - domain sections (replaces the single Queue, decided 2026-09-24)
+One generic queue with a generic drawer made nothing feel actionable: every type has a different SOP, and the one type with a real workflow (review removal) was squeezed into a side drawer. Tickets are now split into a small, fixed set of **domain sections**, each with a screen built around that domain's actual workflow. The data model does not change - these are views over `tickets` grouped by `type`.
+
+| Section | Ticket types | Built around |
+|---|---|---|
+| **Reviews** | `review_flag`, `review_removal_case`, `review_removal_escalation`, `review_action_item`, `guest_review_reminder` | Appeal decision, AI draft + evidence, attempt history, escalation to Robert |
+| **Maintenance** | `maintenance_ticket`, `maintenance_access`, `cleaning_issue`, `qc_inspection`, `property_security_check` | Per-unit issue checklist, assignee/technician, rollover, before-next-check-in deadline |
+| **Claims** | `claim_tracker`, `guest_block_report` | Filing-deadline countdown, evidence checklist, claim status by platform |
+| **Requests** | `vehicle_registration`, `pet_fee`, `pack_n_play`, `direct_booking_id_check`, `guest_vetting`, `extension_request` | Small SOP-driven tasks tied to a date on the reservation (usually check-in): a short checklist and a done button |
+
+Not in these sections: `unanswered_message` and `missed_call` live in **Inbox**; `system_health` lives in Admin; internal cleaning-ops types (`cleaner_late_noshow`, `incomplete_cleaning_form`, `cleaning_overtime_approval`) stay hidden from staff views until M5.
+
+New ticket types go into one of these four sections. A fifth section is added only when a type genuinely fits none of them - "Requests" is the catch-all so the nav never grows a tab per problem.
+
+**Navigation:** the rail has one **Tickets** item. Tapping it expands in place to Reviews / Maintenance / Claims / Requests (each its own route under `/tickets/…`). It opens on tap/click, never hover-only - hover doesn't exist on the phones the team uses, and hover-only menus fail WCAG 2.1.1 (keyboard) and 1.4.13 (content on hover). It is a button with `aria-expanded`, and stays expanded while any section is active. Each section shows its open count.
+
+Within each section: "Mine", "Unassigned", "Breached" as one-tap views, filterable by property, stage, assignee.
 
 ### 7.2 Ticket detail
-Status, assignee, due, stage, linked reservation and property, checklist items, comments, attachments, event history, and the linked conversation inline if there is one. Every action here writes a `ticket_events` row.
+Status, assignee, due, stage, linked reservation and property, checklist items, comments, attachments, event history, and the linked conversation inline if there is one. Every action here writes a `ticket_events` row. Domain sections render type-specific tools in the detail view (e.g. the review appeal flow); the generic fields are the fallback, not the whole experience.
 
 ### 7.3 Conversations
 **Guest messaging (Hospitable):**
@@ -180,6 +211,11 @@ Per property: open tickets, latest smart-lock status from Hospitable (`get-prope
 
 ### 7.5 Reservation timeline
 The screen that makes this an ops platform rather than a ticket queue. One reservation, six stages left to right (Book -> Check-in -> Stay -> Check-out -> Turnover -> Accountability), with the tickets and conversation events for that reservation pinned to their stage. Green when nothing is open, colored by the worst open ticket otherwise. This is the "Reservation Spine" diagram, made live. Status of the guest vetting check, the clean (and who did it), any maintenance, the review and its subscores, any removal case, and any claim are all visible here without leaving the page.
+
+Tickets on a reservation are **grouped by the same domain sections as §7.1** (Reviews, Maintenance, Claims, Requests), open first, resolved kept for history. Opening one gives the same type-specific tools as opening it from its section - one place to handle a ticket, reachable two ways. "Everything about this stay is here" is the test.
+
+### 7.8 Manual ticket creation
+Staff can create any ticket type by hand ("+ New ticket" globally, and "+ Add" from a reservation or property, which pre-fills them). Picking a section and type shows only that type's fields and default checklist. Manual tickets set `source = 'manual'`, `created_by`, and no `external_ref`. Prerequisite for every non-automated type in §9 - today there is no way to create a ticket except through automation.
 
 ### 7.6 Dashboard
 Counts by type and SLA state; unanswered conversations; missed calls awaiting callback; review-removal cases by attempt stage; claims approaching filing deadline; locks offline. One reserved tile for Phase 2: trailing-12-month account rating vs the 4.8 Superhost threshold.
@@ -206,7 +242,7 @@ Counts by type and SLA state; unanswered conversations; missed calls awaiting ca
 
 ## 9. Ticket type catalog
 
-`source` says whether a person or an automation creates it. `stage` is the default spine position.
+`source` says whether a person or an automation creates it. `stage` is the default spine position. The section each type belongs to is in §7.1. Only `unanswered_message`, `cleaner_late_noshow`, `review_flag`, and `review_removal_case` are created today (§0.1).
 
 | Type | Stage | Source | Key fields / items | Default SLA | Notes |
 |---|---|---|---|---|---|
@@ -220,10 +256,12 @@ Counts by type and SLA state; unanswered conversations; missed calls awaiting ca
 | `maintenance_access` | stay | linked to maintenance_ticket | guest notified at, 24h rule satisfied?, guest permission | Before technician visit | Child of a maintenance ticket, not standalone |
 | `cleaning_issue` | turnover / accountability | automation (review cleanliness subscore <= 3, or intent classifier) or manual | complaint, staff_ref (cleaner from `cleaning_job_map` via reservation_id), photos | Same day | This is cleaner-to-review attribution. Depends on the `reservation_id` fix in §5 |
 | `property_security_check` | any (nightly) | recurring (n8n) | items per device: each lock (online, locked, battery via Hospitable), each camera (online via wyze-sdk; optional nightly snapshot verdict) | Nightly | Locks via Hospitable are solid. Cameras via the self-hosted Wyze job on the n8n VPS (§12). Only devices that fail become open items; a fully green check auto-resolves |
+| `vehicle_registration` | checkin | automation (parking form submission) or manual | property, plate, make/model/colour, form received?, registered with building?, registered_at | Before guest arrives on check-in day | Added v1.2. Buildings with managed parking (first case: Fire Mountain Lodge #213) fine unregistered vehicles ~$100 each. SOP: guest submits plate via the parking form after booking; on check-in day the team registers it with the building. Ticket opens when the form arrives (or at booking for opted-in properties if no form yet, with a "chase guest for plate" item), due the morning of check-in. Which properties require it is a per-property flag. Where the form submissions land is an open question (§12) |
 | `pack_n_play` | checkin | automation (Canmore) | requested, delivered, penalty risk | Per existing reminder timing | Builds on the pack-n-play accountability design already scoped |
 | `claim_tracker` | accountability | manual, possibly semi-automated via Gmail | claim type (Truvi/AirCover), status, charges summary, filing_deadline, evidence items | Deadline-driven | `filing_deadline` is auto-computed from checkout: AirCover 14 days, Truvi 30 days. SLA warnings at 7 and 2 days before. Items = the unified evidence checklist (timestamped before/after photos wide + close-up, receipts/estimates, third-party invoice, proof guest accepted house rules, police report if theft). Inbox already has Truvi and Airbnb Resolution labels - check whether their subjects are parseable like review emails are |
 | `guest_block_report` | accountability | manual | reason, platform, case ID, blocked? | Same day | Airbnb has no API to block; ticket tracks that it was done in the Airbnb UI |
 | `guest_review_reminder` | accountability | recurring (n8n) | platform, window deadline | Before window closes | Hospitable pending-review list is Airbnb-only; VRBO stays a manual reminder |
+| `review_flag` | accountability | automation (shadow-mirror of existing `review_flags`) | severity, reason, our/their fault, decision | Rolling | Added v1.2 (built). The earlier "should we try to remove this review?" decision. Appeal starts a `review_removal_case`; don't-appeal writes `review_flags.status = 'suppressed'` like the existing Slack flow |
 | `review_removal_case` | accountability | automation (Gmail) + manual | grounds, attempt stage (1st / 2nd / escalated to Robert), outcome | Rolling | Airbnb sends three exact subjects from automated@airbnb.com: "We're reviewing your request to remove [Guest]'s review" (pending), "[Guest]'s review has been removed" (approved), "[Guest]'s review won't be removed" (denied). Matched to `review_id` via the quoted review text, not the name. Second denied event on the same review -> spawns a `review_removal_escalation` ticket (next row) |
 | `review_removal_escalation` | accountability | automation (2nd denial) | packaged summary: property, dates, guest, review text + subscores, grounds argued, both denial emails, evidence attachments; items: "Sent to Robert", "Robert responded", "Outcome recorded" | Send within 2 days; follow up at 7 | Robert is external and does not log in. The team member picks this up, forwards the package, and records the outcome. `parent_ticket_id` points back to the removal case |
 | `review_action_item` | accountability | manual or automation (review subscore) | complaint, action, proof attachment | 1 week | "Guest said bad pillows, we replaced them - show me" |
@@ -277,6 +315,9 @@ Counts by type and SLA state; unanswered conversations; missed calls awaiting ca
 - **VRBO reviews:** Hospitable pending list is Airbnb-only; VRBO stays manual.
 - **Robert - decided: external, no app login.** On the second denied email for the same review, the app opens a `review_removal_escalation` ticket for the team (see §9) packaged with everything a team member needs to hand Robert in one message: property, reservation dates, guest, full review text and subscores, the grounds argued, both Airbnb denial emails, and any attached evidence. A checklist item "Sent to Robert" plus a follow-up SLA closes the loop.
 - **Call recording retention:** decide how long voicemail audio and transcripts are kept. Guest PII lives in this system; write it down.
+- **Data retention and deletion (broader than calls):** nothing is ever deleted today - every table accumulates via upsert, and there's no way to find and remove everything about one guest. Write a one-paragraph retention policy. Confirm the Anthropic API account is set to zero data retention, since guest messages and review-evidence photos go through Claude.
+- **Parking form (`vehicle_registration`):** where do the guest parking-form submissions land today (Google Form/Sheet, Hospitable, other)? That decides whether the ticket can auto-open from the submission or starts manual. Also: which properties besides Fire Mountain Lodge #213 need registration, and how the building is notified (portal, email, phone).
+- **`guest_vetting`:** the fraud-check workflow posts to Slack only and never saves a verdict, so there's nothing to mirror. Either add a write to that live workflow (a production edit - needs sign-off) or keep the type unbuilt.
 
 ---
 
@@ -295,3 +336,22 @@ Counts by type and SLA state; unanswered conversations; missed calls awaiting ca
 ## 14. What's explicitly out of scope, still
 
 GPS breadcrumbs, geofencing, the native field app, in-house payroll calculation, Superhost prediction, AI photo review, the SOP chat widget. This PRD doesn't change those decisions - it moves ticketing and conversations in front of them and makes sure nothing built here has to be thrown away when they arrive.
+
+---
+
+## 15. Open fixes (from the 2026-09-24 audit)
+
+Known problems in what's already built. Worked alongside new features, not deferred behind them. Remove a line only when it's fixed and pushed.
+
+| # | Fix | Severity | Status |
+|---|---|---|---|
+| 1 | `suppressReviewFlag` trusted a client-supplied `review_flags` id with the RLS-bypassing admin client - any staff account could suppress an arbitrary flag | High | **Fixed** 2026-09-24 (id now derived server-side from the ticket) |
+| 2 | Role-based RLS never implemented: every table grants full read/write to any signed-in profile regardless of `role` (§2, §6). Not reachable from outside the Workspace domain, but all roles can do everything | High | Open - changes existing policies, needs sign-off before applying |
+| 3 | Review-removal evidence attachments aren't re-checked against the ticket before being sent to Claude vision or re-parented to an attempt (`attachPendingToAttempt`) | Medium | Open |
+| 4 | TopBar search input does nothing (no handler) | Medium | Open |
+| 5 | Ticket/reservation drawer: focus doesn't move in on open, isn't restored on close, no focus trap (WCAG 2.4.3) | Medium | Open |
+| 6 | Drawer form fields (manual-log textarea, status select, comment box) rely on placeholder text, no accessible label (WCAG 1.3.1 / 4.1.2) | Medium | Open |
+| 7 | Queue-row severity stripe is colour-only (WCAG 1.4.1) | Low | Open |
+| 8 | Standing rule: every new `SECURITY DEFINER` function must `revoke execute from public` - otherwise it becomes a privilege-escalation path for Ask Pique's read-only SQL | Rule | Open - add to CLAUDE.md |
+| 9 | n8n workflows hold the service-role key in plaintext; its blast radius is the whole shared production database (~45 tables), not just this app. Consider n8n encrypted credentials | Awareness | Open |
+| 10 | No record of production schema/data changes made outside the app (e.g. by an agent via MCP). Adopt: someone other than the changer sees prod changes before or shortly after | Process | Open |

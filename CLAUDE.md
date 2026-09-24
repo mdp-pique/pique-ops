@@ -66,6 +66,9 @@ The team's explicit rule for this project: build and extend freely and fast, but
 - Webhook handlers verify signatures and are idempotent on the provider's event id.
 - Automation-created tickets always set `external_ref` and upsert on it — never plain insert — or scheduled runs duplicate.
 - Errors from the app's own jobs create `system_health` tickets and post to the existing error channel.
+- Every new `SECURITY DEFINER` function must `revoke execute on function ... from public` (then grant only to the roles that need it). Ask Pique's read-only SQL can call any function it has execute on, and a definer function runs with its owner's privileges - forgetting the revoke turns it into a privilege-escalation path.
+- Server actions that use the admin (service_role) client must derive the target row id server-side from something RLS-checked (e.g. the ticket), never take it from the client.
+- Open fixes from the audit are tracked in `docs/PRD.md` §15 - check it before starting new work, and update it when one is fixed.
 
 ## Env vars
 
