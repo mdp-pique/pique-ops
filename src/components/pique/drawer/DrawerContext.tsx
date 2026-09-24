@@ -2,13 +2,22 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { DomainKey } from "@/lib/pique-ui/domains";
+import type { ReservationOption } from "./ticketActions";
 
-type Panel = { kind: "res" | "ticket"; id: string };
+export interface NewTicketPrefill {
+  domain?: DomainKey;
+  type?: string;
+  reservation?: ReservationOption;
+}
+
+type Panel = { kind: "res" | "ticket"; id: string } | { kind: "new"; prefill: NewTicketPrefill; nonce: number };
 
 interface DrawerState {
   panel: Panel | null;
   openRes: (id: string) => void;
   openTicket: (id: string) => void;
+  openNew: (prefill?: NewTicketPrefill) => void;
   close: () => void;
 }
 
@@ -39,7 +48,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("res");
     params.delete("ticket");
-    if (panel) params.set(panel.kind, panel.id);
+    if (panel && panel.kind !== "new") params.set(panel.kind, panel.id);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -47,7 +56,8 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
 
   const openRes = useCallback((id: string) => setPanel({ kind: "res", id }), []);
   const openTicket = useCallback((id: string) => setPanel({ kind: "ticket", id }), []);
+  const openNew = useCallback((prefill: NewTicketPrefill = {}) => setPanel({ kind: "new", prefill, nonce: Date.now() }), []);
   const close = useCallback(() => setPanel(null), []);
 
-  return <DrawerCtx.Provider value={{ panel, openRes, openTicket, close }}>{children}</DrawerCtx.Provider>;
+  return <DrawerCtx.Provider value={{ panel, openRes, openTicket, openNew, close }}>{children}</DrawerCtx.Provider>;
 }

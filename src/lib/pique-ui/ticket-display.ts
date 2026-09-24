@@ -31,7 +31,8 @@ export function ticketTitle(t: { type: string; metadata: Metadata }): string {
     case "review_removal_case":
       return `Review removal – attempt #${typeof m.attempt_number === "number" ? m.attempt_number : 1}`;
     default:
-      return ticketTypeLabel(t.type);
+      // Manually created tickets carry the staff-entered summary.
+      return typeof m.title === "string" && m.title.trim() ? m.title : ticketTypeLabel(t.type);
   }
 }
 

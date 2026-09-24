@@ -3,6 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { DOMAINS, type DomainKey } from "@/lib/pique-ui/domains";
 
 const NAV = [
   {
@@ -28,16 +30,6 @@ const NAV = [
     ),
   },
   {
-    href: "/queue",
-    label: "Tickets",
-    icon: (
-      <svg viewBox="0 0 24 24">
-        <path d="M4 6h16M4 12h10M4 18h7" />
-        <circle cx="18" cy="16" r="3" />
-      </svg>
-    ),
-  },
-  {
     href: "/properties",
     label: "Properties",
     icon: (
@@ -57,7 +49,95 @@ const NAV = [
   },
 ];
 
-export function Rail({ initials }: { initials: string }) {
+const TICKETS_ICON = (
+  <svg viewBox="0 0 24 24">
+    <path d="M4 6h16M4 12h10M4 18h7" />
+    <circle cx="18" cy="16" r="3" />
+  </svg>
+);
+
+const MOBILE_QUERY = "(max-width: 760px)";
+function subscribeMobile(cb: () => void) {
+  const mq = window.matchMedia(MOBILE_QUERY);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+
+function NavLink({ item, pathname }: { item: (typeof NAV)[number]; pathname: string }) {
+  const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+  return (
+    <Link href={item.href} aria-current={isActive ? "page" : undefined}>
+      {item.icon}
+      {item.label}
+    </Link>
+  );
+}
+
+/**
+ * Tickets opens on tap/click, never hover-only: hover doesn't exist on the
+ * phones the team uses, and hover-only menus fail WCAG 2.1.1 / 1.4.13.
+ * Desktop: expands inline and stays open inside any section. Phone (bottom
+ * bar): pops up above the bar and closes after navigating.
+ */
+function TicketsNav({ pathname, counts }: { pathname: string; counts: Record<DomainKey, number> }) {
+  const inTickets = pathname.startsWith("/tickets");
+  const isMobile = useSyncExternalStore(subscribeMobile, () => window.matchMedia(MOBILE_QUERY).matches, () => false);
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const [seenPath, setSeenPath] = useState(pathname);
+  if (seenPath !== pathname) {
+    setSeenPath(pathname);
+    setUserOpen(null);
+  }
+  const expanded = isMobile ? userOpen === true : (userOpen ?? inTickets);
+  const total = DOMAINS.reduce((n, d) => n + (counts[d.key] ?? 0), 0);
+
+  useEffect(() => {
+    if (!isMobile || !expanded) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setUserOpen(false);
+    const onClick = (e: MouseEvent) => {
+      if (!(e.target as Element).closest(".nav-group")) setUserOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("click", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("click", onClick);
+    };
+  }, [isMobile, expanded]);
+
+  return (
+    <div className={`nav-group ${expanded ? "expanded" : ""}`}>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls="nav-tickets"
+        aria-current={inTickets ? "page" : undefined}
+        onClick={() => setUserOpen(!expanded)}
+      >
+        {TICKETS_ICON}
+        <span className="nav-label">
+          Tickets
+          {total > 0 && <span className="nav-badge num">{total}</span>}
+        </span>
+      </button>
+      <ul id="nav-tickets" className="subnav">
+        {DOMAINS.map((d) => {
+          const href = `/tickets/${d.key}`;
+          return (
+            <li key={d.key}>
+              <Link href={href} aria-current={pathname.startsWith(href) ? "page" : undefined}>
+                <span>{d.label}</span>
+                <span className="cnt num">{counts[d.key] ?? 0}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+export function Rail({ initials, ticketCounts }: { initials: string; ticketCounts: Record<DomainKey, number> }) {
   const pathname = usePathname();
 
   return (
@@ -66,15 +146,13 @@ export function Rail({ initials }: { initials: string }) {
         <Image src="/pique-logo.png" alt="" width={44} height={44} priority />
       </Link>
       <nav className="nav" aria-label="Sections">
-        {NAV.map((item) => {
-          const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-          return (
-            <Link key={item.href} href={item.href} aria-current={isActive ? "page" : undefined}>
-              {item.icon}
-              {item.label}
-            </Link>
-          );
-        })}
+        {NAV.slice(0, 2).map((item) => (
+          <NavLink key={item.href} item={item} pathname={pathname} />
+        ))}
+        <TicketsNav pathname={pathname} counts={ticketCounts} />
+        {NAV.slice(2).map((item) => (
+          <NavLink key={item.href} item={item} pathname={pathname} />
+        ))}
       </nav>
       <div className="spacer" />
       <Link href="/admin/users" className="me" title="Team & account">

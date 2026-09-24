@@ -7,6 +7,15 @@ import { Tag, StatusPill, Btn, IconBtn } from "@/components/pique/primitives";
 import { useDrawer } from "./DrawerContext";
 import { assignTicket, addTicketComment, rollOverTicket, markUnansweredMessageResolved, uploadTicketAttachment } from "./actions";
 import { ReviewRemovalPanel } from "./ReviewRemovalPanel";
+import { setTicketStatus, toggleTicketItem, addTicketItem } from "./ticketActions";
+import { specFor } from "@/lib/pique-ui/domains";
+
+const STATUS_OPTIONS = [
+  { key: "open", label: "Open" },
+  { key: "in_progress", label: "In progress" },
+  { key: "blocked", label: "Blocked" },
+  { key: "resolved", label: "Resolved" },
+];
 
 export function TicketPanel({
   data,
@@ -20,6 +29,22 @@ export function TicketPanel({
   const { close } = useDrawer();
   const [isPending, startTransition] = useTransition();
   const [comment, setComment] = useState("");
+  const [newItem, setNewItem] = useState("");
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const spec = specFor(data.type);
+  const fieldLabels = new Map(spec?.fields.map((f) => [f.key, f.label]) ?? []);
+  const details = Object.entries(data.metadata).filter(([k]) => !(spec && k === "title"));
+  const undone = data.items.filter((i) => !i.isDone).length;
+
+  const changeStatus = (status: string) => {
+    if (status === "resolved" && undone > 0 && !window.confirm(`${undone} checklist item${undone === 1 ? " is" : "s are"} not done. Resolve anyway?`)) return;
+    setStatusError(null);
+    startTransition(async () => {
+      const result = await setTicketStatus(data.id, status);
+      if (result.error) setStatusError(result.error);
+      onMutated?.();
+    });
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const timeline = [
@@ -56,6 +81,7 @@ export function TicketPanel({
           <h2>{data.title}</h2>
           <div className="m">
             <select
+              aria-label="Assignee"
               value={data.assigneeId ?? ""}
               disabled={isPending}
               onChange={(e) => {
@@ -85,6 +111,20 @@ export function TicketPanel({
             </select>
             <StatusPill variant={data.due.late ? "crit" : "neutral"}>{data.due.text}</StatusPill>
           </div>
+          {spec && (
+            <div className="status-seg" role="group" aria-label="Status">
+              {STATUS_OPTIONS.map((o) => (
+                <button key={o.key} aria-pressed={data.status === o.key} disabled={isPending} onClick={() => changeStatus(o.key)}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {statusError && (
+            <p className="form-err" role="alert">
+              {statusError}
+            </p>
+          )}
         </div>
 
         {data.reservationSummary && (
@@ -112,14 +152,14 @@ export function TicketPanel({
         <div className="card">
           <h3>Details</h3>
           <div style={{ fontSize: "13.5px", color: "var(--ink-2)" }}>
-            {Object.keys(data.metadata).length === 0 ? (
+            {details.length === 0 ? (
               <span style={{ color: "var(--ink-3)" }}>No additional details recorded.</span>
             ) : (
               <dl style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 12px", margin: 0 }}>
-                {Object.entries(data.metadata).map(([k, v]) => (
+                {details.map(([k, v]) => (
                   <div key={k} style={{ display: "contents" }}>
-                    <dt style={{ color: "var(--ink-3)" }}>{k}</dt>
-                    <dd style={{ margin: 0, wordBreak: "break-word" }}>{String(v)}</dd>
+                    <dt style={{ color: "var(--ink-3)" }}>{fieldLabels.get(k) ?? k}</dt>
+                    <dd style={{ margin: 0, wordBreak: "break-word", whiteSpace: "pre-line" }}>{String(v)}</dd>
                   </div>
                 ))}
               </dl>
@@ -166,22 +206,44 @@ export function TicketPanel({
           </div>
         )}
 
-        {data.items.length > 0 && (
+        {(data.items.length > 0 || spec) && (
           <div className="card">
             <h3>
               Checklist{" "}
               <span className="mono">
-                {data.items.filter((i) => i.isDone).length}/{data.items.length}
+                {data.items.length - undone}/{data.items.length}
               </span>
             </h3>
             <ul className="items">
               {data.items.map((i) => (
                 <li key={i.id} className={i.isDone ? "done" : ""}>
-                  <i />
-                  <span>{i.label}</span>
+                  <button
+                    role="checkbox"
+                    aria-checked={i.isDone}
+                    disabled={isPending}
+                    onClick={() => runAction(() => toggleTicketItem(data.id, i.id, !i.isDone))}
+                  >
+                    <i />
+                    <span>{i.label}</span>
+                  </button>
                 </li>
               ))}
             </ul>
+            <form
+              className="add-item"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const label = newItem.trim();
+                if (!label) return;
+                setNewItem("");
+                runAction(() => addTicketItem(data.id, label));
+              }}
+            >
+              <input value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder="Add an item…" aria-label="New checklist item" />
+              <Btn type="submit" disabled={isPending || !newItem.trim()}>
+                Add
+              </Btn>
+            </form>
           </div>
         )}
 
@@ -221,6 +283,7 @@ export function TicketPanel({
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           placeholder="Add a comment…"
+          aria-label="Comment"
           style={{
             borderRadius: 999,
             border: "1px solid var(--line-2)",

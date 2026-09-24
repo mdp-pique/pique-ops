@@ -31,7 +31,7 @@ export default async function DashboardPage() {
       <AskPique />
 
       <div className="tiles">
-        <Tile href="/queue" variant="warn" eyebrow="Open tickets" value={kpis.openTickets} label={`${kpis.openTicketsPastSla} past SLA`} />
+        <Tile href="/tickets/reviews" variant="warn" eyebrow="Open tickets" value={kpis.openTickets} label={`${kpis.openTicketsPastSla} past SLA`} />
         <Tile
           href="/inbox"
           variant="crit"
@@ -40,14 +40,14 @@ export default async function DashboardPage() {
           label={`${kpis.awaitingMessages} messages · ${kpis.awaitingCalls} calls`}
         />
         <Tile
-          href="/queue?type=clean"
+          href="/reservations?bucket=checkingout"
           variant="accent"
           eyebrow="Cleans in flight"
           value={kpis.cleansInFlight}
           label={`${kpis.cleansLate} late · ${kpis.cleansFormIncomplete} form incomplete`}
         />
         <Tile
-          href="/queue?type=claim"
+          href="/tickets/claims"
           variant="warn"
           eyebrow="Open claims"
           value={kpis.openClaims}
@@ -72,7 +72,7 @@ export default async function DashboardPage() {
 
       <div className="section-h">
         <h2>Needs a human now</h2>
-        <Link href="/queue">Open tickets</Link>
+        <Link href="/tickets/reviews">Tickets</Link>
       </div>
       <div className="list">
         {needsHuman.length === 0 && <div className="card">Nothing needs a human right now.</div>}

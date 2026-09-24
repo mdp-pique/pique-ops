@@ -5,6 +5,7 @@ import { useDrawer } from "./DrawerContext";
 import { fetchReservationPanel, fetchTicketPanel } from "./actions";
 import { ReservationPanel } from "./ReservationPanel";
 import { TicketPanel } from "./TicketPanel";
+import { NewTicketPanel } from "./NewTicketPanel";
 import type { ReservationDrawerData } from "@/lib/data/reservations";
 import type { TicketDrawerData } from "@/lib/data/tickets";
 
@@ -21,7 +22,7 @@ type Tab = "ticket" | "res";
  * click away and there's no back-arrow to hunt for.
  */
 export function DrawerRoot() {
-  const { panel, close } = useDrawer();
+  const { panel, close, openTicket } = useDrawer();
   const [ticket, setTicket] = useState<TicketDrawerData | null>(null);
   const [res, setRes] = useState<ReservationDrawerData | null>(null);
   const [tab, setTab] = useState<Tab>("ticket");
@@ -31,17 +32,17 @@ export function DrawerRoot() {
   // bubble, Live Activity...) is a different identity than whatever pair
   // was showing before - reset during render (React's own pattern for
   // "adjusting state when a prop changes"), not as a side effect.
-  const panelKey = panel ? `${panel.kind}:${panel.id}` : null;
+  const panelKey = panel ? `${panel.kind}:${panel.kind === "new" ? panel.nonce : panel.id}` : null;
   const seenKeyRef = useRef<string | null>(null);
   if (panelKey !== seenKeyRef.current) {
     seenKeyRef.current = panelKey;
-    setTab(panel?.kind ?? "ticket");
+    setTab(panel?.kind === "res" ? "res" : "ticket");
     setTicket(null);
     setRes(null);
   }
 
   useEffect(() => {
-    if (!panel) return;
+    if (!panel || panel.kind === "new") return;
     let cancelled = false;
     if (panel.kind === "ticket") {
       fetchTicketPanel(panel.id).then((data) => {
@@ -97,7 +98,8 @@ export function DrawerRoot() {
   }, [panel, close]);
 
   const isOpen = !!panel;
-  const showTabs = !!ticket?.reservationId;
+  const isNew = panel?.kind === "new";
+  const showTabs = !isNew && !!ticket?.reservationId;
 
   return (
     <>
@@ -113,8 +115,9 @@ export function DrawerRoot() {
             </button>
           </div>
         )}
-        {tab === "res" && res && <ReservationPanel data={res} onSelectTicket={selectTicket} />}
-        {tab === "ticket" && ticket && (
+        {panel?.kind === "new" && <NewTicketPanel key={panel.nonce} prefill={panel.prefill} onCreated={openTicket} />}
+        {!isNew && tab === "res" && res && <ReservationPanel data={res} onSelectTicket={selectTicket} />}
+        {!isNew && tab === "ticket" && ticket && (
           <TicketPanel data={ticket} onOpenReservation={() => setTab("res")} onMutated={refreshTicket} />
         )}
       </aside>

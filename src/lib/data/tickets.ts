@@ -3,6 +3,7 @@ import { OPEN_STATUSES, ticketTagClass, ticketTypeLabel, typesForTagClass, isHid
 import { ticketTitle, unansweredMessageTitle, dueText } from "@/lib/pique-ui/ticket-display";
 import { STAGE_KEYS, STAGE_LABELS_LG } from "@/lib/pique-ui/mappings";
 import { formatShortDate } from "@/lib/pique-ui/dates";
+import { DOMAINS, domainFor, type DomainKey } from "@/lib/pique-ui/domains";
 
 const PRIORITY_WEIGHT: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 };
 
@@ -25,6 +26,7 @@ export interface QueueRow {
   stageLabel: string;
   ownerName: string;
   due: { text: string; late: boolean };
+  dueAt: string | null;
   severity: "warn" | "crit";
 }
 
@@ -66,6 +68,7 @@ function toQueueRow(t: RawTicketRow, messageBody?: string | null): QueueRow {
     stageLabel: t.stage ? STAGE_LABELS_LG[STAGE_KEYS.indexOf(t.stage as (typeof STAGE_KEYS)[number])] : "Any stage",
     ownerName: t.assignee?.display_name ?? "Unassigned",
     due: due,
+    dueAt: t.due_at,
     severity: t.sla_breached || t.priority === "urgent" || t.status === "blocked" ? "crit" : "warn",
   };
 }
@@ -146,6 +149,78 @@ async function fetchUnansweredMessageBodies(
     if (ticketId && m.body) result.set(ticketId, m.body);
   }
   return result;
+}
+
+export type DomainSegment = "open" | "mine" | "unassigned" | "breached" | "resolved";
+
+export interface DomainData {
+  rows: QueueRow[];
+  countsByType: Record<string, number>;
+}
+
+function sortOpen(a: RawTicketRow, b: RawTicketRow): number {
+  if (a.sla_breached !== b.sla_breached) return a.sla_breached ? -1 : 1;
+  const pw = (PRIORITY_WEIGHT[a.priority] ?? 9) - (PRIORITY_WEIGHT[b.priority] ?? 9);
+  if (pw !== 0) return pw;
+  return (a.due_at ?? a.created_at) < (b.due_at ?? b.created_at) ? -1 : 1;
+}
+
+export async function getDomainData(opts: { domain: DomainKey; type: string; segment: DomainSegment; userId?: string }): Promise<DomainData> {
+  const supabase = await createClient();
+  const types = domainFor(opts.domain).types;
+
+  const { data: openData, error } = await supabase
+    .from("tickets")
+    .select(QUEUE_SELECT)
+    .in("type", types)
+    .in("status", OPEN_STATUSES as unknown as string[])
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error) {
+    console.error("getDomainData:", error);
+    return { rows: [], countsByType: {} };
+  }
+  const open = (openData ?? []) as unknown as RawTicketRow[];
+
+  const countsByType: Record<string, number> = { all: open.length };
+  for (const t of open) countsByType[t.type] = (countsByType[t.type] ?? 0) + 1;
+
+  let rows: RawTicketRow[];
+  if (opts.segment === "resolved") {
+    const since = new Date(Date.now() - 30 * 86400000).toISOString();
+    const { data } = await supabase
+      .from("tickets")
+      .select(QUEUE_SELECT)
+      .in("type", opts.type === "all" ? types : [opts.type])
+      .in("status", ["resolved", "closed"])
+      .gte("closed_at", since)
+      .order("closed_at", { ascending: false })
+      .limit(200);
+    rows = (data ?? []) as unknown as RawTicketRow[];
+  } else {
+    rows = open.filter((t) => opts.type === "all" || t.type === opts.type);
+    if (opts.segment === "mine") rows = opts.userId ? rows.filter((t) => t.assignee_id === opts.userId) : [];
+    else if (opts.segment === "unassigned") rows = rows.filter((t) => !t.assignee_id);
+    else if (opts.segment === "breached") rows = rows.filter((t) => t.sla_breached);
+    rows.sort(sortOpen);
+  }
+
+  const messageBodyById = await fetchUnansweredMessageBodies(supabase, rows);
+  return { rows: rows.map((t) => toQueueRow(t, messageBodyById.get(t.id))), countsByType };
+}
+
+export async function getOpenCountsByDomain(): Promise<Record<DomainKey, number>> {
+  const supabase = await createClient();
+  const results = await Promise.all(
+    DOMAINS.map((d) =>
+      supabase
+        .from("tickets")
+        .select("id", { count: "exact", head: true })
+        .in("type", d.types)
+        .in("status", OPEN_STATUSES as unknown as string[]),
+    ),
+  );
+  return Object.fromEntries(DOMAINS.map((d, i) => [d.key, results[i].count ?? 0])) as Record<DomainKey, number>;
 }
 
 export async function getNeedsHumanNow(limit = 6): Promise<QueueRow[]> {

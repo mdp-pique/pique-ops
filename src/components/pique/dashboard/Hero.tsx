@@ -6,7 +6,7 @@ const HREF_BY_KEY: Record<string, string> = {
   checkin: "/reservations?bucket=checkingin",
   stay: "/reservations?bucket=staying",
   checkout: "/reservations?bucket=checkingout",
-  turnover: "/queue?type=clean",
+  turnover: "/reservations?bucket=checkingout",
   account: "/reservations?bucket=checkedout",
 };
 

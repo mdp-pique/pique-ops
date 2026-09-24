@@ -23,10 +23,13 @@ const TAG_CLASS_BY_TYPE: Record<string, string> = {
   direct_booking_id_check: "vet",
   pack_n_play: "vet",
   pet_fee: "vet",
+  vehicle_registration: "vet",
+  extension_request: "vet",
   claim_tracker: "claim",
+  guest_block_report: "claim",
+  property_security_check: "maint",
   unanswered_message: "msg",
   missed_call: "msg",
-  extension_request: "msg",
 };
 
 export function ticketTagClass(type: string): string {
@@ -64,6 +67,9 @@ const TYPE_LABELS: Record<string, string> = {
   pack_n_play: "Pack 'n play",
   pet_fee: "Pet fee",
   claim_tracker: "Claim",
+  guest_block_report: "Guest block / report",
+  vehicle_registration: "Vehicle registration",
+  property_security_check: "Security check",
   unanswered_message: "Unanswered message",
   missed_call: "Missed call",
   extension_request: "Extension request",
@@ -73,15 +79,6 @@ const TYPE_LABELS: Record<string, string> = {
 export function ticketTypeLabel(type: string): string {
   return TYPE_LABELS[type] ?? type;
 }
-
-export const QUEUE_TYPE_FILTERS = [
-  { key: "all", label: "All" },
-  { key: "maint", label: "Maintenance" },
-  { key: "review", label: "Reviews" },
-  { key: "vet", label: "Vetting" },
-  { key: "msg", label: "Messages" },
-  { key: "claim", label: "Claims" },
-] as const;
 
 export function ticketSeverity(t: { status: string; priority: string; sla_breached: boolean }): "warn" | "crit" {
   if (t.status === "blocked" || t.priority === "urgent" || t.sla_breached) return "crit";

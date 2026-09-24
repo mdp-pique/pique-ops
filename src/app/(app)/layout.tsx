@@ -4,6 +4,7 @@ import { Rail } from "@/components/pique/Rail";
 import { DrawerProvider } from "@/components/pique/drawer/DrawerContext";
 import { DrawerRoot } from "@/components/pique/drawer/DrawerRoot";
 import { AskPiqueHotkey } from "@/components/pique/dashboard/AskPiqueHotkey";
+import { getOpenCountsByDomain } from "@/lib/data/tickets";
 
 function initialsFor(name: string | null | undefined, email: string | null | undefined): string {
   if (name) {
@@ -27,11 +28,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (user && !profile) redirect("/pending");
 
+  const ticketCounts = await getOpenCountsByDomain();
+
   return (
     <DrawerProvider>
       <div className="pq">
         <div className="app">
-          <Rail initials={initialsFor(profile?.display_name, user?.email)} />
+          <Rail initials={initialsFor(profile?.display_name, user?.email)} ticketCounts={ticketCounts} />
           <main className="main">{children}</main>
         </div>
         <DrawerRoot />

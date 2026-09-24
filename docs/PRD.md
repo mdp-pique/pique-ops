@@ -22,13 +22,15 @@ Two rules that govern every decision below:
 
 The architecture held up (generic `tickets` table, spine stages, Ask Pique), but only a narrow slice of the catalog is live. Plan from this, not from the milestone list alone.
 
-- **Ticket types actually created today (4):** `unanswered_message`, `cleaner_late_noshow`, `review_removal_case`, `review_flag`. All four come from exception-safe shadow-mirror triggers on existing automation tables (see CLAUDE.md). No other creation path exists yet - no manual creation UI, no GHL, no Gmail parsing, no Connecteam, no Wyze.
-- **Actionable in-app today:** `review_flag` (appeal / don't appeal) and `review_removal_case` (AI draft with evidence photos, manual log of past attempts), `unanswered_message` (mark answered). Everything else gets only the generic drawer (status, comments, checklist).
-- **Labels only, never created:** every other type in §9.
+- **Automatically created today (4 types):** `unanswered_message`, `cleaner_late_noshow`, `review_removal_case`, `review_flag`, all from exception-safe shadow-mirror triggers on existing automation tables (see CLAUDE.md). No GHL, Gmail parsing, Connecteam, or Wyze creation yet.
+- **Manual creation (built 2026-09-24):** "New ticket" (top bar, every page) and "+ Add ticket" on a reservation create any type in `CREATABLE_TYPES` (`src/lib/pique-ui/domains.ts`) with its fields, default checklist, and computed due date (§7.8).
+- **Tickets sections (built 2026-09-24):** `/tickets/reviews|maintenance|claims|requests` with the tap-to-expand rail menu (§7.1). Requests and Claims group by due date, Maintenance by property. `/queue` redirects. Hand-made tickets get status buttons and a tickable checklist in the drawer.
+- **Actionable in-app today:** `review_flag` (appeal / don't appeal), `review_removal_case` (AI draft with evidence photos, manual log of past attempts), `unanswered_message` (mark answered), and every manually created type (status, checklist, comments, photos).
+- **Not built yet per type:** type-specific tools beyond the checklist (e.g. claim evidence upload per checklist item, maintenance rollover automation, Robert escalation package), and every automated trigger other than the four above.
 - **Milestones:** M0 done. M1 mostly done - but role-based RLS was deferred and never implemented (§15), SLA breach and Slack posting not wired. M2 partial - 4 shadow-mirrors, no Slack reaction-to-ticket, `guest_vetting` blocked (fraud-check workflow never persists a verdict). M3 schema only (`calls` table exists, no GHL code). M4/M5/M6 not started.
 - **Beyond the PRD, built:** Dashboard as landing page (portfolio spine, KPI tiles, trends, live activity), Ask Pique (§7.7 equivalent, built as designed), automated daily detection of reviews removed from Airbnb (`reviews.removed_at` / `pending_removed_since`, two-strike confirmation, n8n `Pique-Detect-Removed-Reviews-Daily`).
 
-**Next build order (decided 2026-09-24):** manual ticket creation (§7.8) → Tickets nav with domain sections (§7.1) → Maintenance, Claims, Requests sections → Reviews experience polish. Open fixes (§15) are worked alongside, not after.
+**Next build order (decided 2026-09-24):** ~~manual ticket creation (§7.8)~~ → ~~Tickets nav with domain sections (§7.1)~~ → deeper Maintenance, Claims, Requests tools → Reviews experience polish. Open fixes (§15) are worked alongside, not after.
 
 ---
 
@@ -350,7 +352,7 @@ Known problems in what's already built. Worked alongside new features, not defer
 | 3 | Review-removal evidence attachments aren't re-checked against the ticket before being sent to Claude vision or re-parented to an attempt (`attachPendingToAttempt`) | Medium | Open |
 | 4 | TopBar search input does nothing (no handler) | Medium | Open |
 | 5 | Ticket/reservation drawer: focus doesn't move in on open, isn't restored on close, no focus trap (WCAG 2.4.3) | Medium | Open |
-| 6 | Drawer form fields (manual-log textarea, status select, comment box) rely on placeholder text, no accessible label (WCAG 1.3.1 / 4.1.2) | Medium | Open |
+| 6 | Drawer form fields (manual-log textarea, status select, comment box) rely on placeholder text, no accessible label (WCAG 1.3.1 / 4.1.2) | Medium | Partial - assignee and comment labelled, new-ticket form fully labelled; review-removal panel fields still open |
 | 7 | Queue-row severity stripe is colour-only (WCAG 1.4.1) | Low | Open |
 | 8 | Standing rule: every new `SECURITY DEFINER` function must `revoke execute from public` - otherwise it becomes a privilege-escalation path for Ask Pique's read-only SQL | Rule | **Done** 2026-09-24 - in CLAUDE.md build conventions |
 | 9 | n8n workflows hold the service-role key in plaintext; its blast radius is the whole shared production database (~45 tables), not just this app. Consider n8n encrypted credentials | Awareness | Open |
