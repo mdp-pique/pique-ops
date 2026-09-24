@@ -4,11 +4,13 @@ import { ticketTitle, unansweredMessageTitle, dueText } from "@/lib/pique-ui/tic
 import { STAGE_KEYS, STAGE_LABELS_LG } from "@/lib/pique-ui/mappings";
 import { formatShortDate } from "@/lib/pique-ui/dates";
 import { DOMAINS, domainFor, type DomainKey } from "@/lib/pique-ui/domains";
+import { clockFor, healthRank, type Clock } from "@/lib/pique-ui/clock";
 
 const PRIORITY_WEIGHT: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 };
 
 const QUEUE_SELECT = `
   id, type, stage, status, priority, sla_breached, due_at, created_at, guest_name, assignee_id, metadata, reservation_id,
+  started_at, target_at, health,
   property:properties(property_name, public_name),
   reservation:reservations(check_in, check_out, guest:guests(full_name)),
   assignee:profiles!tickets_assignee_id_fkey(display_name)
@@ -27,6 +29,8 @@ export interface QueueRow {
   ownerName: string;
   due: { text: string; late: boolean };
   dueAt: string | null;
+  health: string | null;
+  clock: Clock | null;
   severity: "warn" | "crit";
 }
 
@@ -39,6 +43,9 @@ type RawTicketRow = {
   sla_breached: boolean;
   due_at: string | null;
   created_at: string;
+  started_at: string | null;
+  target_at: string | null;
+  health: string | null;
   guest_name: string | null;
   assignee_id: string | null;
   metadata: Record<string, unknown>;
@@ -69,6 +76,8 @@ function toQueueRow(t: RawTicketRow, messageBody?: string | null): QueueRow {
     ownerName: t.assignee?.display_name ?? "Unassigned",
     due: due,
     dueAt: t.due_at,
+    health: t.health,
+    clock: clockFor(t.started_at, t.due_at),
     severity: t.sla_breached || t.priority === "urgent" || t.status === "blocked" ? "crit" : "warn",
   };
 }
@@ -110,15 +119,10 @@ export async function getQueueData(opts: { tagClass: string; segment: "open" | "
   if (opts.segment === "mine" && opts.userId) {
     filtered = filtered.filter((t) => t.assignee_id === opts.userId);
   } else if (opts.segment === "breached") {
-    filtered = filtered.filter((t) => t.sla_breached);
+    filtered = filtered.filter(isBehind);
   }
 
-  filtered.sort((a, b) => {
-    if (a.sla_breached !== b.sla_breached) return a.sla_breached ? -1 : 1;
-    const pw = (PRIORITY_WEIGHT[a.priority] ?? 9) - (PRIORITY_WEIGHT[b.priority] ?? 9);
-    if (pw !== 0) return pw;
-    return (a.due_at ?? a.created_at) < (b.due_at ?? b.created_at) ? -1 : 1;
-  });
+  filtered.sort(sortOpen);
 
   const messageBodyById = await fetchUnansweredMessageBodies(supabase, filtered);
 
@@ -151,6 +155,10 @@ async function fetchUnansweredMessageBodies(
   return result;
 }
 
+function isBehind(t: RawTicketRow): boolean {
+  return t.health === "behind" || t.health === "missed" || t.sla_breached;
+}
+
 export type DomainSegment = "open" | "mine" | "unassigned" | "breached" | "resolved";
 
 export interface DomainData {
@@ -159,6 +167,8 @@ export interface DomainData {
 }
 
 function sortOpen(a: RawTicketRow, b: RawTicketRow): number {
+  const hr = healthRank(a.health) - healthRank(b.health);
+  if (hr !== 0) return hr;
   if (a.sla_breached !== b.sla_breached) return a.sla_breached ? -1 : 1;
   const pw = (PRIORITY_WEIGHT[a.priority] ?? 9) - (PRIORITY_WEIGHT[b.priority] ?? 9);
   if (pw !== 0) return pw;
@@ -201,7 +211,7 @@ export async function getDomainData(opts: { domain: DomainKey; type: string; seg
     rows = open.filter((t) => opts.type === "all" || t.type === opts.type);
     if (opts.segment === "mine") rows = opts.userId ? rows.filter((t) => t.assignee_id === opts.userId) : [];
     else if (opts.segment === "unassigned") rows = rows.filter((t) => !t.assignee_id);
-    else if (opts.segment === "breached") rows = rows.filter((t) => t.sla_breached);
+    else if (opts.segment === "breached") rows = rows.filter(isBehind);
     rows.sort(sortOpen);
   }
 
@@ -239,6 +249,11 @@ export interface TicketDrawerData {
   assigneeId: string | null;
   assignableUsers: { id: string; name: string }[];
   due: { text: string; late: boolean };
+  health: string | null;
+  clock: Clock | null;
+  startedAt: string | null;
+  targetAt: string | null;
+  dueAt: string | null;
   status: string;
   reservationId: string | null;
   reservationSummary: {
@@ -266,6 +281,7 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
     .from("tickets")
     .select(
       `id, type, stage, status, priority, sla_breached, due_at, created_at, guest_name, metadata, reservation_id, assignee_id,
+       started_at, target_at, health,
        property:properties(property_name, public_name, city),
        reservation:reservations(check_in, check_out, guest:guests(full_name)),
        assignee:profiles!tickets_assignee_id_fkey(display_name)`,
@@ -338,6 +354,11 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
     assigneeId: t.assignee_id,
     assignableUsers: (assignableProfiles ?? []).map((p) => ({ id: p.id, name: p.display_name ?? "Unnamed" })),
     due: dueText(t),
+    health: t.health,
+    clock: clockFor(t.started_at, t.due_at),
+    startedAt: t.started_at,
+    targetAt: t.target_at,
+    dueAt: t.due_at,
     status: t.status,
     reservationId: t.reservation_id,
     reservationSummary: t.reservation

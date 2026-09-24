@@ -12,7 +12,7 @@ const SEGMENTS: { key: DomainSegment; label: string }[] = [
   { key: "open", label: "Open" },
   { key: "mine", label: "Mine" },
   { key: "unassigned", label: "Unassigned" },
-  { key: "breached", label: "Breached" },
+  { key: "breached", label: "Behind" },
   { key: "resolved", label: "Resolved" },
 ];
 

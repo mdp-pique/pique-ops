@@ -40,6 +40,10 @@ Beyond unanswered-message alerts (above), three more existing automated flows ar
 
 The GHL form "213 FML Parking Registration" already posts to Slack from a GHL workflow (unchanged). A webhook action added to that GHL workflow calls the new n8n workflow `Pique-Parking-Form-To-Ticket` (id `8nKXAvhG1CVUKfIG`, webhook path `pique-parking-form`, requires `?key=` secret and `?property_id=`), which runs `select public.upsert_parking_ticket($1::uuid, $2::jsonb)` over the existing "Supabase Postgres" n8n credential - no service key in the workflow. All matching/upsert logic lives in that SQL function (migrations `20260924190000_*`, `20260924193000_*`, `20260924200000_*`); execute is revoked from public/anon/authenticated. Idempotent on `external_ref = 'parking:{reservation_id}'`.
 
+## Ticket clocks and health — as of 2026-09-24
+
+PRD §8.2. Every ticket has `started_at` / `target_at` / `due_at` and a computed `health` (`on_track` · `attention` · `behind` · `missed` · `waiting`). Per-type rules live in `ticket_type_clocks` (migration `20260924210000_ticket_clocks_and_health.sql`). An exception-safe BEFORE trigger on `tickets` fills clock defaults on insert (only where null - an explicit due date always wins), pauses soft clocks while `blocked`, recomputes health, and mirrors Behind/Missed into `sla_breached` (except `unanswered_message`, whose mirror owns that flag). An AFTER trigger logs health changes to `ticket_events`; checklist changes touch the parent ticket. Time passing is handled by n8n `Pique-Ticket-Health-Refresh` (id `wFFvcYMRoY3AeJo6`, every 15 min, `select public.refresh_ticket_health()`). Never set `health` by hand; change the clock or the rules instead.
+
 ## `review_flag` tickets are now actionable in-app — as of 2026-09-21
 
 Previously `review_flag` tickets were read-only in the UI — nothing to click, no way to progress or close one from the app, which was confusing since they look identical to actionable `review_removal_case` tickets in the queue. Fixed additively, no changes to the existing `review_flags` table's own automation:

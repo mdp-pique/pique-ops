@@ -70,7 +70,8 @@ export function NewTicketPanel({ prefill, onCreated }: { prefill: NewTicketPrefi
         fields,
         priority,
         assigneeId: assigneeId || null,
-        dueDate: due || null,
+        // Untouched = let the type's clock (ticket_type_clocks) set it in the database.
+        dueDate: dueOverride || null,
       });
       if ("error" in result) setError(result.error);
       else onCreated(result.id);

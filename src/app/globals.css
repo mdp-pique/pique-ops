@@ -477,3 +477,19 @@ h1,h2,h3{font-family:var(--font-outfit),var(--font-manrope),system-ui,sans-serif
 .tsection-h{font-size:13px;font-weight:700;color:var(--ink-2);margin:0 0 8px;display:flex;align-items:baseline;gap:8px}
 .tsection-h .num{font-size:12px;color:var(--ink-3);font-weight:600}
 .tsection-h.late{color:var(--crit)}
+/* ---------- ticket clock + health (PRD §8.2) ---------- */
+.status.missed{background:var(--crit);color:#fff;border-color:transparent}
+.clock{display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-size:11px;font-weight:600;color:var(--ink-3)}
+.clock-bar{display:block;width:96px;height:4px;border-radius:999px;background:var(--line-2);overflow:hidden}
+.clock-bar i{display:block;height:100%;border-radius:999px;background:var(--ink-3)}
+.clock.ok .clock-bar i{background:var(--ok)}
+.clock.warn .clock-bar i{background:var(--warn)}
+.clock.crit .clock-bar i,.clock.missed .clock-bar i{background:var(--crit)}
+.clock.crit .clock-label,.clock.missed .clock-label{color:var(--crit)}
+.clock-card .dates{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3);margin-top:10px}
+.clock-card .dates b{color:var(--ink-2);font-weight:600}
+.clock-card .clock{align-items:stretch}
+.clock-card .clock-bar{width:100%;height:6px}
+@media (max-width:760px){
+  .row .right .clock{align-items:flex-end}
+}

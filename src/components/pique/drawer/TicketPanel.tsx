@@ -9,6 +9,7 @@ import { assignTicket, addTicketComment, rollOverTicket, markUnansweredMessageRe
 import { ReviewRemovalPanel } from "./ReviewRemovalPanel";
 import { setTicketStatus, toggleTicketItem, addTicketItem } from "./ticketActions";
 import { specFor } from "@/lib/pique-ui/domains";
+import { healthLabel, healthVariant, formatClockDate } from "@/lib/pique-ui/clock";
 
 const STATUS_OPTIONS = [
   { key: "open", label: "Open" },
@@ -109,7 +110,11 @@ export function TicketPanel({
                 </option>
               ))}
             </select>
-            <StatusPill variant={data.due.late ? "crit" : "neutral"}>{data.due.text}</StatusPill>
+            {data.health ? (
+              <span className={`status ${healthVariant(data.health)}`}>{healthLabel(data.health)}</span>
+            ) : (
+              <StatusPill variant="neutral">{data.due.text}</StatusPill>
+            )}
           </div>
           {spec && (
             <div className="status-seg" role="group" aria-label="Status">
@@ -126,6 +131,34 @@ export function TicketPanel({
             </p>
           )}
         </div>
+
+        {data.clock && (
+          <div className="card clock-card">
+            <h3>
+              Clock <span className="mono">{data.clock.label}</span>
+            </h3>
+            <span className={`clock ${healthVariant(data.health)}`}>
+              <span className="clock-bar" aria-hidden="true">
+                <i style={{ width: `${Math.round(data.clock.pct * 100)}%` }} />
+              </span>
+            </span>
+            <div className="dates">
+              {data.startedAt && (
+                <span>
+                  Started <b>{formatClockDate(data.startedAt)}</b>
+                </span>
+              )}
+              {data.targetAt && (
+                <span>
+                  Target <b>{formatClockDate(data.targetAt)}</b>
+                </span>
+              )}
+              <span>
+                Due <b>{formatClockDate(data.dueAt)}</b>
+              </span>
+            </div>
+          </div>
+        )}
 
         {data.reservationSummary && (
           <button

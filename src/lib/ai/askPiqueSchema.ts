@@ -13,6 +13,7 @@ Pique Ops' central work-item table. One row per unit of work needing a human, wh
 - external_ref text (unique, nullable) - e.g. "unanswered:{hospitable_message_id}", "noshow:{shift_id}:{check_date}", "review_flag:{id}", "review_removal:{review_id}"
 - parent_ticket_id uuid (self FK), rollover_count int
 - due_at timestamptz, sla_breached boolean, metadata jsonb (free-form, varies by type)
+- started_at / target_at timestamptz (clock start and optional internal target), health text: 'on_track' | 'attention' | 'behind' | 'missed' | 'waiting' (computed from the clock and checklist progress; null = resolved or no clock). Per-type clock rules live in ticket_type_clocks.
 - created_at / updated_at / closed_at timestamptz
 
 tickets.status: 'open' | 'in_progress' | 'blocked' | 'resolved' | 'closed'. "Open" for reporting purposes means status in ('open','in_progress','blocked').

@@ -2710,6 +2710,10 @@ export type Database = {
           reservation_id: string | null
           rollover_count: number
           sla_breached: boolean
+          health: string | null
+          paused_at: string | null
+          started_at: string | null
+          target_at: string | null
           source: string
           staff_ref: string | null
           stage: string | null
@@ -2734,6 +2738,10 @@ export type Database = {
           reservation_id?: string | null
           rollover_count?: number
           sla_breached?: boolean
+          health?: string | null
+          paused_at?: string | null
+          started_at?: string | null
+          target_at?: string | null
           source: string
           staff_ref?: string | null
           stage?: string | null
@@ -2758,6 +2766,10 @@ export type Database = {
           reservation_id?: string | null
           rollover_count?: number
           sla_breached?: boolean
+          health?: string | null
+          paused_at?: string | null
+          started_at?: string | null
+          target_at?: string | null
           source?: string
           staff_ref?: string | null
           stage?: string | null
