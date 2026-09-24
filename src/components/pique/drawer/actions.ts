@@ -140,15 +140,106 @@ export async function uploadTicketAttachment(ticketId: string, formData: FormDat
   revalidatePath("/", "layout");
 }
 
-export async function rollOverTicket(ticketId: string) {
-  // Rollover automation (PRD §8) isn't built yet - this is a placeholder so the
-  // button in the spec's Actions row doesn't silently do nothing forever.
+const ROLLOVER_ESCALATE_AT = 3;
+
+/**
+ * PRD §8 rollover: the visit is resolved as partial, a follow-up ticket opens
+ * with the undone items, and the third rollover escalates (urgent, and
+ * reassigned to an ops_manager when one exists).
+ */
+export async function rollOverTicket(ticketId: string): Promise<{ id: string } | { error: string }> {
   const { supabase, user } = await requireUser();
-  await supabase.from("ticket_events").insert({
-    ticket_id: ticketId,
-    event_type: "field_change",
-    actor_id: user.id,
-    note: "Rollover requested (manual - automated rollover not implemented yet)",
-  });
+
+  const { data: t } = await supabase
+    .from("tickets")
+    .select("type, status, priority, stage, property_id, reservation_id, guest_name, staff_ref, assignee_id, metadata, rollover_count, due_at")
+    .eq("id", ticketId)
+    .maybeSingle();
+  if (!t) return { error: "Ticket not found." };
+  if (t.type !== "maintenance_ticket") return { error: "Only maintenance tickets roll over." };
+  if (t.status === "resolved" || t.status === "closed") return { error: "This ticket is already closed." };
+
+  const { data: undone } = await supabase
+    .from("ticket_items")
+    .select("label, sort_order")
+    .eq("ticket_id", ticketId)
+    .eq("is_done", false)
+    .order("sort_order");
+  if (!undone?.length) return { error: "Every item is done - resolve it instead." };
+
+  const count = (t.rollover_count ?? 0) + 1;
+  const escalate = count >= ROLLOVER_ESCALATE_AT;
+  let assigneeId = t.assignee_id;
+  if (escalate) {
+    const { data: manager } = await supabase.from("profiles").select("id").eq("role", "ops_manager").limit(1).maybeSingle();
+    if (manager) assigneeId = manager.id;
+  }
+
+  const { data: child, error } = await supabase
+    .from("tickets")
+    .insert({
+      type: t.type,
+      status: "open",
+      priority: escalate ? "urgent" : t.priority,
+      stage: t.stage,
+      property_id: t.property_id,
+      reservation_id: t.reservation_id,
+      guest_name: t.guest_name,
+      staff_ref: t.staff_ref,
+      assignee_id: assigneeId,
+      created_by: user.id,
+      source: "manual",
+      parent_ticket_id: ticketId,
+      rollover_count: count,
+      due_at: t.due_at,
+      metadata: t.metadata,
+    })
+    .select("id")
+    .single();
+  if (error || !child) {
+    console.error("rollOverTicket:", error);
+    return { error: "Couldn't create the follow-up ticket." };
+  }
+
+  await supabase.from("ticket_items").insert(undone.map((i, idx) => ({ ticket_id: child.id, label: i.label, sort_order: idx })));
+
+  await supabase
+    .from("tickets")
+    .update({ status: "resolved", closed_at: new Date().toISOString(), metadata: { ...(t.metadata as Record<string, unknown>), partial: true } })
+    .eq("id", ticketId);
+
+  const n = undone.length;
+  await supabase.from("ticket_events").insert([
+    {
+      ticket_id: ticketId,
+      event_type: "rollover",
+      actor_id: user.id,
+      from_value: t.status,
+      to_value: "resolved",
+      note: `Resolved as partial - ${n} item${n === 1 ? "" : "s"} rolled over to a follow-up ticket`,
+      payload: { child_ticket_id: child.id },
+    },
+    {
+      ticket_id: child.id,
+      event_type: "rollover",
+      actor_id: user.id,
+      to_value: String(count),
+      note: `Rolled over from an earlier visit (rollover #${count})`,
+      payload: { parent_ticket_id: ticketId },
+    },
+    ...(escalate
+      ? [
+          {
+            ticket_id: child.id,
+            event_type: "escalation",
+            actor_id: user.id,
+            to_value: String(count),
+            note: `Escalated - rolled over ${count} times${assigneeId !== t.assignee_id ? ", reassigned to ops manager" : ""}`,
+          },
+        ]
+      : []),
+  ]);
+
   revalidatePath("/", "layout");
+  return { id: child.id };
 }

@@ -26,7 +26,7 @@ export function TicketPanel({
   onOpenReservation?: () => void;
   onMutated?: () => void;
 }) {
-  const { close } = useDrawer();
+  const { close, openTicket } = useDrawer();
   const [isPending, startTransition] = useTransition();
   const [comment, setComment] = useState("");
   const [newItem, setNewItem] = useState("");
@@ -272,7 +272,21 @@ export function TicketPanel({
               runAction(() => uploadTicketAttachment(data.id, formData));
             }}
           />
-          {data.tagClass === "maint" && <Btn onClick={() => runAction(() => rollOverTicket(data.id))}>Roll over</Btn>}
+          {data.type === "maintenance_ticket" && undone > 0 && data.status !== "resolved" && (
+            <Btn
+              disabled={isPending}
+              onClick={() => {
+                if (!window.confirm(`Close this visit as partly done and open a follow-up with the ${undone} unfinished item${undone === 1 ? "" : "s"}?`)) return;
+                startTransition(async () => {
+                  const result = await rollOverTicket(data.id);
+                  if ("error" in result) setStatusError(result.error);
+                  else openTicket(result.id);
+                });
+              }}
+            >
+              Roll over
+            </Btn>
+          )}
           {data.type === "unanswered_message" && data.status !== "resolved" && (
             <Btn variant="primary" onClick={() => runAction(() => markUnansweredMessageResolved(data.id))}>
               Mark answered

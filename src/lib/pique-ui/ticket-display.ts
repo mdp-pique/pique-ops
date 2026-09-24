@@ -1,5 +1,9 @@
 import { ticketTypeLabel } from "./mappings";
 
+function localDate(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Edmonton" }).format(d);
+}
+
 type Metadata = Record<string, unknown>;
 
 /**
@@ -40,10 +44,11 @@ export function dueText(t: { due_at: string | null; sla_breached: boolean; creat
   if (t.due_at) {
     const due = new Date(t.due_at);
     const late = due.getTime() < Date.now();
-    return {
-      text: (late ? "Overdue – " : "Due ") + due.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      late: late || t.sla_breached,
-    };
+    const dateLabel = due.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Edmonton" });
+    if (late) return { text: `Overdue – ${dateLabel}`, late: true };
+    const days = Math.round((Date.parse(localDate(due)) - Date.parse(localDate(new Date()))) / 86400000);
+    const left = days === 0 ? "today" : days === 1 ? "tomorrow" : days <= 30 ? `${days} days left` : null;
+    return { text: days === 0 ? "Due today" : `Due ${dateLabel}${left ? ` · ${left}` : ""}`, late: t.sla_breached };
   }
   const days = Math.floor((Date.now() - new Date(t.created_at).getTime()) / 86400000);
   return { text: days <= 0 ? "Opened today" : `Opened ${days}d ago`, late: t.sla_breached };
