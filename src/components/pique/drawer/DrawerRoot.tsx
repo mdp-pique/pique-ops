@@ -89,28 +89,72 @@ export function DrawerRoot() {
     if (panel) bodyRef.current?.querySelector(".d-body")?.scrollTo({ top: 0 });
   }, [panel, tab]);
 
+  const isOpen = !!panel;
+
+  // Focus management (WCAG 2.4.3): move focus in on open, keep Tab inside
+  // while open, and hand it back to whatever opened the drawer on close.
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (isOpen) {
+      if (!returnFocusRef.current) returnFocusRef.current = document.activeElement as HTMLElement | null;
+      requestAnimationFrame(() => bodyRef.current?.focus());
+    } else if (returnFocusRef.current) {
+      returnFocusRef.current.focus?.();
+      returnFocusRef.current = null;
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && panel) close();
+      if (!panel) return;
+      if (e.key === "Escape") {
+        close();
+        return;
+      }
+      if (e.key !== "Tab" || !bodyRef.current) return;
+      const focusable = Array.from(
+        bodyRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => el.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const inside = bodyRef.current.contains(document.activeElement);
+      if (e.shiftKey && (document.activeElement === first || !inside)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (document.activeElement === last || !inside)) {
+        e.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [panel, close]);
 
-  const isOpen = !!panel;
   const isNew = panel?.kind === "new";
   const showTabs = !isNew && !!ticket?.reservationId;
 
   return (
     <>
       <div className={`scrim ${isOpen ? "open" : ""}`} onClick={close} />
-      <aside className={`drawer ${isOpen ? "open" : ""}`} aria-hidden={!isOpen} role="dialog" aria-label="Detail" ref={bodyRef}>
+      <aside
+        className={`drawer ${isOpen ? "open" : ""}`}
+        aria-hidden={!isOpen}
+        inert={!isOpen}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Detail"
+        tabIndex={-1}
+        ref={bodyRef}
+      >
         {showTabs && (
           <div className="d-tabs">
-            <button className={tab === "ticket" ? "active" : ""} onClick={() => setTab("ticket")}>
+            <button className={tab === "ticket" ? "active" : ""} aria-pressed={tab === "ticket"} onClick={() => setTab("ticket")}>
               Ticket
             </button>
-            <button className={tab === "res" ? "active" : ""} onClick={() => setTab("res")}>
+            <button className={tab === "res" ? "active" : ""} aria-pressed={tab === "res"} onClick={() => setTab("res")}>
               Reservation
             </button>
           </div>

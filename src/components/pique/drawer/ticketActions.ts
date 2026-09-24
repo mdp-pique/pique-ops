@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "./actions";
 import { specFor, defaultDueDate } from "@/lib/pique-ui/domains";
 import { todayLocal, edmontonDateTimeToISO } from "@/lib/pique-ui/dates";
+import { ticketTitle } from "@/lib/pique-ui/ticket-display";
+import { ticketTypeLabel, isHiddenTicketType } from "@/lib/pique-ui/mappings";
 
 export interface ReservationOption {
   id: string;
@@ -250,4 +252,52 @@ export async function addTicketItem(ticketId: string, label: string) {
   await supabase.from("ticket_items").insert({ ticket_id: ticketId, label: text, sort_order: (last?.sort_order ?? -1) + 1 });
 
   revalidatePath("/", "layout");
+}
+
+export interface TicketSearchResult {
+  id: string;
+  title: string;
+  typeLabel: string;
+  propertyName: string;
+  status: string;
+}
+
+/** Top-bar search: reservations (guest, code, property) plus tickets (guest, summary, property). */
+export async function globalSearch(query: string): Promise<{ reservations: ReservationOption[]; tickets: TicketSearchResult[] }> {
+  const { supabase } = await requireUser();
+  const q = query.replace(/[,()*%\\:"']/g, " ").trim();
+  if (q.length < 2) return { reservations: [], tickets: [] };
+
+  const { data: props } = await supabase
+    .from("properties")
+    .select("id")
+    .or(`property_name.ilike.%${q}%,public_name.ilike.%${q}%`)
+    .limit(20);
+
+  const clauses = [`guest_name.ilike.%${q}%`, `metadata->>title.ilike.%${q}%`];
+  if (props?.length) clauses.push(`property_id.in.(${props.map((p) => p.id).join(",")})`);
+
+  const [reservations, { data: tickets }] = await Promise.all([
+    searchReservations(q),
+    supabase
+      .from("tickets")
+      .select("id, type, status, metadata, property:properties(property_name, public_name)")
+      .or(clauses.join(","))
+      .in("status", ["open", "in_progress", "blocked"])
+      .order("created_at", { ascending: false })
+      .limit(8),
+  ]);
+
+  return {
+    reservations: reservations.slice(0, 6),
+    tickets: (tickets ?? [])
+      .filter((t) => !isHiddenTicketType(t.type))
+      .map((t) => ({
+        id: t.id,
+        title: ticketTitle({ type: t.type, metadata: (t.metadata as Record<string, unknown>) ?? {} }),
+        typeLabel: ticketTypeLabel(t.type),
+        propertyName: t.property?.public_name ?? t.property?.property_name ?? "Unknown property",
+        status: t.status,
+      })),
+  };
 }
