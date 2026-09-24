@@ -178,10 +178,10 @@ One generic queue with a generic drawer made nothing feel actionable: every type
 
 | Section | Ticket types | Built around |
 |---|---|---|
-| **Reviews** | `review_flag`, `review_removal_case`, `review_removal_escalation`, `review_action_item`, `guest_review_reminder` | Appeal decision, AI draft + evidence, attempt history, escalation to Robert |
+| **Reviews** | `review_flag`, `review_removal_case`, `review_removal_escalation`, `review_action_item`, `guest_review_reminder` | Appeal decision, AI draft + evidence, attempt history, escalation to Robert. Includes a view of every review by removal stage (1st attempt / 2nd / escalated / removed) and a searchable history of successfully removed reviews (`reviews.removed_at`) - both asked for directly in Katrina's list |
 | **Maintenance** | `maintenance_ticket`, `maintenance_access`, `cleaning_issue`, `qc_inspection`, `property_security_check` | Per-unit issue checklist, assignee/technician, rollover, before-next-check-in deadline |
 | **Claims** | `claim_tracker`, `guest_block_report` | Filing-deadline countdown, evidence checklist, claim status by platform |
-| **Requests** | `vehicle_registration`, `pet_fee`, `pack_n_play`, `direct_booking_id_check`, `guest_vetting`, `extension_request` | Small SOP-driven tasks tied to a date on the reservation (usually check-in): a short checklist and a done button |
+| **Requests** | `vehicle_registration`, `guest_phone_verification`, `pet_fee`, `pack_n_play`, `direct_booking_id_check`, `guest_vetting`, `extension_request` | Small SOP-driven tasks tied to a date on the reservation (usually check-in): a short checklist and a done button |
 
 Not in these sections: `unanswered_message` and `missed_call` live in **Inbox**; `system_health` lives in Admin; internal cleaning-ops types (`cleaner_late_noshow`, `incomplete_cleaning_form`, `cleaning_overtime_approval`) stay hidden from staff views until M5.
 
@@ -248,10 +248,11 @@ Counts by type and SLA state; unanswered conversations; missed calls awaiting ca
 |---|---|---|---|---|---|
 | `guest_vetting` | book | automation (existing fraud-check n8n) | history tier, flagged reason, DNH match | Before check-in | Existing workflow; now upserts a ticket (`external_ref = fraud:{reservation_id}`) in addition to Slack |
 | `direct_booking_id_check` | book | automation | ID collected?, purpose of trip, pet count | Before check-in | Trigger: reservation with platform = direct. Items: ID, purpose, pets |
+| `guest_phone_verification` | book | automation (reservation missing a verified phone) or manual | phone collected?, verified (2FA / confirmed reachable)? | Before check-in | Added v1.2 from Katrina's list (Appendix A) - was missing from v1.1. Exact meaning of "verified / 2FA" to confirm with Katrina (§12) |
 | `pet_fee` | book | automation | requested?, collected?, escalated to Airbnb? | 48h after booking | Trigger: pets flagged on the reservation (data already surfaces in the arrivals check) |
 | `unanswered_message` | any | automation (conversations) | conversation_id, minutes since inbound | 30 min | |
 | `extension_request` | stay | automation (intent classifier) | requested dates, responded? | 2h | |
-| `missed_call` | any | automation (GHL) | call_id, caller, callback done? | 1h | |
+| `missed_call` | any | automation (GHL) | call_id, caller, callback done? | 1h | Covers cleaners calling in, not just guests - match the number against Connecteam staff as well as guest conversations and set `staff_ref` when it's a cleaner |
 | `maintenance_ticket` | stay / turnover | automation (intent classifier, review subscores) or manual | items (one per issue), staff_ref, rollover_count | Before next check-in | The missing piece from v1.0. One ticket per unit-visit, one item per issue (lamp, dishwasher, deck door). Partial completion rolls over per §8; 3rd rollover escalates to Tammy |
 | `maintenance_access` | stay | linked to maintenance_ticket | guest notified at, 24h rule satisfied?, guest permission | Before technician visit | Child of a maintenance ticket, not standalone |
 | `cleaning_issue` | turnover / accountability | automation (review cleanliness subscore <= 3, or intent classifier) or manual | complaint, staff_ref (cleaner from `cleaning_job_map` via reservation_id), photos | Same day | This is cleaner-to-review attribution. Depends on the `reservation_id` fix in §5 |
@@ -317,6 +318,7 @@ Counts by type and SLA state; unanswered conversations; missed calls awaiting ca
 - **Call recording retention:** decide how long voicemail audio and transcripts are kept. Guest PII lives in this system; write it down.
 - **Data retention and deletion (broader than calls):** nothing is ever deleted today - every table accumulates via upsert, and there's no way to find and remove everything about one guest. Write a one-paragraph retention policy. Confirm the Anthropic API account is set to zero data retention, since guest messages and review-evidence photos go through Claude.
 - **Parking form (`vehicle_registration`):** where do the guest parking-form submissions land today (Google Form/Sheet, Hospitable, other)? That decides whether the ticket can auto-open from the submission or starts manual. Also: which properties besides Fire Mountain Lodge #213 need registration, and how the building is notified (portal, email, phone).
+- **`guest_phone_verification`:** Katrina's list says "verified phone numbers for guests - ensuring they are 2FA / collecting." Confirm what "verified" means in practice (platform-verified number, confirmed by text, collected at all for direct bookings) before building.
 - **`guest_vetting`:** the fraud-check workflow posts to Slack only and never saves a verdict, so there's nothing to mirror. Either add a write to that live workflow (a production edit - needs sign-off) or keep the type unbuilt.
 
 ---
@@ -355,3 +357,37 @@ Known problems in what's already built. Worked alongside new features, not defer
 | 8 | Standing rule: every new `SECURITY DEFINER` function must `revoke execute from public` - otherwise it becomes a privilege-escalation path for Ask Pique's read-only SQL | Rule | **Done** 2026-09-24 - in CLAUDE.md build conventions |
 | 9 | n8n workflows hold the service-role key in plaintext; its blast radius is the whole shared production database (~45 tables), not just this app. Consider n8n encrypted credentials | Awareness | Open |
 | 10 | No record of production schema/data changes made outside the app (e.g. by an agent via MCP). Adopt: someone other than the changer sees prod changes before or shortly after | Process | Open |
+
+---
+
+## Appendix A. Katrina's list - coverage map
+
+Source: Katrina's operational-gaps doc (Google Doc "Katrina's list", linked from the project). Every item maps to a ticket type or surface below. When the list changes, update this table.
+
+| Katrina's item | Covered by | Section | Built? |
+|---|---|---|---|
+| ID + purpose of trip collected on direct bookings; was the guest vetted (purpose, pets) | `direct_booking_id_check` | Requests | No |
+| Is there a current Truvi / AirCover claim, with a summary of charges | `claim_tracker` (charges summary field) | Claims | No |
+| Pet fee: request sent? collected? escalate to Airbnb resolutions? | `pet_fee` | Requests | No |
+| Cameras on and working at night; locks on and working | `property_security_check` (locks via Hospitable, cameras via Wyze job) | Maintenance | No |
+| Maintenance visit: guest permission to enter / 24h heads-up rule | `maintenance_access` (child of `maintenance_ticket`) | Maintenance | No |
+| Verified guest phone numbers (2FA), collecting them | `guest_phone_verification` (added v1.2 - was missing) | Requests | No |
+| Pack-n-plays for Canmore ($60+ if missed) | `pack_n_play` | Requests | No |
+| Team never reviews guests on VRBO (manual) | `guest_review_reminder` (VRBO stays a manual reminder) | Reviews | No |
+| Vet guests with no / few / bad reviews before they stay | `guest_vetting` (blocked - fraud check doesn't save a verdict, §12) | Requests | No |
+| Initial guest message gets buried under the auto-reply | `unanswered_message` + intent classifier (§7.3) | Inbox | Partial - unanswered detection mirrored from existing alerts; classifier not built |
+| Extension requests missed by CS | `extension_request` (intent classifier) | Requests | No |
+| Blocking / reporting bad guests (case IDs, hostile guests) | `guest_block_report` | Claims | No |
+| Reminder to write reviews for bad guests (mess, damage, late checkout, noise, hostility) | `guest_review_reminder` | Reviews | No |
+| Database of reviews successfully removed | `reviews.removed_at` + removed-reviews history view (§7.1) | Reviews | Data yes (daily auto-detection), view no |
+| Which reviews are on 1st / 2nd / 3rd attempt (escalation / Robert) | `review_removal_case` attempt history + `review_removal_escalation` | Reviews | Partial - attempts tracked, escalation not built |
+| Visibility on review suggestions being fixed (pillows replaced: request, photos, orders, proof) | `review_action_item` | Reviews | No |
+| Missed calls from cleaners | `missed_call` (cleaner numbers matched, `staff_ref`) | Inbox | No (GHL not integrated) |
+| Missed calls generally; listen to voicemail in-app | `missed_call` + `calls.recording_url` / transcript | Inbox | No (GHL not integrated) |
+| Cleaners starting shifts on time | `cleaner_late_noshow` | Hidden until M5 | Partial - no-shows mirrored, lateness not |
+| Cleaning forms fully filled out (hot tub often missed) | `incomplete_cleaning_form` | Hidden until M5 | No |
+| Cleaning overtime needs approval + reason + photos (chargeable to guest) | `cleaning_overtime_approval` | Hidden until M5 | No |
+| AI-assisted cleaning schedule, best cleaners get best cleans | `smart_scheduling_suggestion` (M6 stretch) | - | No |
+| QC visibility and a real checklist (supplies, floors, counters, overall rating) | `qc_inspection` | Maintenance | No |
+
+Not from Katrina's list but added since: `vehicle_registration` (Fire Mountain Lodge #213 parking fines), `review_flag` (existing suppression-decision stage).
