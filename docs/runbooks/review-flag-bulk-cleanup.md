@@ -109,7 +109,7 @@ Use `decided_by = 'laurice@piquepropertiesinc.com'` (the same format the app wri
      select id, 'status_change', '<laurice profile id>', 'open', 'resolved', 'Appeal logged from bulk cleanup'
      from public.tickets where external_ref = 'review_flag:<id>';
      ```
-   - If the review was **removed** or the appeal was **finally rejected**, also close the `review_removal_case` ticket the same way (`external_ref = 'review_removal:<review_id>'`, `to_value 'resolved'`, a note saying which).
+   - If the review was **removed**, inserting the attempt with `status = 'removed'` resolves the `review_removal_case` ticket by itself. If Laurice is **giving up** after a final rejection, close that ticket directly the same way (`external_ref = 'review_removal:<review_id>'`, `to_value 'resolved'`, a note saying it was finally rejected).
 7. **Still undecided:** leave them `pending`. They stay in the app for her to handle one by one.
 8. **Verify and report.** Re-run the survey query. Then confirm every flag you closed has a resolved ticket:
    ```sql
