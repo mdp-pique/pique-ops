@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { ticketTypeLabel } from "@/lib/pique-ui/mappings";
 import { createTeam, deleteTeam, saveTeam } from "./actions";
+import { SubmitButton } from "@/components/pique/SubmitButton";
 
 export default async function AdminTeamsPage() {
   const supabase = await createClient();
@@ -49,7 +50,9 @@ export default async function AdminTeamsPage() {
           placeholder="New team, e.g. Maintenance"
           className="flex-1 rounded border border-gray-700 bg-black px-3 py-2 text-sm"
         />
-        <button className="rounded bg-white px-3 py-2 text-sm font-medium text-black">Add team</button>
+        <SubmitButton pendingText="Adding…" className="rounded bg-white px-3 py-2 text-sm font-medium text-black disabled:opacity-60">
+          Add team
+        </SubmitButton>
       </form>
 
       {(teams ?? []).length === 0 && <p className="text-sm text-gray-500">No teams yet.</p>}
@@ -62,7 +65,9 @@ export default async function AdminTeamsPage() {
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="font-semibold">{t.name} team</h2>
                 <form action={deleteTeam.bind(null, t.id)}>
-                  <button className="text-xs text-red-400 hover:underline">Delete team</button>
+                  <SubmitButton pendingText="Deleting…" className="text-xs text-red-400 hover:underline disabled:opacity-60">
+                    Delete team
+                  </SubmitButton>
                 </form>
               </div>
               <form action={saveTeam.bind(null, t.id)} className="space-y-4">
@@ -91,7 +96,7 @@ export default async function AdminTeamsPage() {
                     ))}
                   </div>
                 </fieldset>
-                <button className="rounded border border-gray-700 px-3 py-1 text-sm hover:bg-gray-900">Save</button>
+                <SubmitButton className="rounded border border-gray-700 px-3 py-1 text-sm hover:bg-gray-900 disabled:opacity-60">Save</SubmitButton>
               </form>
             </section>
           );

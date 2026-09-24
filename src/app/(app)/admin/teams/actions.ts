@@ -18,8 +18,9 @@ export async function createTeam(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
   const supabase = await requireTeamManager();
+  // Duplicate name (e.g. a double-submitted form) is a no-op: the team already exists.
   const { error } = await supabase.from("teams").insert({ name });
-  if (error) throw new Error(error.code === "23505" ? "A team with that name already exists" : error.message);
+  if (error && error.code !== "23505") console.error("createTeam:", error);
   revalidatePath("/admin/teams");
 }
 
