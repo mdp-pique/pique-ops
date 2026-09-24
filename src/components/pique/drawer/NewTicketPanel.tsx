@@ -191,12 +191,23 @@ export function NewTicketPanel({ prefill, onCreated }: { prefill: NewTicketPrefi
               <label className="fld">
                 <span>Assign to</span>
                 <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-                  <option value="">Unassigned</option>
-                  {options?.users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                    </option>
-                  ))}
+                  <option value="">{spec.type ? "Unassigned (or the type's default team)" : "Unassigned"}</option>
+                  {options && options.teams.length > 0 && (
+                    <optgroup label="Teams">
+                      {options.teams.map((t) => (
+                        <option key={t.id} value={`team:${t.id}`}>
+                          {t.name} team
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="People">
+                    {options?.users.map((u) => (
+                      <option key={u.id} value={`user:${u.id}`}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
               </label>
             </fieldset>

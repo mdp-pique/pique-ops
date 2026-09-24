@@ -9,7 +9,7 @@ export const SCHEMA_DIGEST = `
 Pique Ops' central work-item table. One row per unit of work needing a human, whether created manually or shadow-mirrored from an existing automation table.
 - id uuid (PK), type text, status text, priority text, stage text (nullable)
 - property_id / reservation_id / conversation_id uuid (nullable FKs), guest_name text, staff_ref text
-- assignee_id / created_by uuid (FK profiles), source text
+- assignee_id / created_by uuid (FK profiles), assignee_team_id uuid (FK teams - a ticket can be owned by a team, a person, or both), source text
 - external_ref text (unique, nullable) - e.g. "unanswered:{hospitable_message_id}", "noshow:{shift_id}:{check_date}", "review_flag:{id}", "review_removal:{review_id}"
 - parent_ticket_id uuid (self FK), rollover_count int
 - due_at timestamptz, sla_breached boolean, metadata jsonb (free-form, varies by type)
@@ -29,6 +29,9 @@ tickets.type (free text, no DB constraint - values in use today):
   unanswered_message, missed_call, extension_request - guest communication
   system_health - the app's own job failures
 Note: cleaner_late_noshow, incomplete_cleaning_form, cleaning_overtime_approval, and other purely-internal cleaning-ops ticket types are intentionally hidden from the staff-facing queue UI, but they still exist in this table and are fair game to query directly.
+
+### teams / team_members
+- teams: id uuid, name text. team_members: team_id, profile_id. ticket_type_clocks.default_team_id sets which team new tickets of a type go to.
 
 ### ticket_events
 Audit trail, one row per state change or note on a ticket.

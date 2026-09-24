@@ -13,7 +13,9 @@ const QUEUE_SELECT = `
   started_at, target_at, health,
   property:properties(property_name, public_name),
   reservation:reservations(check_in, check_out, guest:guests(full_name)),
-  assignee:profiles!tickets_assignee_id_fkey(display_name)
+  assignee:profiles!tickets_assignee_id_fkey(display_name),
+  assignee_team_id,
+  team:teams!tickets_assignee_team_id_fkey(name)
 `;
 
 export interface QueueRow {
@@ -53,6 +55,8 @@ type RawTicketRow = {
   property: { property_name: string | null; public_name: string | null } | null;
   reservation: { check_in: string; check_out: string; guest: { full_name: string | null } | null } | null;
   assignee: { display_name: string | null } | null;
+  assignee_team_id: string | null;
+  team: { name: string } | null;
 };
 
 function toQueueRow(t: RawTicketRow, messageBody?: string | null): QueueRow {
@@ -73,13 +77,31 @@ function toQueueRow(t: RawTicketRow, messageBody?: string | null): QueueRow {
     guestName,
     dates: t.reservation ? `${formatShortDate(t.reservation.check_in)}–${formatShortDate(t.reservation.check_out)}` : null,
     stageLabel: t.stage ? STAGE_LABELS_LG[STAGE_KEYS.indexOf(t.stage as (typeof STAGE_KEYS)[number])] : "Any stage",
-    ownerName: t.assignee?.display_name ?? "Unassigned",
+    ownerName: ownerLabel(t.assignee?.display_name, t.team?.name),
     due: due,
     dueAt: t.due_at,
     health: t.health,
     clock: clockFor(t.started_at, t.due_at),
     severity: t.sla_breached || t.priority === "urgent" || t.status === "blocked" ? "crit" : "warn",
   };
+}
+
+/** A person wins over the team; a team-only ticket reads "Maintenance team". */
+function ownerLabel(person: string | null | undefined, team: string | null | undefined): string {
+  if (person) return person;
+  if (team) return `${team} team`;
+  return "Unassigned";
+}
+
+function isMine(t: RawTicketRow, userId: string | undefined, myTeams: Set<string>): boolean {
+  if (!userId) return false;
+  return t.assignee_id === userId || (!t.assignee_id && !!t.assignee_team_id && myTeams.has(t.assignee_team_id));
+}
+
+async function teamIdsFor(supabase: Awaited<ReturnType<typeof createClient>>, userId: string | undefined): Promise<Set<string>> {
+  if (!userId) return new Set();
+  const { data } = await supabase.from("team_members").select("team_id").eq("profile_id", userId);
+  return new Set((data ?? []).map((r) => r.team_id));
 }
 
 export interface QueueData {
@@ -117,7 +139,8 @@ export async function getQueueData(opts: { tagClass: string; segment: "open" | "
     filtered = filtered.filter((t) => types.has(t.type));
   }
   if (opts.segment === "mine" && opts.userId) {
-    filtered = filtered.filter((t) => t.assignee_id === opts.userId);
+    const myTeams = await teamIdsFor(supabase, opts.userId);
+    filtered = filtered.filter((t) => isMine(t, opts.userId, myTeams));
   } else if (opts.segment === "breached") {
     filtered = filtered.filter(isBehind);
   }
@@ -209,8 +232,10 @@ export async function getDomainData(opts: { domain: DomainKey; type: string; seg
     rows = (data ?? []) as unknown as RawTicketRow[];
   } else {
     rows = open.filter((t) => opts.type === "all" || t.type === opts.type);
-    if (opts.segment === "mine") rows = opts.userId ? rows.filter((t) => t.assignee_id === opts.userId) : [];
-    else if (opts.segment === "unassigned") rows = rows.filter((t) => !t.assignee_id);
+    if (opts.segment === "mine") {
+      const myTeams = await teamIdsFor(supabase, opts.userId);
+      rows = rows.filter((t) => isMine(t, opts.userId, myTeams));
+    } else if (opts.segment === "unassigned") rows = rows.filter((t) => !t.assignee_id && !t.assignee_team_id);
     else if (opts.segment === "breached") rows = rows.filter(isBehind);
     rows.sort(sortOpen);
   }
@@ -247,7 +272,9 @@ export interface TicketDrawerData {
   stageLabel: string;
   ownerName: string;
   assigneeId: string | null;
+  assigneeTeamId: string | null;
   assignableUsers: { id: string; name: string }[];
+  assignableTeams: { id: string; name: string }[];
   due: { text: string; late: boolean };
   health: string | null;
   clock: Clock | null;
@@ -284,7 +311,9 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
        started_at, target_at, health,
        property:properties(property_name, public_name, city),
        reservation:reservations(check_in, check_out, guest:guests(full_name)),
-       assignee:profiles!tickets_assignee_id_fkey(display_name)`,
+       assignee:profiles!tickets_assignee_id_fkey(display_name),
+       assignee_team_id,
+       team:teams!tickets_assignee_team_id_fkey(name)`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -292,7 +321,7 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
   if (error) console.error("getTicketDrawerData:", error);
   if (!t) return null;
 
-  const [{ data: items }, { data: events }, { data: comments }, { data: siblingTickets }, { data: assignableProfiles }, { data: attachmentRows }] =
+  const [{ data: items }, { data: events }, { data: comments }, { data: siblingTickets }, { data: assignableProfiles }, { data: attachmentRows }, { data: teamRows }] =
     await Promise.all([
     supabase.from("ticket_items").select("id, label, is_done").eq("ticket_id", id).order("sort_order"),
     supabase
@@ -315,6 +344,7 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
       .eq("ticket_id", id)
       .is("review_removal_draft_id", null)
       .order("created_at", { ascending: false }),
+    supabase.from("teams").select("id, name").order("name"),
   ]);
 
   const { data: signedAttachments } = attachmentRows?.length
@@ -350,8 +380,10 @@ export async function getTicketDrawerData(id: string): Promise<TicketDrawerData 
     tagClass: ticketTagClass(t.type),
     title,
     stageLabel: t.stage ? STAGE_LABELS_LG[STAGE_KEYS.indexOf(t.stage as (typeof STAGE_KEYS)[number])] : "Any stage",
-    ownerName: t.assignee?.display_name ?? "Unassigned",
+    ownerName: ownerLabel(t.assignee?.display_name, t.team?.name),
     assigneeId: t.assignee_id,
+    assigneeTeamId: t.assignee_team_id,
+    assignableTeams: (teamRows ?? []).map((tm) => ({ id: tm.id, name: tm.name })),
     assignableUsers: (assignableProfiles ?? []).map((p) => ({ id: p.id, name: p.display_name ?? "Unnamed" })),
     due: dueText(t),
     health: t.health,

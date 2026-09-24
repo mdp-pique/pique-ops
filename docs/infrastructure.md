@@ -1,0 +1,27 @@
+# Infrastructure
+
+Record of deployment and auth configuration that lives outside the code. Any change to these settings must be noted here.
+
+## Deploys (Vercel + GitHub)
+
+Owner: MDP.
+
+- **2026-09-24:** Vercel production branch set to `main`; GitHub default branch set to `main`. Live site: ops.piquepropertiesinc.com.
+- Work happens on feature branches (currently `claude/github-setup-question-9b4s3w`); every push gets a Vercel preview URL. Merging (or fast-forwarding) into `main` is what publishes to live.
+- Rollback: promote the previous production deployment in Vercel.
+
+## Auth / Supabase config
+
+Owner: MDP.
+
+- **2026-09-24:** Supabase Auth redirect URLs now include `https://pique-*-pique-ops.vercel.app/**` so Vercel preview deployments can sign in. Replaced the broader `https://*.vercel.app/**`, which would have let any Vercel-hosted site receive our login redirects.
+- Previews share the production Supabase database on purpose - they're for checking screens, not a data sandbox.
+- Entries `https://pique-*-ops-pique-ops.vercel.app` and `https://pique-*-ops-pique-ops.vercel.app/**` look unused (they don't match real preview URLs like `pique-xod6qtbom-pique-ops.vercel.app`) and should be cleaned up later.
+- Revisit a separate Supabase project or branch for previews once the team uses the app daily.
+
+## Scheduled / automation workflows the app depends on (n8n)
+
+- `Pique-Ticket-Health-Refresh` (`wFFvcYMRoY3AeJo6`) - every 15 min, `select public.refresh_ticket_health()`.
+- `Pique-Parking-Form-To-Ticket` (`8nKXAvhG1CVUKfIG`) - GHL parking form webhook → `public.upsert_parking_ticket`. Webhook URL carries a secret `key` (kept in n8n and GHL, not in the repo).
+- `Pique-Detect-Removed-Reviews-Daily` (`6qNqQbphBc1eVCGx`) - daily review-removal detection.
+All attached to the shared error handler `Pique-Error-Handler`.

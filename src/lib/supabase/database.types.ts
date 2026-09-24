@@ -2644,6 +2644,111 @@ export type Database = {
           },
         ]
       }
+      teams: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+        ]
+      }
+      team_members: {
+        Row: {
+          created_at: string
+          profile_id: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          profile_id: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          profile_id?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_members_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_type_clocks: {
+        Row: {
+          critical_before: unknown
+          default_team_id: string | null
+          due_anchor: string
+          due_hour: number | null
+          due_is_hard: boolean
+          due_offset: unknown
+          pausable: boolean
+          start_anchor: string
+          target_offset: unknown
+          type: string
+          updated_at: string
+          warn_before: unknown
+        }
+        Insert: {
+          critical_before?: unknown
+          default_team_id?: string | null
+          due_anchor?: string
+          due_hour?: number | null
+          due_is_hard?: boolean
+          due_offset?: unknown
+          pausable?: boolean
+          start_anchor?: string
+          target_offset?: unknown
+          type: string
+          updated_at?: string
+          warn_before?: unknown
+        }
+        Update: {
+          critical_before?: unknown
+          default_team_id?: string | null
+          due_anchor?: string
+          due_hour?: number | null
+          due_is_hard?: boolean
+          due_offset?: unknown
+          pausable?: boolean
+          start_anchor?: string
+          target_offset?: unknown
+          type?: string
+          updated_at?: string
+          warn_before?: unknown
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_type_clocks_default_team_id_fkey"
+            columns: ["default_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_items: {
         Row: {
           created_at: string
@@ -2695,6 +2800,7 @@ export type Database = {
       tickets: {
         Row: {
           assignee_id: string | null
+          assignee_team_id: string | null
           closed_at: string | null
           conversation_id: string | null
           created_at: string
@@ -2723,6 +2829,7 @@ export type Database = {
         }
         Insert: {
           assignee_id?: string | null
+          assignee_team_id?: string | null
           closed_at?: string | null
           conversation_id?: string | null
           created_at?: string
@@ -2751,6 +2858,7 @@ export type Database = {
         }
         Update: {
           assignee_id?: string | null
+          assignee_team_id?: string | null
           closed_at?: string | null
           conversation_id?: string | null
           created_at?: string
@@ -2778,6 +2886,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tickets_assignee_team_id_fkey"
+            columns: ["assignee_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tickets_assignee_id_fkey"
             columns: ["assignee_id"]

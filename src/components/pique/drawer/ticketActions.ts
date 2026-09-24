@@ -19,17 +19,20 @@ export interface ReservationOption {
 export interface NewTicketOptions {
   properties: { id: string; name: string }[];
   users: { id: string; name: string }[];
+  teams: { id: string; name: string }[];
 }
 
 export async function getNewTicketOptions(): Promise<NewTicketOptions> {
   const { supabase } = await requireUser();
-  const [{ data: properties }, { data: users }] = await Promise.all([
+  const [{ data: properties }, { data: users }, { data: teams }] = await Promise.all([
     supabase.from("properties").select("id, property_name, public_name").eq("is_active", true).order("property_name"),
     supabase.from("profiles").select("id, display_name").order("display_name"),
+    supabase.from("teams").select("id, name").order("name"),
   ]);
   return {
     properties: (properties ?? []).map((p) => ({ id: p.id, name: p.public_name ?? p.property_name ?? "Unnamed property" })),
     users: (users ?? []).map((u) => ({ id: u.id, name: u.display_name ?? "Unnamed" })),
+    teams: (teams ?? []).map((t) => ({ id: t.id, name: t.name })),
   };
 }
 
@@ -143,7 +146,8 @@ export async function createManualTicket(input: CreateTicketInput): Promise<{ id
       property_id: propertyId,
       reservation_id: reservation?.id ?? null,
       guest_name: reservation?.guest?.full_name ?? null,
-      assignee_id: input.assigneeId || null,
+      assignee_id: input.assigneeId?.startsWith("user:") ? input.assigneeId.slice(5) : null,
+      assignee_team_id: input.assigneeId?.startsWith("team:") ? input.assigneeId.slice(5) : null,
       created_by: user.id,
       source: "manual",
       due_at: dueDate ? edmontonDateTimeToISO(dueDate) : null,
@@ -322,6 +326,44 @@ export async function setTicketDueDate(ticketId: string, date: string): Promise<
     from_value: ticket.due_at,
     to_value: dueAt,
     note: `Due date changed: ${fmt(ticket.due_at)} → ${fmt(dueAt)}`,
+  });
+
+  revalidatePath("/", "layout");
+  return {};
+}
+
+/**
+ * Assign to a person ("user:<id>"), a team ("team:<id>"), or nobody ("").
+ * Assigning a person keeps the team as context; assigning a team clears the person.
+ */
+export async function assignTicketTo(ticketId: string, value: string): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+  const [kind, id] = value ? value.split(":") : ["", ""];
+
+  let update: { assignee_id?: string | null; assignee_team_id?: string | null };
+  let note: string;
+  if (kind === "user") {
+    const { data: p } = await supabase.from("profiles").select("display_name").eq("id", id).maybeSingle();
+    if (!p) return { error: "Unknown person." };
+    update = { assignee_id: id };
+    note = id === user.id ? "Self-assigned" : `Assigned to ${p.display_name ?? "someone"}`;
+  } else if (kind === "team") {
+    const { data: t } = await supabase.from("teams").select("name").eq("id", id).maybeSingle();
+    if (!t) return { error: "Unknown team." };
+    update = { assignee_team_id: id, assignee_id: null };
+    note = `Assigned to the ${t.name} team`;
+  } else {
+    update = { assignee_id: null, assignee_team_id: null };
+    note = "Unassigned";
+  }
+
+  await supabase.from("tickets").update(update).eq("id", ticketId);
+  await supabase.from("ticket_events").insert({
+    ticket_id: ticketId,
+    event_type: "assignment",
+    actor_id: user.id,
+    to_value: value || null,
+    note,
   });
 
   revalidatePath("/", "layout");

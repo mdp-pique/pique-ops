@@ -5,9 +5,9 @@ import type { TicketDrawerData } from "@/lib/data/tickets";
 import { Spine } from "@/components/pique/Spine";
 import { Tag, StatusPill, Btn, IconBtn } from "@/components/pique/primitives";
 import { useDrawer } from "./DrawerContext";
-import { assignTicket, addTicketComment, rollOverTicket, markUnansweredMessageResolved, uploadTicketAttachment } from "./actions";
+import { addTicketComment, rollOverTicket, markUnansweredMessageResolved, uploadTicketAttachment } from "./actions";
 import { ReviewRemovalPanel } from "./ReviewRemovalPanel";
-import { setTicketStatus, toggleTicketItem, addTicketItem, setTicketDueDate } from "./ticketActions";
+import { setTicketStatus, toggleTicketItem, addTicketItem, setTicketDueDate, assignTicketTo } from "./ticketActions";
 import { specFor } from "@/lib/pique-ui/domains";
 import { healthLabel, healthVariant, formatClockDate } from "@/lib/pique-ui/clock";
 
@@ -117,32 +117,31 @@ export function TicketPanel({
           <div className="m">
             <select
               aria-label="Assignee"
-              value={data.assigneeId ?? ""}
+              value={data.assigneeId ? `user:${data.assigneeId}` : data.assigneeTeamId ? `team:${data.assigneeTeamId}` : ""}
               disabled={isPending}
               onChange={(e) => {
-                const id = e.target.value || null;
-                const name = data.assignableUsers.find((u) => u.id === id)?.name;
-                runAction(() => assignTicket(data.id, id, name));
+                const value = e.target.value;
+                runAction(() => assignTicketTo(data.id, value));
               }}
-              style={{
-                borderRadius: 999,
-                border: "1px solid var(--line-2)",
-                background: "var(--surface-2)",
-                color: "var(--ink)",
-                font: "inherit",
-                fontSize: 12.5,
-                fontWeight: 600,
-                padding: "6px 10px",
-              }}
+              className="assignee-select"
             >
-              <option value="" style={{ background: "var(--surface-solid)", color: "var(--ink)" }}>
-                Unassigned
-              </option>
-              {data.assignableUsers.map((u) => (
-                <option key={u.id} value={u.id} style={{ background: "var(--surface-solid)", color: "var(--ink)" }}>
-                  {u.name}
-                </option>
-              ))}
+              <option value="">Unassigned</option>
+              {data.assignableTeams.length > 0 && (
+                <optgroup label="Teams">
+                  {data.assignableTeams.map((t) => (
+                    <option key={t.id} value={`team:${t.id}`}>
+                      {t.name} team
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="People">
+                {data.assignableUsers.map((u) => (
+                  <option key={u.id} value={`user:${u.id}`}>
+                    {u.name}
+                  </option>
+                ))}
+              </optgroup>
             </select>
             {data.health ? (
               <span className={`status ${healthVariant(data.health)}`}>{healthLabel(data.health)}</span>

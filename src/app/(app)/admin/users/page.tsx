@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PROFILE_ROLES } from "@/lib/types";
 import { approveUser, listPendingAndApproved, revokeUser, updateRole } from "./actions";
@@ -14,6 +15,13 @@ export default async function AdminUsersPage() {
     return (
       <div className="mx-auto max-w-2xl px-6 py-8 text-sm text-gray-400">
         Admin only. Ask an admin if you need access changed.
+        {profile?.role === "ops_manager" && (
+          <p className="mt-3">
+            <Link href="/admin/teams" className="text-gray-200 underline">
+              Manage teams →
+            </Link>
+          </p>
+        )}
       </div>
     );
   }
@@ -23,7 +31,12 @@ export default async function AdminUsersPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Team</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-lg font-semibold">People &amp; access</h1>
+          <Link href="/admin/teams" className="text-sm text-gray-400 hover:underline">
+            Teams →
+          </Link>
+        </div>
         <div className="flex items-center gap-3 text-sm text-gray-400">
           <span>{user?.email}</span>
           <SignOutButton />
