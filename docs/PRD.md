@@ -352,6 +352,6 @@ Known problems in what's already built. Worked alongside new features, not defer
 | 5 | Ticket/reservation drawer: focus doesn't move in on open, isn't restored on close, no focus trap (WCAG 2.4.3) | Medium | Open |
 | 6 | Drawer form fields (manual-log textarea, status select, comment box) rely on placeholder text, no accessible label (WCAG 1.3.1 / 4.1.2) | Medium | Open |
 | 7 | Queue-row severity stripe is colour-only (WCAG 1.4.1) | Low | Open |
-| 8 | Standing rule: every new `SECURITY DEFINER` function must `revoke execute from public` - otherwise it becomes a privilege-escalation path for Ask Pique's read-only SQL | Rule | Open - add to CLAUDE.md |
+| 8 | Standing rule: every new `SECURITY DEFINER` function must `revoke execute from public` - otherwise it becomes a privilege-escalation path for Ask Pique's read-only SQL | Rule | **Done** 2026-09-24 - in CLAUDE.md build conventions |
 | 9 | n8n workflows hold the service-role key in plaintext; its blast radius is the whole shared production database (~45 tables), not just this app. Consider n8n encrypted credentials | Awareness | Open |
 | 10 | No record of production schema/data changes made outside the app (e.g. by an agent via MCP). Adopt: someone other than the changer sees prod changes before or shortly after | Process | Open |
