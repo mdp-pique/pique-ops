@@ -61,7 +61,7 @@ Tammy's noon + 3 PM Connecteam chat summaries. Source is `connecteam_chat_messag
 - `connecteam_office_staff` lists who counts as office (Connecteam owners/managers). Only DMs with an office member on one end are read; cleaner-to-cleaner DMs never are.
 - `cleaning_chat_digest_input(slot)` builds the day's transcript plus the list of cleaner messages with no reply after 30 min. n8n `Pique-Cleaning-Chat-Checkins` (id `Wh5kooJCSKuT4bze`, 12:00 + 15:00 Edmonton) has Claude summarize it against Tammy's checklist and saves it to `cleaning_chat_digests` (one row per day per slot). The 3 PM run reads the noon row.
 - All service-role only (DM content). The prompt drops access codes and HR/personal matters.
-- Posts once per slot to `#cleaning-health-check` (`C0BJM1A4MDY`); `cleaning_chat_digests.slack_ts` blocks a second post if the slot is re-run. That channel must stay limited to office staff, since it carries DM content.
+- Posts once per slot to `#cleaning-health-check` (`C0BJM1A4MDY`), tagging Tammy (`<@U05QG0BUP0E>`); `cleaning_chat_digests.slack_ts` blocks a second post if the slot is re-run. That channel must stay limited to office staff, since it carries DM content.
 
 ## Ticket clocks and health — as of 2026-09-24
 
