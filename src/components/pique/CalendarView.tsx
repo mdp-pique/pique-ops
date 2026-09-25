@@ -119,15 +119,22 @@ export function CalendarView({ data }: { data: CalendarData }) {
 
   const cell = (d: CalDay, key: LayerKey) => {
     if (key === "res") {
-      const turn = d.checkOuts.filter((o) => d.checkIns.some((i) => i.propertyName === o.propertyName)).length;
       if (!d.checkIns.length && !d.checkOuts.length) return null;
+      const { cleans, sameDay } = dayCounts(d);
       return (
         <>
           <span className="cal-resline">
             <span className="cal-pill num">{d.checkIns.length} in</span>
             <span className="cal-pill out num">{d.checkOuts.length} out</span>
           </span>
-          {turn > 0 && <span className="cal-sub num">{turn} same-day turnover{turn > 1 ? "s" : ""}</span>}
+          <span className="cal-counts num">
+            <span>
+              <b>{cleans}</b> {cleans === 1 ? "clean" : "cleans"}
+            </span>
+            <span>
+              <b>{sameDay}</b> same-day check-in{sameDay === 1 ? "" : "s"}
+            </span>
+          </span>
         </>
       );
     }
@@ -301,8 +308,8 @@ export function CalendarView({ data }: { data: CalendarData }) {
               <div key={l.key} className="cal-aline">
                 {l.key === "res" ? (
                   d.checkIns.length + d.checkOuts.length > 0 && (
-                    <span className="cal-ev l-res">
-                      {d.checkIns.length} check-ins · {d.checkOuts.length} check-outs
+                    <span className="cal-ev l-res num">
+                      {d.checkIns.length} in · {d.checkOuts.length} out · {dayCounts(d).cleans} cleans · {dayCounts(d).sameDay} same-day
                     </span>
                   )
                 ) : (
@@ -326,8 +333,16 @@ export function CalendarView({ data }: { data: CalendarData }) {
               <h3>{l.label}</h3>
               {l.key === "res" && (
                 <>
+                  <span className="cal-counts num">
+                    <span>
+                      <b>{dayCounts(selDay).cleans}</b> cleans
+                    </span>
+                    <span>
+                      <b>{dayCounts(selDay).sameDay}</b> same-day check-ins
+                    </span>
+                  </span>
                   <ResList title="Checking out" list={selDay.checkOuts} onOpen={openRes} />
-                  <ResList title="Checking in" list={selDay.checkIns} onOpen={openRes} />
+                  <ResList title="Checking in" list={selDay.checkIns} onOpen={openRes} sameDay={sameDayIds(selDay)} />
                 </>
               )}
               {l.key === "clean" &&
@@ -384,7 +399,28 @@ function CleanChip({ c, full }: { c: CalClean; full?: boolean }) {
   );
 }
 
-function ResList({ title, list, onOpen }: { title: string; list: { id: string; propertyName: string; guestName: string | null }[]; onOpen: (id: string) => void }) {
+// Every check-out needs a clean. A same-day check-in lands on a property someone
+// checks out of that day, so that clean has to be done before check-in time.
+function dayCounts(d: CalDay) {
+  return { cleans: d.checkOuts.length, sameDay: sameDayIds(d).size };
+}
+
+function sameDayIds(d: CalDay) {
+  const out = new Set(d.checkOuts.map((o) => o.propertyName));
+  return new Set(d.checkIns.filter((i) => out.has(i.propertyName)).map((i) => i.id));
+}
+
+function ResList({
+  title,
+  list,
+  onOpen,
+  sameDay,
+}: {
+  title: string;
+  list: { id: string; propertyName: string; guestName: string | null }[];
+  onOpen: (id: string) => void;
+  sameDay?: Set<string>;
+}) {
   if (!list.length) return <span className="cal-empty">{title}: nobody.</span>;
   return (
     <details className="cal-reslist" open={list.length <= 6}>
@@ -394,6 +430,7 @@ function ResList({ title, list, onOpen }: { title: string; list: { id: string; p
       {list.map((r) => (
         <button key={r.id} type="button" className="cal-ev l-res" onClick={() => onOpen(r.id)}>
           {r.propertyName}
+          {sameDay?.has(r.id) && <span className="cal-tag">Same-day</span>}
           {r.guestName && <span className="cal-sub">{r.guestName}</span>}
         </button>
       ))}
