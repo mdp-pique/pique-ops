@@ -744,6 +744,70 @@ export type Database = {
         }
         Relationships: []
       }
+      connecteam_shifts: {
+        Row: {
+          shift_id: string
+          scheduler_id: string
+          job_id: string | null
+          property_id: string | null
+          title: string | null
+          reservation_code: string | null
+          shift_date: string | null
+          start_at: string | null
+          end_at: string | null
+          is_published: boolean | null
+          is_open_shift: boolean | null
+          assigned_user_ids: Json
+          raw: Json | null
+          first_seen_at: string
+          last_seen_at: string
+          gone_at: string | null
+          created_at: string
+          updated_at: string
+          assigned_count: number | null
+        }
+        Insert: {
+          shift_id: string
+          scheduler_id: string
+          job_id?: string | null
+          property_id?: string | null
+          title?: string | null
+          reservation_code?: string | null
+          shift_date?: string | null
+          start_at?: string | null
+          end_at?: string | null
+          is_published?: boolean | null
+          is_open_shift?: boolean | null
+          assigned_user_ids?: Json
+          raw?: Json | null
+          first_seen_at?: string
+          last_seen_at?: string
+          gone_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          shift_id?: string
+          scheduler_id?: string
+          job_id?: string | null
+          property_id?: string | null
+          title?: string | null
+          reservation_code?: string | null
+          shift_date?: string | null
+          start_at?: string | null
+          end_at?: string | null
+          is_published?: boolean | null
+          is_open_shift?: boolean | null
+          assigned_user_ids?: Json
+          raw?: Json | null
+          first_seen_at?: string
+          last_seen_at?: string
+          gone_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       connecteam_users: {
         Row: {
           email: string | null

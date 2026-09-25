@@ -191,10 +191,13 @@ export async function getCalendarData(start: string, today: string, numDays = 7)
 }
 
 /**
- * Cleaning shifts come from the Connecteam no-show checker's table, which only
- * the service role can read (no authenticated RLS policy - left as is). Read it
- * server-side, only for a signed-in team member, and return just what the
- * calendar shows.
+ * Cleans come from two places:
+ * - today and earlier: cleaning_shift_check, the no-show checker's snapshot, which
+ *   knows who actually clocked in;
+ * - later days: connecteam_shifts, the hourly read-only copy of the Connecteam
+ *   schedule (Pique-Connecteam-Shifts-Sync).
+ * Both tables are read server-side with the admin client, only for a signed-in team
+ * member, returning just what the calendar shows (never shift notes).
  */
 async function getCleans(start: string, end: string, today: string): Promise<{ date: string; clean: CalClean }[]> {
   const supabase = await createClient();
@@ -204,20 +207,51 @@ async function getCleans(start: string, end: string, today: string): Promise<{ d
   if (!profile) return [];
 
   const admin = createAdminClient();
-  const { data: shifts } = await admin
-    .from("cleaning_shift_check")
-    .select("shift_id, check_date, shift_start, connecteam_job_id, assigned_user_ids, flag")
-    .gte("check_date", start)
-    .lte("check_date", end)
-    .order("shift_start");
-  if (!shifts?.length) return [];
+  type Row = { id: string; date: string; start: string | null; jobId: string | null; propertyId: string | null; userIds: string[]; state: string };
+  const ids = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
 
-  const jobIds = [...new Set(shifts.map((s) => s.connecteam_job_id).filter((x): x is string => !!x))];
-  const firstUser = (s: (typeof shifts)[number]) => {
-    const ids = Array.isArray(s.assigned_user_ids) ? s.assigned_user_ids : [];
-    return ids.length ? String(ids[0]) : null;
-  };
-  const userIds = [...new Set(shifts.map(firstUser).filter((x): x is string => !!x))];
+  const [{ data: checked }, { data: scheduled }] = await Promise.all([
+    start <= today
+      ? admin
+          .from("cleaning_shift_check")
+          .select("shift_id, check_date, shift_start, connecteam_job_id, assigned_user_ids, flag")
+          .gte("check_date", start)
+          .lte("check_date", end < today ? end : today)
+          .order("shift_start")
+      : Promise.resolve({ data: [] as never[] }),
+    end > today
+      ? admin
+          .from("connecteam_shifts")
+          .select("shift_id, shift_date, start_at, job_id, property_id, assigned_user_ids, is_published")
+          .is("gone_at", null)
+          .gt("shift_date", today > start ? today : addDays(start, -1))
+          .lte("shift_date", end)
+          .order("start_at")
+      : Promise.resolve({ data: [] as never[] }),
+  ]);
+
+  const rows: Row[] = [
+    ...(checked ?? []).map((s) => {
+      let state = s.flag ?? "ok";
+      if (state === "no_show" && s.check_date >= today) state = "not_clocked_in";
+      return { id: s.shift_id, date: s.check_date, start: s.shift_start, jobId: s.connecteam_job_id, propertyId: null, userIds: ids(s.assigned_user_ids), state };
+    }),
+    // Upcoming shifts start as unpublished open shifts until a coordinator publishes
+    // them - normal, so "open" is shown without a warning.
+    ...(scheduled ?? []).map((s) => ({
+      id: s.shift_id,
+      date: s.shift_date ?? "",
+      start: s.start_at,
+      jobId: s.job_id,
+      propertyId: s.property_id,
+      userIds: ids(s.assigned_user_ids),
+      state: ids(s.assigned_user_ids).length ? "ok" : "open",
+    })),
+  ];
+  if (!rows.length) return [];
+
+  const jobIds = [...new Set(rows.map((r) => r.jobId).filter((x): x is string => !!x))];
+  const userIds = [...new Set(rows.map((r) => r.userIds[0]).filter((x): x is string => !!x))];
 
   const [{ data: jobs }, { data: users }] = await Promise.all([
     jobIds.length
@@ -225,7 +259,7 @@ async function getCleans(start: string, end: string, today: string): Promise<{ d
       : Promise.resolve({ data: [] as { connecteam_job_id: string; property_id: string | null; property_name: string | null }[] }),
     userIds.length ? admin.from("connecteam_users").select("user_id, first_name").in("user_id", userIds.map(Number)) : Promise.resolve({ data: [] as never[] }),
   ]);
-  const propIds = [...new Set((jobs ?? []).map((j) => j.property_id).filter((x): x is string => !!x))];
+  const propIds = [...new Set([...(jobs ?? []).map((j) => j.property_id), ...rows.map((r) => r.propertyId)].filter((x): x is string => !!x))];
   const { data: props } = propIds.length
     ? await supabase.from("properties").select("id, property_name, public_name").in("id", propIds)
     : { data: [] as { id: string; property_name: string | null; public_name: string | null }[] };
@@ -238,19 +272,14 @@ async function getCleans(start: string, end: string, today: string): Promise<{ d
   );
   const userName = new Map((users ?? []).map((u) => [String(u.user_id), u.first_name]));
 
-  return shifts.map((s) => {
-    const uid = firstUser(s);
-    let state = s.flag ?? "ok";
-    if (state === "no_show" && s.check_date >= today) state = "not_clocked_in";
-    return {
-      date: s.check_date,
-      clean: {
-        id: s.shift_id,
-        time: localTime(s.shift_start),
-        propertyName: (s.connecteam_job_id && jobName.get(s.connecteam_job_id)) || "Unknown property",
-        cleaner: uid ? (userName.get(uid) ?? null) : null,
-        state,
-      },
-    };
-  });
+  return rows.map((r) => ({
+    date: r.date,
+    clean: {
+      id: r.id,
+      time: localTime(r.start),
+      propertyName: (r.propertyId && propById.get(r.propertyId)) || (r.jobId && jobName.get(r.jobId)) || "Unknown property",
+      cleaner: r.userIds[0] ? (userName.get(r.userIds[0]) ?? null) : null,
+      state: r.state,
+    },
+  }));
 }

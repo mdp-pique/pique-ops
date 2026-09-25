@@ -23,5 +23,10 @@ Owner: MDP.
 
 - `Pique-Ticket-Health-Refresh` (`wFFvcYMRoY3AeJo6`) - every 15 min, `select public.refresh_ticket_health()`.
 - `Pique-Parking-Form-To-Ticket` (`8nKXAvhG1CVUKfIG`) - GHL parking form webhook → `public.upsert_parking_ticket`. Webhook URL carries a secret `key` (kept in n8n and GHL, not in the repo).
+- `Pique-Connecteam-Shifts-Sync` (`rfFercNzL7BUJQfM`) - hourly at :07, read-only copy of Connecteam Job Scheduler shifts (-7d to +6 months) into `connecteam_shifts` for the calendar and the booking-vs-shift comparison. Never writes to Connecteam.
 - `Pique-Detect-Removed-Reviews-Daily` (`6qNqQbphBc1eVCGx`) - daily review-removal detection.
 All attached to the shared error handler `Pique-Error-Handler`.
+
+## Zapier (still live)
+
+- Zap "Hospitable reservation → Connecteam shift" creates cleaning shifts from Hospitable `reservation.changed` events (Edmonton + Calgary), looking up the Connecteam job by exact property name in the Google Sheet "Connecteam Lookup" (worksheet Jobs). Being replaced by n8n (PRD §7.9); do not turn it off without sign-off.

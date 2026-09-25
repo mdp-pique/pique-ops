@@ -58,6 +58,7 @@ const CLEAN_STATE: Record<string, { text: string; tone: "behind" | "attention" |
   no_show: { text: "No-show", tone: "behind" },
   draft: { text: "Draft, not published", tone: "attention" },
   unassigned: { text: "Nobody assigned", tone: "attention" },
+  open: { text: "Open shift, not claimed yet", tone: "" },
 };
 
 function toneFor(health: string | null): "behind" | "attention" | "" {
@@ -131,7 +132,7 @@ export function CalendarView({ data }: { data: CalendarData }) {
       );
     }
     if (key === "clean") {
-      if (!d.cleans.length) return d.date > data.today ? <span className="cal-sub">Not synced yet</span> : null;
+      if (!d.cleans.length) return null;
       const flagged = d.cleans.filter((c) => CLEAN_STATE[c.state]?.tone);
       const shown = [...flagged, ...d.cleans.filter((c) => !CLEAN_STATE[c.state]?.tone)].slice(0, 3);
       return (
@@ -335,7 +336,7 @@ export function CalendarView({ data }: { data: CalendarData }) {
                     .sort((a, b) => Number(!CLEAN_STATE[a.state]?.tone) - Number(!CLEAN_STATE[b.state]?.tone))
                     .map((c) => <CleanChip key={c.id} c={c} full />)
                 ) : (
-                  <span className="cal-empty">{selDay.date > data.today ? "Future cleans aren't synced from Connecteam yet." : "No cleans recorded."}</span>
+                  <span className="cal-empty">No cleans scheduled.</span>
                 ))}
               {l.key !== "res" &&
                 l.key !== "clean" &&
@@ -378,7 +379,7 @@ function CleanChip({ c, full }: { c: CalClean; full?: boolean }) {
     <span className={`cal-ev l-clean ${st.tone}`}>
       {c.time && <span className="cal-time">{c.time}</span>} {c.propertyName}
       <Badge tone={st.tone} />
-      {full && <span className="cal-sub">{[st.text, c.cleaner ?? "Cleaner not matched"].filter(Boolean).join(" · ")}</span>}
+      {full && <span className="cal-sub">{[st.text, c.cleaner ?? (c.state === "open" ? null : "Cleaner not matched")].filter(Boolean).join(" · ")}</span>}
     </span>
   );
 }
