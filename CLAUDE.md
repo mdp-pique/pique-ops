@@ -54,6 +54,15 @@ PRD §7.9. `/calendar` (`src/lib/data/calendar.ts`, `CalendarView.tsx`) is a rea
 
 The replacement (migration `20260925030000`, n8n `Pique-Cleaning-Shifts-From-Bookings` id `TCsHEpxNcHxqFOKd`) drives shifts from bookings: one linked shift per checkout (`cleaning_shift_links`), every decision logged in `cleaning_shift_actions`. It is gated by `automation_flags.cleaning_shifts_mode`: `dry_run` (current) only logs and adopts existing shifts, and only `live` writes to Connecteam. Flipping to `live` is the cutover and needs sign-off plus the Zap turned off first, or both will create shifts. See PRD §7.9.
 
+## Cleaning chat check-ins — as of 2026-09-25
+
+Tammy's noon + 3 PM Connecteam chat summaries. Source is `connecteam_chat_messages`, written by the live webhook workflow `Connecteam-Chat-Capture` (id `rAwkafl0v6w1a755`, untouched). Migration `20260925040000_cleaning_chat_checkins.sql`:
+- `connecteam_conversations` (chat titles) plus `connecteam_users` (171 incl. archived) are refreshed daily by n8n `Pique-Connecteam-Directory-Sync` (id `XIHah9eOrtkYbxfo`, read-only).
+- `connecteam_office_staff` lists who counts as office (Connecteam owners/managers). Only DMs with an office member on one end are read; cleaner-to-cleaner DMs never are.
+- `cleaning_chat_digest_input(slot)` builds the day's transcript plus the list of cleaner messages with no reply after 30 min. n8n `Pique-Cleaning-Chat-Checkins` (id `Wh5kooJCSKuT4bze`, 12:00 + 15:00 Edmonton) has Claude summarize it against Tammy's checklist and saves it to `cleaning_chat_digests` (one row per day per slot). The 3 PM run reads the noon row.
+- All service-role only (DM content). The prompt drops access codes and HR/personal matters.
+- **No Slack post yet**: the destination channel isn't chosen. It must be private, since it carries DM content.
+
 ## Ticket clocks and health — as of 2026-09-24
 
 PRD §8.2. Every ticket has `started_at` / `target_at` / `due_at` and a computed `health` (`on_track` · `attention` · `behind` · `missed` · `waiting`). Per-type rules live in `ticket_type_clocks` (migration `20260924210000_ticket_clocks_and_health.sql`). An exception-safe BEFORE trigger on `tickets` fills clock defaults on insert (only where null - an explicit due date always wins), pauses soft clocks while `blocked`, recomputes health, and mirrors Behind/Missed into `sla_breached` (except `unanswered_message`, whose mirror owns that flag). An AFTER trigger logs health changes to `ticket_events`; checklist changes touch the parent ticket. Time passing is handled by n8n `Pique-Ticket-Health-Refresh` (id `wFFvcYMRoY3AeJo6`, every 15 min, `select public.refresh_ticket_health()`). Never set `health` by hand; change the clock or the rules instead.
