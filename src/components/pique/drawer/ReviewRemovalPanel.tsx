@@ -185,9 +185,13 @@ export function ReviewRemovalPanel({
   const reviewId = ctx?.reviewId;
   const toggleHint = (key: string) => setHints((h) => (h.includes(key) ? h.filter((x) => x !== key) : [...h, key]));
 
-  const runGenerate = (isRevision: boolean) => {
+  const runGenerate = (isRevision: boolean, force = false) => {
     if (!reviewId) return;
     if (!isRevision && pendingAttachments.length === 0 && !window.confirm("Generate this draft with no evidence attached?")) return;
+    if (force && hints.length === 0 && !feedback.trim()) {
+      setError("Pick the violation type you're appealing on above, or say why in the box, then try again.");
+      return;
+    }
     setError(null);
     startTransition(async () => {
       try {
@@ -195,7 +199,9 @@ export function ReviewRemovalPanel({
           violationHints: hints,
           extraContext,
           priorDraft: isRevision ? draft?.draftEmail : undefined,
+          priorReasoning: isRevision && draft && !draft.isViolation ? draft.reasoning : undefined,
           feedback: isRevision ? feedback : undefined,
+          force,
           attachmentIds: pendingAttachments.map((a) => a.id),
         });
         setDraft(result);
@@ -219,6 +225,11 @@ export function ReviewRemovalPanel({
 
   const markCreated = () => {
     if (!draft || !reviewId) return;
+    if (
+      !draft.isViolation &&
+      !window.confirm("This logs \"no violation\" and closes the removal case for this review. To appeal anyway, use \"Draft it anyway\" instead. Continue?")
+    )
+      return;
     startTransition(async () => {
       const { draftId } = await saveDraftAttempt(ticketId, reviewId, {
         isViolation: draft.isViolation,
@@ -456,8 +467,9 @@ export function ReviewRemovalPanel({
                     {draft.isViolation ? draft.violationTypes : "No violation found"}
                   </div>
 
-                  {!draft.isViolation && draft.reasoning && (
+                  {draft.reasoning && (
                     <div className="d" style={{ marginBottom: 10 }}>
+                      {draft.isViolation && <b>Heads-up: </b>}
                       {draft.reasoning}
                     </div>
                   )}
@@ -505,9 +517,14 @@ export function ReviewRemovalPanel({
 
                   <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                     <Btn onClick={() => runGenerate(true)}>{isPending ? "Redrafting…" : "Regenerate with feedback"}</Btn>
+                    {!draft.isViolation && (
+                      <Btn variant="primary" onClick={() => runGenerate(true, true)}>
+                        {isPending ? "Drafting…" : "Draft it anyway"}
+                      </Btn>
+                    )}
                     {draft.isViolation && <Btn onClick={copyDraft}>Copy draft</Btn>}
-                    <Btn variant="primary" onClick={markCreated}>
-                      {saved ? "Saved ✓" : "Mark as created"}
+                    <Btn variant={draft.isViolation ? "primary" : undefined} onClick={markCreated}>
+                      {saved ? "Saved ✓" : draft.isViolation ? "Mark as created" : "Log as no violation"}
                     </Btn>
                   </div>
                   {saved && (

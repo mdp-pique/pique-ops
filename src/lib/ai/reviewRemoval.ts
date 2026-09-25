@@ -21,7 +21,11 @@ export interface DraftRequest {
   violationHints: string[];
   extraContext: string;
   priorDraft?: string;
+  /** Why the last run found no violation - sent instead of priorDraft when there was no draft to revise. */
+  priorReasoning?: string;
   feedback?: string;
+  /** The team has decided to appeal anyway: write the strongest honest request instead of re-deciding the verdict. */
+  force?: boolean;
   attachments?: EvidenceAttachment[];
 }
 
@@ -105,8 +109,21 @@ function buildPrompt(ctx: ReviewRemovalContext, req: DraftRequest): string {
         .join(", ")
     : "(none specified - use your own judgment across all 8 checks)";
 
-  const revisePart = req.priorDraft
+  const hasPriorDraft = !!req.priorDraft && req.priorDraft.trim() !== "N/A";
+  const revisePart = hasPriorDraft
     ? `\n\nPRIOR DRAFT (attempt before this one):\n${req.priorDraft}\n\nTEAM FEEDBACK ON THAT DRAFT — revise accordingly, keeping citation quality and the 2,000-2,500 character range:\n${req.feedback || "(no specific feedback given - just try a different angle/framing)"}`
+    : req.priorReasoning
+      ? `\n\nYOUR PREVIOUS ASSESSMENT found no violation:\n${req.priorReasoning}\n\nTHE TEAM DISAGREES:\n${req.feedback || "(no specific reason given)"}\nReconsider with their points in mind.`
+      : "";
+
+  // Staff decide whether to appeal; the tool advises. Without this, a review the
+  // rubric scores as "no violation" can never get a draft, however many times the
+  // team regenerates with feedback.
+  const forcePart = req.force
+    ? `\n\n== TEAM DECISION — this overrides the verdict step above ==
+The team has read your assessment and decided to submit a removal request anyway, on these grounds: ${hints}.
+Their reasoning: ${[req.feedback, req.extraContext].map((x) => x?.trim()).filter(Boolean).join(" / ") || "(see suspected violation types)"}
+Do not re-decide the verdict. Output VERDICT: POLICY VIOLATION, set VIOLATION_TYPES to the team's grounds, and write the strongest honest removal request for them: quote Airbnb's policy wording and the review accurately, and use only facts from the review, conversation, attached evidence and team input - never invent any. Also include a REASONING line (1-2 sentences, placed before DRAFT_EMAIL) giving your honest read on how likely Airbnb is to accept it.`
     : "";
 
   return `You are a review removal specialist for Pique Properties. Analyze this Airbnb review against ALL Airbnb policies.
@@ -131,6 +148,7 @@ ${revisePart}
 
 ---
 ${RUBRIC}
+${forcePart}
 
 ---
 ${OUTPUT_FORMAT}`;
