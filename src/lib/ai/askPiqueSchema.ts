@@ -25,6 +25,7 @@ tickets.type (free text, no DB constraint - values in use today):
   cleaning_issue, cleaner_late_noshow, incomplete_cleaning_form, qc_inspection, cleaning_overtime_approval - cleaning/turnover ops
   review_removal_case, review_removal_escalation, review_action_item, guest_review_reminder, review_flag - review handling (review_flag is the earlier suppression-decision stage, review_removal_case is the later "drafted a removal request" stage - distinct types)
   guest_vetting, direct_booking_id_check, pack_n_play, pet_fee - pre-arrival checks (guest_vetting has no rows yet - its source workflow never persists a verdict)
+  front_desk_notice - building front desk (Lodges #320) emailed about a booking; metadata.front_desk_confirmation = the desk's confirmation number
   claim_tracker - AirCover/insurance claims, due_at is the filing deadline
   unanswered_message, missed_call, extension_request - guest communication
   system_health - the app's own job failures
