@@ -206,7 +206,9 @@ export async function generateReviewRemovalDraft(ctx: ReviewRemovalContext, req:
 
   const message = await client.messages.create({
     model: "claude-sonnet-5",
-    max_tokens: 2000,
+    // Verdict + reasoning + a 2,000-2,500 character draft + attachments all share
+    // this budget; at 2000 tokens long drafts were cut off mid-sentence.
+    max_tokens: 8000,
     messages: [
       {
         role: "user",
@@ -214,6 +216,11 @@ export async function generateReviewRemovalDraft(ctx: ReviewRemovalContext, req:
       },
     ],
   });
+
+  // Never hand back a half-written draft as if it were finished.
+  if (message.stop_reason === "max_tokens") {
+    throw new Error("The draft came back cut off. Try generating it again.");
+  }
 
   const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("\n");
   return parseResponse(text);
