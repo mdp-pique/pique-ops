@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Btn } from "@/components/pique/primitives";
-import { VIOLATION_HINTS, type DraftResult } from "@/lib/ai/reviewRemoval";
+import { VIOLATION_HINTS, type DraftResult, type Odds } from "@/lib/ai/reviewRemoval";
 import type { ReviewRemovalContext } from "@/lib/data/reviews";
 import {
   fetchReviewContext,
@@ -29,6 +29,13 @@ const TEXTAREA_STYLE: React.CSSProperties = {
   font: "inherit",
   fontSize: 13,
   resize: "vertical",
+};
+
+// The AI's odds are advice only - every run still returns a draft.
+const ODDS_COLOR: Record<Odds, string> = {
+  Likely: "var(--ok)",
+  Possible: "var(--warn)",
+  "Long shot": "var(--crit)",
 };
 
 const MANUAL_STATUS_OPTIONS: { value: "sent" | "rejected" | "removed"; label: string }[] = [
@@ -185,13 +192,9 @@ export function ReviewRemovalPanel({
   const reviewId = ctx?.reviewId;
   const toggleHint = (key: string) => setHints((h) => (h.includes(key) ? h.filter((x) => x !== key) : [...h, key]));
 
-  const runGenerate = (isRevision: boolean, force = false) => {
+  const runGenerate = (isRevision: boolean) => {
     if (!reviewId) return;
     if (!isRevision && pendingAttachments.length === 0 && !window.confirm("Generate this draft with no evidence attached?")) return;
-    if (force && hints.length === 0 && !feedback.trim()) {
-      setError("Pick the violation type you're appealing on above, or say why in the box, then try again.");
-      return;
-    }
     setError(null);
     startTransition(async () => {
       try {
@@ -199,9 +202,7 @@ export function ReviewRemovalPanel({
           violationHints: hints,
           extraContext,
           priorDraft: isRevision ? draft?.draftEmail : undefined,
-          priorReasoning: isRevision && draft && !draft.isViolation ? draft.reasoning : undefined,
           feedback: isRevision ? feedback : undefined,
-          force,
           attachmentIds: pendingAttachments.map((a) => a.id),
         });
         setDraft(result);
@@ -225,14 +226,9 @@ export function ReviewRemovalPanel({
 
   const markCreated = () => {
     if (!draft || !reviewId) return;
-    if (
-      !draft.isViolation &&
-      !window.confirm("This logs \"no violation\" and closes the removal case for this review. To appeal anyway, use \"Draft it anyway\" instead. Continue?")
-    )
-      return;
     startTransition(async () => {
       const { draftId } = await saveDraftAttempt(ticketId, reviewId, {
-        isViolation: draft.isViolation,
+        odds: draft.odds,
         violationTypes: draft.violationTypes,
         draftEmail: draft.draftEmail,
       });
@@ -331,6 +327,9 @@ export function ReviewRemovalPanel({
                 </div>
               )}
 
+              <div className="d" style={{ marginBottom: 6, color: "var(--ink-3)" }}>
+                Grounds to argue (optional - leave blank and the AI picks the strongest):
+              </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
                 {VIOLATION_HINTS.map((h) => (
                   <button
@@ -463,39 +462,48 @@ export function ReviewRemovalPanel({
 
               {draft && (
                 <div style={{ marginTop: 14 }}>
-                  <div className="mono" style={{ marginBottom: 6, color: draft.isViolation ? "var(--accent)" : "var(--ink-3)" }}>
-                    {draft.isViolation ? draft.violationTypes : "No violation found"}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+                    <span className="mono" style={{ color: "var(--accent)" }}>
+                      {draft.violationTypes}
+                    </span>
+                    {draft.odds && (
+                      <span className="chip" style={{ color: ODDS_COLOR[draft.odds], borderColor: ODDS_COLOR[draft.odds] }}>
+                        Odds: {draft.odds}
+                      </span>
+                    )}
                   </div>
 
                   {draft.reasoning && (
                     <div className="d" style={{ marginBottom: 10 }}>
-                      {draft.isViolation && <b>Heads-up: </b>}
                       {draft.reasoning}
                     </div>
                   )}
 
-                  {draft.isViolation && (
-                    <>
-                      <textarea
-                        value={draft.draftEmail}
-                        onChange={(e) => setDraft(draft ? { ...draft, draftEmail: e.target.value } : draft)}
-                        rows={12}
-                        style={TEXTAREA_STYLE}
-                      />
-                      <div
-                        className="d"
-                        style={{
-                          marginTop: 4,
-                          textAlign: "right",
-                          color:
-                            draft.draftEmail.length < 2000 || draft.draftEmail.length > 2500 ? "var(--crit)" : "var(--ink-3)",
-                        }}
-                      >
-                        {draft.draftEmail.length.toLocaleString()} / 2,000–2,500 characters
-                      </div>
-                    </>
+                  <textarea
+                    value={draft.draftEmail}
+                    onChange={(e) => setDraft(draft ? { ...draft, draftEmail: e.target.value } : draft)}
+                    rows={12}
+                    style={TEXTAREA_STYLE}
+                  />
+                  <div
+                    className="d"
+                    style={{
+                      marginTop: 4,
+                      textAlign: "right",
+                      color: draft.draftEmail.length < 2000 || draft.draftEmail.length > 2500 ? "var(--crit)" : "var(--ink-3)",
+                    }}
+                  >
+                    {draft.draftEmail.length.toLocaleString()} / 2,000–2,500 characters
+                  </div>
+
+                  {draft.verify && (
+                    <div className="d" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
+                      <b>Check before sending:</b>
+                      {"\n"}
+                      {draft.verify}
+                    </div>
                   )}
-                  {draft.isViolation && draft.attachments && draft.attachments !== "N/A" && (
+                  {draft.attachments && draft.attachments !== "N/A" && (
                     <div className="d" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
                       <b>Suggested attachments:</b>
                       {"\n"}
@@ -506,32 +514,21 @@ export function ReviewRemovalPanel({
                   <textarea
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
-                    placeholder={
-                      draft.isViolation
-                        ? "What should change? (leave blank to just try a different angle)"
-                        : "Disagree? Add context and try again (e.g. what actually happened)…"
-                    }
+                    placeholder="What should change? e.g. 'Section 2 is wrong - rewrite it around the pet fee'. Your edits to the draft above are kept. Leave blank to just try a different angle."
                     rows={2}
                     style={{ ...TEXTAREA_STYLE, marginTop: 10 }}
                   />
 
                   <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                     <Btn onClick={() => runGenerate(true)}>{isPending ? "Redrafting…" : "Regenerate with feedback"}</Btn>
-                    {!draft.isViolation && (
-                      <Btn variant="primary" onClick={() => runGenerate(true, true)}>
-                        {isPending ? "Drafting…" : "Draft it anyway"}
-                      </Btn>
-                    )}
-                    {draft.isViolation && <Btn onClick={copyDraft}>Copy draft</Btn>}
-                    <Btn variant={draft.isViolation ? "primary" : undefined} onClick={markCreated}>
-                      {saved ? "Saved ✓" : draft.isViolation ? "Mark as created" : "Log as no violation"}
+                    <Btn onClick={copyDraft}>Copy draft</Btn>
+                    <Btn variant="primary" onClick={markCreated}>
+                      {saved ? "Saved ✓" : "Mark as created"}
                     </Btn>
                   </div>
                   {saved && (
                     <div className="d" style={{ marginTop: 6, color: "var(--ok)" }}>
-                      {draft.isViolation
-                        ? `Logged as an attempt on this ticket. Send it via Gmail, then track any Airbnb response here manually for now.${isFlag ? " This flag ticket is now closed." : ""} You can attach more evidence to it anytime under prior attempts.`
-                        : "Logged on this ticket as a no-violation attempt."}
+                      {`Logged as an attempt on this ticket. Send it via Gmail, then track any Airbnb response here manually for now.${isFlag ? " This flag ticket is now closed." : ""} You can attach more evidence to it anytime under prior attempts.`}
                     </div>
                   )}
                 </div>

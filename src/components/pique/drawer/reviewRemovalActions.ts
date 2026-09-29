@@ -183,7 +183,7 @@ export async function generateDraft(
 export async function saveDraftAttempt(
   ticketId: string,
   reviewId: string,
-  result: { isViolation: boolean; violationTypes: string; draftEmail: string },
+  result: { odds: string | null; violationTypes: string; draftEmail: string },
 ): Promise<{ draftId: string }> {
   const { supabase, user } = await requireUser();
   await claimTicketIfUnassigned(ticketId);
@@ -205,7 +205,9 @@ export async function saveDraftAttempt(
       draft_email: result.draftEmail,
       slack_thread_ts: "",
       attempt_number: nextAttempt,
-      status: result.isViolation ? "pending" : "no_violation",
+      // Always an open attempt: the AI's odds are advice, and only Airbnb's
+      // answer (logged later as removed/rejected) should close the case.
+      status: "pending",
     })
     .select("id")
     .single();
@@ -214,7 +216,7 @@ export async function saveDraftAttempt(
   await supabase.from("ticket_comments").insert({
     ticket_id: ticketId,
     author_id: user.id,
-    body: `Drafted removal request manually (attempt #${nextAttempt}) - ${result.violationTypes}`,
+    body: `Drafted removal request manually (attempt #${nextAttempt}) - ${result.violationTypes}${result.odds ? ` - AI odds: ${result.odds}` : ""}`,
   });
 
   await resolveIfReviewFlagTicket(supabase, ticketId);
