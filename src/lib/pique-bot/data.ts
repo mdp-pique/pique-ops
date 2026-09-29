@@ -96,10 +96,22 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
  * saved profiles.slack_user_id first, then the Slack account's email against
  * the Google sign-in email, and remembers the link for next time.
  */
+// Slack users with no app login (e.g. staff who only use Slack), remembered for
+// an hour per server instance so each tap doesn't repeat the slow user search.
+const unlinked = new Map<string, { name: string; until: number }>();
+
 export async function resolveActor(admin: Admin, slackUserId: string, slackName: string): Promise<{ profileId: string | null; name: string }> {
   const { data: linked } = await admin.from("profiles").select("id, display_name").eq("slack_user_id", slackUserId).maybeSingle();
   if (linked) return { profileId: linked.id, name: linked.display_name || slackName };
 
+  const cached = unlinked.get(slackUserId);
+  if (cached && cached.until > Date.now()) return { profileId: null, name: cached.name };
+  const actor = await matchByEmail(admin, slackUserId, slackName);
+  if (!actor.profileId) unlinked.set(slackUserId, { name: actor.name, until: Date.now() + 3_600_000 });
+  return actor;
+}
+
+async function matchByEmail(admin: Admin, slackUserId: string, slackName: string): Promise<{ profileId: string | null; name: string }> {
   const info = await slackApi<{ user?: { real_name?: string; profile?: { email?: string; real_name?: string } } }>("users.info", { user: slackUserId });
   const name = info.user?.profile?.real_name || info.user?.real_name || slackName;
   const email = info.user?.profile?.email?.toLowerCase();

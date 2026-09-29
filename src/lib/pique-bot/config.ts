@@ -28,6 +28,3 @@ export const BOT_RULES: Record<string, BotRule> = {
 export const OVERDUE_LIMIT_DAYS = 30;
 
 export const OPEN_STATUSES = ["open", "in_progress", "blocked"];
-
-/** Slack allows 50 blocks per message; each ticket uses two. */
-export const MAX_ROWS_PER_POST = 22;

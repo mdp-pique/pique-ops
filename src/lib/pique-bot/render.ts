@@ -1,6 +1,6 @@
 // Pure layout for Pique Bot's Slack messages - no I/O, so it can be checked on
 // its own. The same function draws the 7 AM post and every update after a tap.
-import { BOT_RULES, MAX_ROWS_PER_POST, OVERDUE_LIMIT_DAYS } from "./config";
+import { BOT_RULES, OVERDUE_LIMIT_DAYS } from "./config";
 
 export interface BotItem {
   id: string;
@@ -81,53 +81,41 @@ export function sortRows(rows: BotRow[]): BotRow[] {
   return [...rows].sort((a, b) => (a.checkIn ?? "9999").localeCompare(b.checkIn ?? "9999"));
 }
 
-export function renderRow(row: BotRow, postId: string, postDate: string, appUrl: string | null): Block[] {
+function titleOf(row: BotRow): string {
   const rule = BOT_RULES[row.type];
-  const title = [`*${rule?.label ?? row.type}*`, row.guestName && esc(row.guestName), row.property && esc(row.property)]
+  return [`*${rule?.label ?? row.type}*`, row.guestName && esc(row.guestName), row.property && esc(row.property)]
     .filter(Boolean)
     .join(" · ");
+}
 
-  const item = nextItem(row);
-  const lines = [title, whenText(row, postDate)];
+function noteLines(row: BotRow): string[] {
+  return row.notes.slice(-2).map((n) => `:memo: ${esc(n.by)}: "${esc(n.text.slice(0, 200))}"`);
+}
 
-  const noteLines = row.notes.slice(-2).map((n) => `:memo: ${esc(n.by)}: "${esc(n.text.slice(0, 200))}"`);
-  const noteButton: Block = {
-    type: "button",
-    action_id: "pique_bot_note",
-    text: { type: "plain_text", text: "Add note" },
-    value: `${postId}|${row.ticketId}`,
-  };
+function noteButton(row: BotRow, postId: string): Block {
+  return { type: "button", action_id: "pique_bot_note", text: { type: "plain_text", text: "Add note" }, value: `${postId}|${row.ticketId}` };
+}
 
-  if (isFinished(row)) {
-    lines.push(`:white_check_mark: Done${row.doneBy ? ` by ${esc(row.doneBy)}` : ""}`, ...noteLines);
-    const section: Block = { type: "section", block_id: `t:${row.ticketId}`, text: { type: "mrkdwn", text: lines.join("\n") } };
-    // Done stays one tap; the note is optional, offered once someone has ticked it here.
-    if (!row.doneBy) return [section];
-    return [section, { type: "actions", block_id: `a:${row.ticketId}`, elements: [noteButton] }];
-  }
-
-  lines.push(`${question(row, item!)}${owner(row)}`);
+/** An item that still needs an answer: the question plus Done / Not yet / Problem / Open. */
+export function renderOpenRow(row: BotRow, postId: string, postDate: string, appUrl: string | null): Block[] {
+  const item = nextItem(row)!;
+  const lines = [titleOf(row), whenText(row, postDate), `${question(row, item)}${owner(row)}`];
   if (row.lastAnswer?.kind === "not_yet") lines.push(`:hourglass_flowing_sand: Not yet - ${esc(row.lastAnswer.by)}`);
   if (row.lastAnswer?.kind === "problem") {
     lines.push(`:warning: Problem - ${esc(row.lastAnswer.by)}${row.lastAnswer.note ? `: "${esc(row.lastAnswer.note.slice(0, 200))}"` : ""}`);
   }
-  if (row.lastAnswer?.kind === "done") lines.push(`:white_check_mark: Ticked by ${esc(row.lastAnswer.by)} - next step above`);
-  lines.push(...noteLines);
+  if (row.lastAnswer?.kind === "done") lines.push(`:white_check_mark: Previous step ticked by ${esc(row.lastAnswer.by)}`);
+  lines.push(...noteLines(row));
 
-  const value = `${postId}|${row.ticketId}|${item!.id}`;
+  const value = `${postId}|${row.ticketId}|${item.id}`;
   const elements: Block[] = [
     { type: "button", action_id: "pique_bot_done", style: "primary", text: { type: "plain_text", text: "Done" }, value },
     { type: "button", action_id: "pique_bot_not_yet", text: { type: "plain_text", text: "Not yet" }, value },
     { type: "button", action_id: "pique_bot_problem", style: "danger", text: { type: "plain_text", text: "Problem" }, value },
   ];
-  if (row.doneBy) elements.push(noteButton);
+  if (row.doneBy) elements.push(noteButton(row, postId));
   if (appUrl) {
-    elements.push({
-      type: "button",
-      action_id: "pique_bot_open",
-      text: { type: "plain_text", text: "Open" },
-      url: `${appUrl}/tickets/requests?ticket=${row.ticketId}`,
-    });
+    elements.push({ type: "button", action_id: "pique_bot_open", text: { type: "plain_text", text: "Open" }, url: `${appUrl}/tickets/requests?ticket=${row.ticketId}` });
   }
 
   return [
@@ -136,10 +124,22 @@ export function renderRow(row: BotRow, postId: string, postDate: string, appUrl:
   ];
 }
 
+/** A finished item, collapsed to one crossed-out line (plus any notes), with Add note on the right. */
+export function renderDoneRow(row: BotRow, postId: string): Block {
+  const plainTitle = titleOf(row).replace(/\*/g, "");
+  const lines = [`:white_check_mark: ~${plainTitle}~${row.doneBy ? ` - done by ${esc(row.doneBy)}` : " - done"}`, ...noteLines(row)];
+  const section: Block = { type: "section", block_id: `t:${row.ticketId}`, text: { type: "mrkdwn", text: lines.join("\n") } };
+  if (row.doneBy) section.accessory = noteButton(row, postId);
+  return section;
+}
+
+/** Slack's limit is 50 blocks per message. */
+const BLOCK_BUDGET = 50;
+
 export function renderPost(rows: BotRow[], postId: string, postDate: string, appUrl: string | null): { text: string; blocks: Block[] } {
   const sorted = sortRows(rows);
-  const shown = sorted.slice(0, MAX_ROWS_PER_POST);
-  const open = sorted.filter((r) => !isFinished(r)).length;
+  const open = sorted.filter((r) => !isFinished(r));
+  const done = sorted.filter((r) => isFinished(r));
 
   const blocks: Block[] = [
     {
@@ -147,21 +147,49 @@ export function renderPost(rows: BotRow[], postId: string, postDate: string, app
       text: {
         type: "mrkdwn",
         text: `:sunrise: *Morning check-ins - ${shortDate(postDate)}*\n${
-          open === 0 ? "All done for today :tada:" : `${open} to confirm. Tap *Done* when it's handled - anything still open comes back tomorrow at 7.`
+          open.length === 0 ? "All done for today :tada:" : `Tap *Done* when it's handled - anything still open comes back tomorrow at 7.`
         }`,
       },
     },
-    { type: "divider" },
   ];
-  for (const row of shown) blocks.push(...renderRow(row, postId, postDate, appUrl));
-  if (sorted.length > shown.length) {
-    blocks.push({
-      type: "context",
-      elements: [{ type: "mrkdwn", text: `+${sorted.length - shown.length} more - see Requests in the Pique app.` }],
+
+  // Reserve room for the done section header and one "+N more" line, then fill open items first.
+  let budget = BLOCK_BUDGET - blocks.length - 3;
+  let hidden = 0;
+
+  if (open.length) {
+    blocks.push({ type: "divider" }, { type: "section", text: { type: "mrkdwn", text: `:red_circle: *Still open (${open.length})*` } });
+    budget -= 2;
+    open.forEach((row, i) => {
+      const cost = i === 0 ? 2 : 3;
+      if (cost > budget) {
+        hidden++;
+        return;
+      }
+      if (i > 0) blocks.push({ type: "divider" });
+      blocks.push(...renderOpenRow(row, postId, postDate, appUrl));
+      budget -= cost;
     });
   }
 
-  return { text: `Morning check-ins - ${open} to confirm`, blocks };
+  if (done.length) {
+    blocks.push({ type: "divider" }, { type: "section", text: { type: "mrkdwn", text: `:white_check_mark: *Done today (${done.length})*` } });
+    budget -= 2;
+    for (const row of done) {
+      if (budget < 1) {
+        hidden++;
+        continue;
+      }
+      blocks.push(renderDoneRow(row, postId));
+      budget -= 1;
+    }
+  }
+
+  if (hidden > 0) {
+    blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: `+${hidden} more - see Requests in the Pique app.` }] });
+  }
+
+  return { text: `Morning check-ins - ${open.length} still open, ${done.length} done`, blocks };
 }
 
 /** What the morning post for one channel asks about: due within the type's lead time, or overdue up to the limit, and not already finished. */

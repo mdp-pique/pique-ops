@@ -29,45 +29,47 @@ export async function POST(request: NextRequest) {
   const payload = JSON.parse(new URLSearchParams(raw).get("payload") ?? "{}");
   const admin = createAdminClient();
 
+  // Slack shows an error if we take more than 3 seconds to answer, so every
+  // tap is acknowledged at once and the work runs right after the response.
   if (payload.type === "block_actions") {
     const action = payload.actions?.[0];
     if (!action || action.action_id === "pique_bot_open") return new NextResponse(null, { status: 200 });
 
     const [postId, ticketId, itemId] = String(action.value ?? "").split("|");
-    const post = await loadPost(admin, postId, ticketId);
-    if (!post) return new NextResponse(null, { status: 200 });
 
-    if (action.action_id === "pique_bot_problem") {
-      await slackApi("views.open", { trigger_id: payload.trigger_id, view: textModal("pique_bot_problem", postId, ticketId) });
-      return new NextResponse(null, { status: 200 });
-    }
-    if (action.action_id === "pique_bot_note") {
-      await slackApi("views.open", { trigger_id: payload.trigger_id, view: textModal("pique_bot_note", postId, ticketId) });
+    if (action.action_id === "pique_bot_problem" || action.action_id === "pique_bot_note") {
+      // The form has to open within the 3 seconds (trigger_id expires); the
+      // submission re-checks the post and ticket before saving anything.
+      await slackApi("views.open", { trigger_id: payload.trigger_id, view: textModal(action.action_id, postId, ticketId) });
       return new NextResponse(null, { status: 200 });
     }
 
-    const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
-    if (action.action_id === "pique_bot_done") await markDone(admin, ticketId, itemId, actor);
-    if (action.action_id === "pique_bot_not_yet") {
-      await admin.from("ticket_events").insert({
-        ticket_id: ticketId,
-        event_type: "comment",
-        actor_id: actor.profileId,
-        note: `Not yet (answered in Slack by ${actor.name})`,
-        payload: { source: "pique_bot", kind: "not_yet", post_id: postId, by: actor.name },
-      }).then(logError("not yet event"));
-    }
-
-    after(() => redraw(admin, post));
+    after(async () => {
+      const post = await loadPost(admin, postId, ticketId);
+      if (!post) return;
+      const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
+      if (action.action_id === "pique_bot_done") await markDone(admin, ticketId, itemId, actor);
+      if (action.action_id === "pique_bot_not_yet") {
+        await admin.from("ticket_events").insert({
+          ticket_id: ticketId,
+          event_type: "comment",
+          actor_id: actor.profileId,
+          note: `Not yet (answered in Slack by ${actor.name})`,
+          payload: { source: "pique_bot", kind: "not_yet", post_id: postId, by: actor.name },
+        }).then(logError("not yet event"));
+      }
+      await redraw(admin, post);
+    });
     return new NextResponse(null, { status: 200 });
   }
 
   const callback = payload.view?.callback_id;
   if (payload.type === "view_submission" && (callback === "pique_bot_problem" || callback === "pique_bot_note")) {
     const [postId, ticketId] = String(payload.view.private_metadata ?? "").split("|");
-    const post = await loadPost(admin, postId, ticketId);
     const text: string = payload.view.state?.values?.text?.value?.value?.trim() ?? "";
-    if (post && text) {
+    after(async () => {
+      const post = await loadPost(admin, postId, ticketId);
+      if (!post || !text) return;
       const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
       const isProblem = callback === "pique_bot_problem";
       await admin.from("ticket_comments").insert({
@@ -84,8 +86,8 @@ export async function POST(request: NextRequest) {
           ? { source: "pique_bot", kind: "problem", post_id: postId, by: actor.name, problem: text }
           : { source: "pique_bot", kind: "note", post_id: postId, by: actor.name, note: text },
       }).then(logError(isProblem ? "problem event" : "note event"));
-      after(() => redraw(admin, post));
-    }
+      await redraw(admin, post);
+    });
     // An empty body closes the form.
     return new NextResponse(null, { status: 200 });
   }
