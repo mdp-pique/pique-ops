@@ -48,7 +48,8 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
   ]);
 
   const checkInById = new Map((reservations.data ?? []).map((r) => [r.id, r.check_in as string | null]));
-  const propById = new Map((properties.data ?? []).map((p) => [p.id, p.public_name || p.property_name]));
+  // The team's own names (e.g. "Boho 2 BDRM 2.0"), not the Airbnb listing title; the trailing "*" is a sync marker.
+  const propById = new Map((properties.data ?? []).map((p) => [p.id, (p.property_name || p.public_name || "").replace(/\*+$/, "").trim() || null]));
   const profById = new Map((profiles.data ?? []).map((p) => [p.id, p]));
   const teamById = new Map((teams.data ?? []).map((t) => [t.id, t.name]));
   const lastAnswer = new Map<string, BotRow["lastAnswer"]>();
