@@ -38,7 +38,11 @@ export async function POST(request: NextRequest) {
     if (!post) return new NextResponse(null, { status: 200 });
 
     if (action.action_id === "pique_bot_problem") {
-      await slackApi("views.open", { trigger_id: payload.trigger_id, view: problemModal(postId, ticketId) });
+      await slackApi("views.open", { trigger_id: payload.trigger_id, view: textModal("pique_bot_problem", postId, ticketId) });
+      return new NextResponse(null, { status: 200 });
+    }
+    if (action.action_id === "pique_bot_note") {
+      await slackApi("views.open", { trigger_id: payload.trigger_id, view: textModal("pique_bot_note", postId, ticketId) });
       return new NextResponse(null, { status: 200 });
     }
 
@@ -58,20 +62,28 @@ export async function POST(request: NextRequest) {
     return new NextResponse(null, { status: 200 });
   }
 
-  if (payload.type === "view_submission" && payload.view?.callback_id === "pique_bot_problem") {
+  const callback = payload.view?.callback_id;
+  if (payload.type === "view_submission" && (callback === "pique_bot_problem" || callback === "pique_bot_note")) {
     const [postId, ticketId] = String(payload.view.private_metadata ?? "").split("|");
     const post = await loadPost(admin, postId, ticketId);
-    const problem: string = payload.view.state?.values?.problem?.text?.value?.trim() ?? "";
-    if (post && problem) {
+    const text: string = payload.view.state?.values?.text?.value?.value?.trim() ?? "";
+    if (post && text) {
       const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
-      await admin.from("ticket_comments").insert({ ticket_id: ticketId, author_id: actor.profileId, body: `Problem reported in Slack by ${actor.name}: ${problem}` });
+      const isProblem = callback === "pique_bot_problem";
+      await admin.from("ticket_comments").insert({
+        ticket_id: ticketId,
+        author_id: actor.profileId,
+        body: isProblem ? `Problem reported in Slack by ${actor.name}: ${text}` : `Note from Slack (${actor.name}): ${text}`,
+      });
       await admin.from("ticket_events").insert({
         ticket_id: ticketId,
         event_type: "comment",
         actor_id: actor.profileId,
-        note: `Problem reported in Slack by ${actor.name}`,
-        payload: { source: "pique_bot", kind: "problem", post_id: postId, by: actor.name, problem },
-      }).then(logError("problem event"));
+        note: isProblem ? `Problem reported in Slack by ${actor.name}` : `Note added in Slack by ${actor.name}`,
+        payload: isProblem
+          ? { source: "pique_bot", kind: "problem", post_id: postId, by: actor.name, problem: text }
+          : { source: "pique_bot", kind: "note", post_id: postId, by: actor.name, note: text },
+      }).then(logError(isProblem ? "problem event" : "note event"));
       after(() => redraw(admin, post));
     }
     // An empty body closes the form.
@@ -149,20 +161,26 @@ async function redraw(admin: Admin, post: { id: string; post_date: string; chann
   await slackApi("chat.update", { channel: post.channel_id, ts: post.slack_ts, text: message.text, blocks: message.blocks });
 }
 
-function problemModal(postId: string, ticketId: string) {
+const MODALS = {
+  pique_bot_problem: { title: "What's the problem?", label: "It goes on the ticket as a comment", placeholder: "e.g. Guest won't send ID until check-in" },
+  pique_bot_note: { title: "Add a note", label: "It goes on the ticket as a comment", placeholder: "e.g. Paid by e-transfer" },
+} as const;
+
+function textModal(callbackId: keyof typeof MODALS, postId: string, ticketId: string) {
+  const m = MODALS[callbackId];
   return {
     type: "modal",
-    callback_id: "pique_bot_problem",
+    callback_id: callbackId,
     private_metadata: `${postId}|${ticketId}`,
-    title: { type: "plain_text", text: "What's the problem?" },
+    title: { type: "plain_text", text: m.title },
     submit: { type: "plain_text", text: "Save" },
     close: { type: "plain_text", text: "Cancel" },
     blocks: [
       {
         type: "input",
-        block_id: "problem",
-        label: { type: "plain_text", text: "It goes on the ticket as a comment" },
-        element: { type: "plain_text_input", action_id: "text", multiline: true },
+        block_id: "text",
+        label: { type: "plain_text", text: m.label },
+        element: { type: "plain_text_input", action_id: "value", multiline: true, placeholder: { type: "plain_text", text: m.placeholder } },
       },
     ],
   };

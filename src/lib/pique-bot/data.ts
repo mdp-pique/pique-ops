@@ -54,8 +54,15 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
   const profById = new Map((profiles.data ?? []).map((p) => [p.id, p]));
   const teamById = new Map((teams.data ?? []).map((t) => [t.id, t.name]));
   const lastAnswer = new Map<string, BotRow["lastAnswer"]>();
+  const doneBy = new Map<string, string>();
+  const notes = new Map<string, BotRow["notes"]>();
   for (const e of answers.data ?? []) {
-    const payload = (e.payload ?? {}) as { kind?: string; by?: string; problem?: string };
+    const payload = (e.payload ?? {}) as { kind?: string; by?: string; problem?: string; note?: string };
+    if (payload.kind === "note" && payload.note) {
+      notes.set(e.ticket_id, [...(notes.get(e.ticket_id) ?? []), { by: payload.by ?? "someone", text: payload.note }]);
+      continue;
+    }
+    if (payload.kind === "done") doneBy.set(e.ticket_id, payload.by ?? "someone");
     if (payload.kind !== "done" && payload.kind !== "not_yet" && payload.kind !== "problem") continue;
     lastAnswer.set(e.ticket_id, { kind: payload.kind, by: payload.by ?? "someone", note: payload.problem });
   }
@@ -78,6 +85,8 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
       assigneeName: prof?.display_name ?? null,
       teamName: (t.assignee_team_id && teamById.get(t.assignee_team_id)) || null,
       lastAnswer: lastAnswer.get(t.id) ?? null,
+      doneBy: doneBy.get(t.id) ?? null,
+      notes: notes.get(t.id) ?? [],
     };
   });
 }

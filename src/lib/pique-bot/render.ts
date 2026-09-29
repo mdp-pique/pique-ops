@@ -23,6 +23,10 @@ export interface BotRow {
   teamName: string | null;
   /** The latest Slack answer since this post went out. */
   lastAnswer: { kind: "done" | "not_yet" | "problem"; by: string; note?: string } | null;
+  /** Who last ticked a step from this post - unlocks "Add note". */
+  doneBy: string | null;
+  /** Notes added from this post, oldest first. */
+  notes: { by: string; text: string }[];
 }
 
 // Slack block kit is loosely typed on purpose: only the shapes used here.
@@ -86,10 +90,20 @@ export function renderRow(row: BotRow, postId: string, postDate: string, appUrl:
   const item = nextItem(row);
   const lines = [title, whenText(row, postDate)];
 
+  const noteLines = row.notes.slice(-2).map((n) => `:memo: ${esc(n.by)}: "${esc(n.text.slice(0, 200))}"`);
+  const noteButton: Block = {
+    type: "button",
+    action_id: "pique_bot_note",
+    text: { type: "plain_text", text: "Add note" },
+    value: `${postId}|${row.ticketId}`,
+  };
+
   if (isFinished(row)) {
-    const by = row.lastAnswer?.kind === "done" ? ` by ${esc(row.lastAnswer.by)}` : "";
-    lines.push(`:white_check_mark: Done${by}`);
-    return [{ type: "section", block_id: `t:${row.ticketId}`, text: { type: "mrkdwn", text: lines.join("\n") } }];
+    lines.push(`:white_check_mark: Done${row.doneBy ? ` by ${esc(row.doneBy)}` : ""}`, ...noteLines);
+    const section: Block = { type: "section", block_id: `t:${row.ticketId}`, text: { type: "mrkdwn", text: lines.join("\n") } };
+    // Done stays one tap; the note is optional, offered once someone has ticked it here.
+    if (!row.doneBy) return [section];
+    return [section, { type: "actions", block_id: `a:${row.ticketId}`, elements: [noteButton] }];
   }
 
   lines.push(`${question(row, item!)}${owner(row)}`);
@@ -98,6 +112,7 @@ export function renderRow(row: BotRow, postId: string, postDate: string, appUrl:
     lines.push(`:warning: Problem - ${esc(row.lastAnswer.by)}${row.lastAnswer.note ? `: "${esc(row.lastAnswer.note.slice(0, 200))}"` : ""}`);
   }
   if (row.lastAnswer?.kind === "done") lines.push(`:white_check_mark: Ticked by ${esc(row.lastAnswer.by)} - next step above`);
+  lines.push(...noteLines);
 
   const value = `${postId}|${row.ticketId}|${item!.id}`;
   const elements: Block[] = [
@@ -105,6 +120,7 @@ export function renderRow(row: BotRow, postId: string, postDate: string, appUrl:
     { type: "button", action_id: "pique_bot_not_yet", text: { type: "plain_text", text: "Not yet" }, value },
     { type: "button", action_id: "pique_bot_problem", style: "danger", text: { type: "plain_text", text: "Problem" }, value },
   ];
+  if (row.doneBy) elements.push(noteButton);
   if (appUrl) {
     elements.push({
       type: "button",
