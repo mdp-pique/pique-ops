@@ -1354,6 +1354,36 @@ export type Database = {
           },
         ]
       }
+      pique_bot_posts: {
+        Row: {
+          channel_id: string
+          created_at: string
+          id: string
+          post_date: string
+          slack_ts: string | null
+          ticket_ids: string[]
+          updated_at: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          id?: string
+          post_date: string
+          slack_ts?: string | null
+          ticket_ids?: string[]
+          updated_at?: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          id?: string
+          post_date?: string
+          slack_ts?: string | null
+          ticket_ids?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pipeline_health: {
         Row: {
           active_properties: number | null

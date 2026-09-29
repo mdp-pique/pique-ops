@@ -63,6 +63,14 @@ Tammy's noon + 3 PM Connecteam chat summaries. Source is `connecteam_chat_messag
 - All service-role only (DM content). The prompt drops access codes and HR/personal matters.
 - Posts once per slot to `#cleaning-health-check` (`C0BJM1A4MDY`), tagging Tammy (`<@U05QG0BUP0E>`); `cleaning_chat_digests.slack_ts` blocks a second post if the slot is re-run. That channel must stay limited to office staff, since it carries DM content.
 
+## Pique Bot - as of 2026-09-29
+
+A Slack bot that asks the team about open Requests tickets every morning at 7 AM Edmonton, so the checklist can be ticked without opening the app. It's its own Slack app (`docs/pique-bot-slack-manifest.yml`), separate from the one n8n uses, so its button taps never touch live n8n flows.
+- Rules live in `src/lib/pique-bot/config.ts`: pet fee, direct booking ID and parking go to `#pique-team-chat` from 2 days before check-in; pack 'n play goes to `#canmore-cleaning` on check-in morning only. Anything still open after check-in comes back daily as overdue (up to 30 days).
+- `POST /api/pique-bot/morning` (bearer `PIQUE_BOT_CRON_SECRET`, called by n8n at 7:00; `?dry=1` previews without posting) sends one post per channel per day, claimed in `pique_bot_posts` (unique date + channel) so a re-run never double-posts.
+- `POST /api/slack/interactions` (Slack signature checked with `PIQUE_BOT_SIGNING_SECRET`): **Done** ticks the checklist item it asked about and resolves the ticket when nothing is left; **Not yet** and **Problem** (form, saved as a comment) are logged as `slack_*` ticket events. A tap only counts for tickets in that post's stored `ticket_ids`. The Slack user is matched to a profile by `profiles.slack_user_id`, else by Slack email = Google sign-in email (then saved).
+- Both routes skip the sign-in redirect in `src/proxy.ts` because they have no browser session.
+
 ## Ticket clocks and health — as of 2026-09-24
 
 PRD §8.2. Every ticket has `started_at` / `target_at` / `due_at` and a computed `health` (`on_track` · `attention` · `behind` · `missed` · `waiting`). Per-type rules live in `ticket_type_clocks` (migration `20260924210000_ticket_clocks_and_health.sql`). An exception-safe BEFORE trigger on `tickets` fills clock defaults on insert (only where null - an explicit due date always wins), pauses soft clocks while `blocked`, recomputes health, and mirrors Behind/Missed into `sla_breached` (except `unanswered_message`, whose mirror owns that flag). An AFTER trigger logs health changes to `ticket_events`; checklist changes touch the parent ticket. Time passing is handled by n8n `Pique-Ticket-Health-Refresh` (id `wFFvcYMRoY3AeJo6`, every 15 min, `select public.refresh_ticket_health()`). Never set `health` by hand; change the clock or the rules instead.

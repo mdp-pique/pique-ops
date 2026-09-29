@@ -1,0 +1,24 @@
+# Slack app manifest for Pique Bot. Create it at https://api.slack.com/apps
+# -> "Create New App" -> "From a manifest", pick the Pique workspace, paste
+# this file, and replace YOUR-APP-DOMAIN with the Pique app's address.
+display_information:
+  name: Pique Bot
+  description: Morning check-ins on open requests - tap Done right in Slack.
+  background_color: "#1f2937"
+features:
+  bot_user:
+    display_name: Pique Bot
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - users:read
+      - users:read.email
+settings:
+  interactivity:
+    is_enabled: true
+    request_url: https://YOUR-APP-DOMAIN/api/slack/interactions
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
