@@ -5,6 +5,8 @@ import { slackApi } from "./slack";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
+const ANSWER_WINDOW_DAYS = 45;
+
 export function edmontonToday(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Edmonton" }).format(now);
 }
@@ -36,16 +38,16 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
     admin.from("properties").select("id, property_name, public_name").in("id", uniq(tickets.map((t) => t.property_id))),
     admin.from("profiles").select("id, display_name, slack_user_id").in("id", uniq(tickets.map((t) => t.assignee_id))),
     admin.from("teams").select("id, name").in("id", uniq(tickets.map((t) => t.assignee_team_id))),
-    opts.since
-      ? admin
-          .from("ticket_events")
-          .select("ticket_id, event_type, note, payload, created_at")
-          .in("ticket_id", ids)
-          .in("event_type", ["item_done", "comment"])
-          .contains("payload", { source: "pique_bot" })
-          .gte("created_at", opts.since)
-          .order("created_at", { ascending: true })
-      : Promise.resolve({ data: [] as { ticket_id: string; event_type: string; note: string | null; payload: unknown }[] }),
+    // The bot's own answers from the last few weeks: a "Not yet" keeps an item
+    // quiet until its ask-again date across posts, so it can't be limited to this post.
+    admin
+      .from("ticket_events")
+      .select("ticket_id, event_type, note, payload, created_at")
+      .in("ticket_id", ids)
+      .in("event_type", ["item_done", "comment"])
+      .contains("payload", { source: "pique_bot" })
+      .gte("created_at", new Date(Date.now() - ANSWER_WINDOW_DAYS * 86_400_000).toISOString())
+      .order("created_at", { ascending: true }),
   ]);
 
   const checkInById = new Map((reservations.data ?? []).map((r) => [r.id, r.check_in as string | null]));
@@ -56,15 +58,29 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
   const lastAnswer = new Map<string, BotRow["lastAnswer"]>();
   const doneBy = new Map<string, string>();
   const notes = new Map<string, BotRow["notes"]>();
+  const waiting = new Map<string, BotRow["waiting"]>();
+  const notNeeded = new Map<string, BotRow["notNeeded"]>();
   for (const e of answers.data ?? []) {
-    const payload = (e.payload ?? {}) as { kind?: string; by?: string; problem?: string; note?: string };
+    const payload = (e.payload ?? {}) as { kind?: string; by?: string; problem?: string; note?: string; ask_after?: string; reason?: string };
+    const by = payload.by ?? "someone";
+    const note = payload.note ?? payload.problem ?? null;
+    // Anything newer than a "Not yet" (a tick, another answer) replaces it.
+    if (payload.kind === "done") waiting.delete(e.ticket_id);
+    if (payload.kind === "not_yet" || payload.kind === "problem") {
+      waiting.set(e.ticket_id, { kind: payload.kind, by, note, until: payload.ask_after ?? null, reason: payload.reason ?? null });
+    }
+    if (payload.kind === "not_needed") notNeeded.set(e.ticket_id, { by, note });
+
+    // The rest only counts for the post being drawn.
+    if (!opts.since || Date.parse(e.created_at) < Date.parse(opts.since)) continue;
     if (payload.kind === "note" && payload.note) {
-      notes.set(e.ticket_id, [...(notes.get(e.ticket_id) ?? []), { by: payload.by ?? "someone", text: payload.note }]);
+      notes.set(e.ticket_id, [...(notes.get(e.ticket_id) ?? []), { by, text: payload.note }]);
       continue;
     }
-    if (payload.kind === "done") doneBy.set(e.ticket_id, payload.by ?? "someone");
-    if (payload.kind !== "done" && payload.kind !== "not_yet" && payload.kind !== "problem") continue;
-    lastAnswer.set(e.ticket_id, { kind: payload.kind, by: payload.by ?? "someone", note: payload.problem });
+    if (payload.kind === "done") {
+      doneBy.set(e.ticket_id, by);
+      lastAnswer.set(e.ticket_id, { kind: "done", by });
+    }
   }
 
   return tickets.map((t) => {
@@ -87,6 +103,8 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
       lastAnswer: lastAnswer.get(t.id) ?? null,
       doneBy: doneBy.get(t.id) ?? null,
       notes: notes.get(t.id) ?? [],
+      waiting: waiting.get(t.id) ?? null,
+      notNeeded: notNeeded.get(t.id) ?? null,
     };
   });
 }

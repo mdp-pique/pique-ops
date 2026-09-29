@@ -1,7 +1,9 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { appUrl, loadRows, resolveActor } from "@/lib/pique-bot/data";
-import { renderPost } from "@/lib/pique-bot/render";
+import { addDays, pickAskAgain, type AskAgainPick } from "@/lib/pique-bot/askAgain";
+import { BOT_RULES, ESCALATE_PROFILE_ID } from "@/lib/pique-bot/config";
+import { appUrl, edmontonToday, loadRows, resolveActor } from "@/lib/pique-bot/data";
+import { nextItem, renderPost, shortDate, type BotRow } from "@/lib/pique-bot/render";
 import { slackApi, verifySlackSignature } from "@/lib/pique-bot/slack";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -13,7 +15,7 @@ interface SlackUser {
 }
 
 /**
- * Pique Bot button taps (Done / Not yet / Problem) and the Problem form.
+ * Pique Bot button taps (Done / Not yet / Add note) and their forms.
  * Every request must carry a valid Slack signature. The ticket is only acted
  * on if it's in the list that post asked about (pique_bot_posts.ticket_ids,
  * stored server-side), and the checklist item must belong to that ticket.
@@ -37,58 +39,73 @@ export async function POST(request: NextRequest) {
 
     const [postId, ticketId, itemId] = String(action.value ?? "").split("|");
 
-    if (action.action_id === "pique_bot_problem" || action.action_id === "pique_bot_note") {
-      // The form has to open within the 3 seconds (trigger_id expires); the
-      // submission re-checks the post and ticket before saving anything.
-      await slackApi("views.open", { trigger_id: payload.trigger_id, view: textModal(action.action_id, postId, ticketId) });
+    // Forms have to open within the 3 seconds (trigger_id expires); the
+    // submission re-checks the post and ticket before saving anything.
+    if (action.action_id === "pique_bot_note") {
+      await slackApi("views.open", { trigger_id: payload.trigger_id, view: noteModal(postId, ticketId) });
+      return new NextResponse(null, { status: 200 });
+    }
+    // Posts from before the redesign still carry a Problem button: same form, box pre-ticked.
+    if (action.action_id === "pique_bot_not_yet" || action.action_id === "pique_bot_problem") {
+      await slackApi("views.open", {
+        trigger_id: payload.trigger_id,
+        view: notYetModal(postId, ticketId, action.action_id === "pique_bot_problem"),
+      });
       return new NextResponse(null, { status: 200 });
     }
 
-    after(async () => {
-      const post = await loadPost(admin, postId, ticketId);
-      if (!post) return;
-      const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
-      if (action.action_id === "pique_bot_done") await markDone(admin, ticketId, itemId, actor);
-      if (action.action_id === "pique_bot_not_yet") {
-        await admin.from("ticket_events").insert({
-          ticket_id: ticketId,
-          event_type: "comment",
-          actor_id: actor.profileId,
-          note: `Not yet (answered in Slack by ${actor.name})`,
-          payload: { source: "pique_bot", kind: "not_yet", post_id: postId, by: actor.name },
-        }).then(logError("not yet event"));
-      }
-      await redraw(admin, post);
-    });
+    if (action.action_id === "pique_bot_done") {
+      after(async () => {
+        const post = await loadPost(admin, postId, ticketId);
+        if (!post) return;
+        const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
+        await markDone(admin, ticketId, itemId, actor);
+        await redraw(admin, post);
+      });
+    }
     return new NextResponse(null, { status: 200 });
   }
 
   const callback = payload.view?.callback_id;
-  if (payload.type === "view_submission" && (callback === "pique_bot_problem" || callback === "pique_bot_note")) {
+  if (payload.type === "view_submission" && callback === "pique_bot_note") {
     const [postId, ticketId] = String(payload.view.private_metadata ?? "").split("|");
     const text: string = payload.view.state?.values?.text?.value?.value?.trim() ?? "";
     after(async () => {
       const post = await loadPost(admin, postId, ticketId);
       if (!post || !text) return;
       const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
-      const isProblem = callback === "pique_bot_problem";
-      await admin.from("ticket_comments").insert({
-        ticket_id: ticketId,
-        author_id: actor.profileId,
-        body: isProblem ? `Problem reported in Slack by ${actor.name}: ${text}` : `Note from Slack (${actor.name}): ${text}`,
-      });
+      await admin.from("ticket_comments").insert({ ticket_id: ticketId, author_id: actor.profileId, body: `Note from Slack (${actor.name}): ${text}` });
       await admin.from("ticket_events").insert({
         ticket_id: ticketId,
         event_type: "comment",
         actor_id: actor.profileId,
-        note: isProblem ? `Problem reported in Slack by ${actor.name}` : `Note added in Slack by ${actor.name}`,
-        payload: isProblem
-          ? { source: "pique_bot", kind: "problem", post_id: postId, by: actor.name, problem: text }
-          : { source: "pique_bot", kind: "note", post_id: postId, by: actor.name, note: text },
-      }).then(logError(isProblem ? "problem event" : "note event"));
+        note: `Note added in Slack by ${actor.name}`,
+        payload: { source: "pique_bot", kind: "note", post_id: postId, by: actor.name, note: text },
+      }).then(logError("note event"));
       await redraw(admin, post);
     });
     // An empty body closes the form.
+    return new NextResponse(null, { status: 200 });
+  }
+
+  if (payload.type === "view_submission" && callback === "pique_bot_not_yet") {
+    const [postId, ticketId] = String(payload.view.private_metadata ?? "").split("|");
+    const values = payload.view.state?.values ?? {};
+    const note: string = values.note?.value?.value?.trim() ?? "";
+    const typedDate: string | null = values.date?.value?.selected_date ?? null;
+    const flags = new Set<string>((values.flags?.value?.selected_options ?? []).map((o: { value: string }) => o.value));
+    const today = edmontonToday();
+    if (typedDate && typedDate <= today && !flags.has("not_needed")) {
+      return NextResponse.json({ response_action: "errors", errors: { date: "Pick a day after today, or leave it blank." } });
+    }
+    after(async () => {
+      const post = await loadPost(admin, postId, ticketId);
+      if (!post) return;
+      const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
+      if (flags.has("not_needed")) await closeNotNeeded(admin, postId, ticketId, note, actor);
+      else await snooze(admin, post, ticketId, { note, typedDate, problem: flags.has("problem"), today }, actor);
+      await redraw(admin, post);
+    });
     return new NextResponse(null, { status: 200 });
   }
 
@@ -156,33 +173,220 @@ async function markDone(admin: Admin, ticketId: string, itemId: string, actor: {
   });
 }
 
-async function redraw(admin: Admin, post: { id: string; post_date: string; channel_id: string; slack_ts: string | null; ticket_ids: string[]; created_at: string }) {
+/** "Not yet": save the note and when to ask again (typed, else picked from the note and check-in date). */
+async function snooze(
+  admin: Admin,
+  post: Post,
+  ticketId: string,
+  answer: { note: string; typedDate: string | null; problem: boolean; today: string },
+  actor: { profileId: string | null; name: string },
+) {
+  const postId = post.id;
+  const [row] = await loadRows(admin, { ticketIds: [ticketId] });
+  let askAfter: string;
+  let reason: string | null = null;
+  let pick: AskAgainPick | null = null;
+  if (answer.typedDate) {
+    askAfter = answer.typedDate;
+  } else {
+    pick = await pickAskAgain({
+      today: answer.today,
+      checkIn: row?.checkIn ?? null,
+      typeLabel: (row && BOT_RULES[row.type]?.label) || "Request",
+      itemLabel: (row && nextItem(row)?.label) || "",
+      note: answer.note,
+    });
+    askAfter = pick.date;
+    reason = pick.reason;
+  }
+  askAfter = askAfter > answer.today ? askAfter : addDays(answer.today, 1);
+
+  const kind = answer.problem ? "problem" : "not_yet";
+  const label = answer.problem ? "Problem reported" : "Not yet";
+  if (answer.note) {
+    await admin.from("ticket_comments").insert({
+      ticket_id: ticketId,
+      author_id: actor.profileId,
+      body: `${label} in Slack by ${actor.name}: ${answer.note}`,
+    });
+  }
+  await admin.from("ticket_events").insert({
+    ticket_id: ticketId,
+    event_type: "comment",
+    actor_id: actor.profileId,
+    note: `${label} (answered in Slack by ${actor.name}) - asking again ${shortDate(askAfter)}`,
+    payload: { source: "pique_bot", kind, post_id: postId, by: actor.name, note: answer.note || null, ask_after: askAfter, reason, needs_human: pick?.needsHuman ?? null },
+  }).then(logError(`${kind} event`));
+
+  // A person always hears about a flagged problem, a note the AI couldn't read, or the AI failing.
+  const why = answer.problem ? "problem" : pick?.needsHuman;
+  if (why) await escalate(admin, post, ticketId, row, { why, detail: pick?.detail ?? null, note: answer.note, by: actor.name, askAfter });
+}
+
+/**
+ * Tags ESCALATE_PROFILE_ID in a thread on the post. If that can't be done (no
+ * Slack account found, Slack refuses) or the AI itself failed, it also opens a
+ * system_health ticket for them, so nothing depends on one channel working.
+ */
+async function escalate(
+  admin: Admin,
+  post: Post,
+  ticketId: string,
+  row: BotRow | undefined,
+  info: { why: "problem" | "unsure" | "failed"; detail: string | null; note: string; by: string; askAfter: string },
+) {
+  const title = [row && (BOT_RULES[row.type]?.label ?? row.type), row?.guestName, row?.property].filter(Boolean).join(" · ") || "a request";
+  const noteText = info.note ? `: "${info.note.slice(0, 300)}"` : " (no note)";
+  const opener = {
+    problem: `${info.by} flagged a problem on *${title}*${noteText}`,
+    unsure: `${info.by} said not yet on *${title}*${noteText}. I couldn't tell when to ask again${info.detail ? ` (${info.detail})` : ""}`,
+    failed: `${info.by} said not yet on *${title}*${noteText}. I couldn't pick a day to ask again - the AI step failed`,
+  }[info.why];
+  const link = appUrl() ? ` <${appUrl()}/tickets/requests?ticket=${ticketId}|Open the ticket>` : "";
+  const nextAsk = info.why === "problem" ? "" : ` I'll ask again ${shortDate(info.askAfter)}.`;
+
+  const slackId = await escalateSlackId(admin);
+  let tagged = false;
+  if (slackId && post.slack_ts) {
+    const sent = await slackApi("chat.postMessage", {
+      channel: post.channel_id,
+      thread_ts: post.slack_ts,
+      text: `<@${slackId}> can you take a look? ${opener}.${nextAsk}${link}`,
+      unfurl_links: false,
+    });
+    tagged = sent.ok;
+    if (!sent.ok) console.error(`Pique Bot: escalation post failed: ${sent.error}`);
+  }
+  if (tagged && info.why !== "failed") return;
+
+  const ref = `pique_bot:escalation:${ticketId}:${info.askAfter}`;
+  const { error } = await admin.from("tickets").upsert(
+    {
+      type: "system_health",
+      source: "automation",
+      external_ref: ref,
+      assignee_id: ESCALATE_PROFILE_ID,
+      metadata: {
+        title: info.why === "failed" ? "Pique Bot couldn't pick an ask-again date" : "Pique Bot needs a person to look at an answer",
+        about_ticket_id: ticketId,
+        why: info.why,
+        detail: info.detail,
+        slack_tag_sent: tagged,
+      },
+    },
+    { onConflict: "external_ref", ignoreDuplicates: true },
+  );
+  if (error) console.error(`Pique Bot: escalation ticket failed: ${error.message}`);
+}
+
+/** The escalation person's Slack id: saved on their profile, else looked up once by their sign-in email. */
+async function escalateSlackId(admin: Admin): Promise<string | null> {
+  const { data: profile } = await admin.from("profiles").select("slack_user_id").eq("id", ESCALATE_PROFILE_ID).maybeSingle();
+  if (profile?.slack_user_id) return profile.slack_user_id;
+  const { data } = await admin.auth.admin.getUserById(ESCALATE_PROFILE_ID);
+  const email = data?.user?.email;
+  if (!email) return null;
+  const found = await slackApi<{ user?: { id?: string } }>("users.lookupByEmail", { email });
+  const id = found.user?.id ?? null;
+  if (id) await admin.from("profiles").update({ slack_user_id: id }).eq("id", ESCALATE_PROFILE_ID);
+  return id;
+}
+
+/** "Not needed anymore": closes the ticket, whatever is left on its checklist. */
+async function closeNotNeeded(admin: Admin, postId: string, ticketId: string, note: string, actor: { profileId: string | null; name: string }) {
+  const { data: ticket } = await admin.from("tickets").select("status").eq("id", ticketId).maybeSingle();
+  if (!ticket || !["open", "in_progress", "blocked"].includes(ticket.status)) return;
+  await admin.from("tickets").update({ status: "resolved", closed_at: new Date().toISOString() }).eq("id", ticketId);
+  await admin.from("ticket_events").insert({
+    ticket_id: ticketId,
+    event_type: "status_change",
+    actor_id: actor.profileId,
+    from_value: ticket.status,
+    to_value: "resolved",
+    note: `Closed from Slack by ${actor.name} - not needed anymore${note ? `: ${note}` : ""}`,
+  }).then(logError("not needed status"));
+  await admin.from("ticket_events").insert({
+    ticket_id: ticketId,
+    event_type: "comment",
+    actor_id: actor.profileId,
+    note: `Marked not needed in Slack by ${actor.name}`,
+    payload: { source: "pique_bot", kind: "not_needed", post_id: postId, by: actor.name, note: note || null },
+  }).then(logError("not needed event"));
+  if (note) {
+    await admin.from("ticket_comments").insert({ ticket_id: ticketId, author_id: actor.profileId, body: `Not needed anymore (${actor.name}, from Slack): ${note}` });
+  }
+}
+
+type Post = { id: string; post_date: string; channel_id: string; slack_ts: string | null; ticket_ids: string[]; created_at: string };
+
+async function redraw(admin: Admin, post: Post) {
   if (!post.slack_ts) return;
   const rows = await loadRows(admin, { ticketIds: post.ticket_ids, since: post.created_at });
   const message = renderPost(rows, post.id, post.post_date, appUrl());
   await slackApi("chat.update", { channel: post.channel_id, ts: post.slack_ts, text: message.text, blocks: message.blocks });
 }
 
-const MODALS = {
-  pique_bot_problem: { title: "What's the problem?", label: "It goes on the ticket as a comment", placeholder: "e.g. Guest won't send ID until check-in" },
-  pique_bot_note: { title: "Add a note", label: "It goes on the ticket as a comment", placeholder: "e.g. Paid by e-transfer" },
-} as const;
-
-function textModal(callbackId: keyof typeof MODALS, postId: string, ticketId: string) {
-  const m = MODALS[callbackId];
+function noteModal(postId: string, ticketId: string) {
   return {
     type: "modal",
-    callback_id: callbackId,
+    callback_id: "pique_bot_note",
     private_metadata: `${postId}|${ticketId}`,
-    title: { type: "plain_text", text: m.title },
+    title: { type: "plain_text", text: "Add a note" },
     submit: { type: "plain_text", text: "Save" },
     close: { type: "plain_text", text: "Cancel" },
     blocks: [
       {
         type: "input",
         block_id: "text",
-        label: { type: "plain_text", text: m.label },
-        element: { type: "plain_text_input", action_id: "value", multiline: true, placeholder: { type: "plain_text", text: m.placeholder } },
+        label: { type: "plain_text", text: "It goes on the ticket as a comment" },
+        element: { type: "plain_text_input", action_id: "value", multiline: true, placeholder: { type: "plain_text", text: "e.g. Paid by e-transfer" } },
+      },
+    ],
+  };
+}
+
+const PROBLEM_OPTION = { text: { type: "plain_text", text: ":warning: Flag as a problem" }, value: "problem" };
+
+function notYetModal(postId: string, ticketId: string, problem: boolean) {
+  return {
+    type: "modal",
+    callback_id: "pique_bot_not_yet",
+    private_metadata: `${postId}|${ticketId}`,
+    title: { type: "plain_text", text: "Not yet" },
+    submit: { type: "plain_text", text: "Save" },
+    close: { type: "plain_text", text: "Cancel" },
+    blocks: [
+      {
+        type: "input",
+        block_id: "note",
+        optional: true,
+        label: { type: "plain_text", text: "What's going on?" },
+        element: {
+          type: "plain_text_input",
+          action_id: "value",
+          multiline: true,
+          placeholder: { type: "plain_text", text: "e.g. Guest says they'll pay Thursday" },
+        },
+      },
+      {
+        type: "input",
+        block_id: "date",
+        optional: true,
+        label: { type: "plain_text", text: "Ask again on" },
+        hint: { type: "plain_text", text: "Leave blank and I'll pick a day from your note and the check-in date." },
+        element: { type: "datepicker", action_id: "value", placeholder: { type: "plain_text", text: "Pick a day" } },
+      },
+      {
+        type: "input",
+        block_id: "flags",
+        optional: true,
+        label: { type: "plain_text", text: "Also" },
+        element: {
+          type: "checkboxes",
+          action_id: "value",
+          options: [PROBLEM_OPTION, { text: { type: "plain_text", text: "Not needed anymore (closes the ticket)" }, value: "not_needed" }],
+          ...(problem ? { initial_options: [PROBLEM_OPTION] } : {}),
+        },
       },
     ],
   };

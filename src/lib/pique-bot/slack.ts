@@ -10,11 +10,18 @@ export function botToken(): string {
   return token;
 }
 
+// Slack's read methods (users.info, users.lookupByEmail) only take form-encoded arguments, not JSON.
+const FORM_METHODS = new Set(["users.info", "users.lookupByEmail"]);
+
 export async function slackApi<T = Record<string, unknown>>(method: string, body: Record<string, unknown>): Promise<T & { ok: boolean; error?: string }> {
+  const form = FORM_METHODS.has(method);
   const res = await fetch(`https://slack.com/api/${method}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${botToken()}`, "Content-Type": "application/json; charset=utf-8" },
-    body: JSON.stringify(body),
+    headers: {
+      Authorization: `Bearer ${botToken()}`,
+      "Content-Type": form ? "application/x-www-form-urlencoded" : "application/json; charset=utf-8",
+    },
+    body: form ? new URLSearchParams(Object.entries(body).map(([k, v]) => [k, String(v)])).toString() : JSON.stringify(body),
   });
   const json = (await res.json()) as T & { ok: boolean; error?: string };
   if (!json.ok) console.error(`Slack ${method} failed: ${json.error}`);

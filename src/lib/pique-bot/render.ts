@@ -21,12 +21,16 @@ export interface BotRow {
   assigneeSlackId: string | null;
   assigneeName: string | null;
   teamName: string | null;
-  /** The latest Slack answer since this post went out. */
-  lastAnswer: { kind: "done" | "not_yet" | "problem"; by: string; note?: string } | null;
+  /** A step ticked from this post (the next step is now showing). */
+  lastAnswer: { kind: "done"; by: string } | null;
   /** Who last ticked a step from this post - unlocks "Add note". */
   doneBy: string | null;
   /** Notes added from this post, oldest first. */
   notes: { by: string; text: string }[];
+  /** The latest "Not yet" with nothing ticked since. until: the morning to ask again (null on old answers). */
+  waiting: { kind: "not_yet" | "problem"; by: string; note: string | null; until: string | null; reason: string | null } | null;
+  /** Closed from Slack as not needed anymore. */
+  notNeeded: { by: string; note: string | null } | null;
 }
 
 // Slack block kit is loosely typed on purpose: only the shapes used here.
@@ -38,7 +42,7 @@ export function daysBetween(fromDate: string, toDate: string): number {
   return Math.round((b - a) / 86_400_000);
 }
 
-function shortDate(date: string): string {
+export function shortDate(date: string): string {
   return new Date(`${date}T12:00:00Z`).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
@@ -96,22 +100,31 @@ function noteButton(row: BotRow, postId: string): Block {
   return { type: "button", action_id: "pique_bot_note", text: { type: "plain_text", text: "Add note" }, value: `${postId}|${row.ticketId}` };
 }
 
-/** An item that still needs an answer: the question plus Done / Not yet / Problem / Open. */
+/** Waiting on a later day: it stays quiet in the morning post until then. */
+export function isSnoozed(row: BotRow, date: string): boolean {
+  return !!row.waiting?.until && row.waiting.until > date;
+}
+
+function waitingLines(row: BotRow, postDate: string): string[] {
+  const w = row.waiting;
+  if (!w) return [];
+  const label = w.kind === "problem" ? ":warning: *Problem*" : ":hourglass_flowing_sand: Not yet";
+  const lines = [`${label} - ${esc(w.by)}${w.note ? `: "${esc(w.note.slice(0, 200))}"` : ""}`];
+  if (w.until && w.until > postDate) lines.push(`I'll ask again ${shortDate(w.until)}${w.reason ? ` (${esc(w.reason)})` : ""}`);
+  return lines;
+}
+
+/** An item that still needs an answer: the question plus Done / Not yet / Open. */
 export function renderOpenRow(row: BotRow, postId: string, postDate: string, appUrl: string | null): Block[] {
   const item = nextItem(row)!;
   const lines = [titleOf(row), whenText(row, postDate), `${question(row, item)}${owner(row)}`];
-  if (row.lastAnswer?.kind === "not_yet") lines.push(`:hourglass_flowing_sand: Not yet - ${esc(row.lastAnswer.by)}`);
-  if (row.lastAnswer?.kind === "problem") {
-    lines.push(`:warning: Problem - ${esc(row.lastAnswer.by)}${row.lastAnswer.note ? `: "${esc(row.lastAnswer.note.slice(0, 200))}"` : ""}`);
-  }
   if (row.lastAnswer?.kind === "done") lines.push(`:white_check_mark: Previous step ticked by ${esc(row.lastAnswer.by)}`);
-  lines.push(...noteLines(row));
+  lines.push(...waitingLines(row, postDate), ...noteLines(row));
 
   const value = `${postId}|${row.ticketId}|${item.id}`;
   const elements: Block[] = [
     { type: "button", action_id: "pique_bot_done", style: "primary", text: { type: "plain_text", text: "Done" }, value },
     { type: "button", action_id: "pique_bot_not_yet", text: { type: "plain_text", text: "Not yet" }, value },
-    { type: "button", action_id: "pique_bot_problem", style: "danger", text: { type: "plain_text", text: "Problem" }, value },
   ];
   if (row.doneBy) elements.push(noteButton(row, postId));
   if (appUrl) {
@@ -127,7 +140,12 @@ export function renderOpenRow(row: BotRow, postId: string, postDate: string, app
 /** A finished item, collapsed to one crossed-out line (plus any notes), with Add note on the right. */
 export function renderDoneRow(row: BotRow, postId: string): Block {
   const plainTitle = titleOf(row).replace(/\*/g, "");
-  const lines = [`:white_check_mark: ~${plainTitle}~${row.doneBy ? ` - done by ${esc(row.doneBy)}` : " - done"}`, ...noteLines(row)];
+  const how = row.notNeeded
+    ? ` - not needed (${esc(row.notNeeded.by)})${row.notNeeded.note ? `: "${esc(row.notNeeded.note.slice(0, 200))}"` : ""}`
+    : row.doneBy
+      ? ` - done by ${esc(row.doneBy)}`
+      : " - done";
+  const lines = [`:white_check_mark: ~${plainTitle}~${how}`, ...noteLines(row)];
   const section: Block = { type: "section", block_id: `t:${row.ticketId}`, text: { type: "mrkdwn", text: lines.join("\n") } };
   if (row.doneBy) section.accessory = noteButton(row, postId);
   return section;
@@ -138,7 +156,8 @@ const BLOCK_BUDGET = 50;
 
 export function renderPost(rows: BotRow[], postId: string, postDate: string, appUrl: string | null): { text: string; blocks: Block[] } {
   const sorted = sortRows(rows);
-  const open = sorted.filter((r) => !isFinished(r));
+  const open = sorted.filter((r) => !isFinished(r) && !isSnoozed(r, postDate));
+  const later = sorted.filter((r) => !isFinished(r) && isSnoozed(r, postDate));
   const done = sorted.filter((r) => isFinished(r));
 
   const blocks: Block[] = [
@@ -147,7 +166,9 @@ export function renderPost(rows: BotRow[], postId: string, postDate: string, app
       text: {
         type: "mrkdwn",
         text: `:sunrise: *Morning check-ins - ${shortDate(postDate)}*\n${
-          open.length === 0 ? "All done for today :tada:" : `Tap *Done* when it's handled - anything still open comes back tomorrow at 7.`
+          open.length === 0
+            ? "All done for today :tada:"
+            : "Tap *Done* when it's handled, or *Not yet* to say what's going on and when to ask again. Anything else still open comes back tomorrow at 7."
         }`,
       },
     },
@@ -157,10 +178,11 @@ export function renderPost(rows: BotRow[], postId: string, postDate: string, app
   let budget = BLOCK_BUDGET - blocks.length - 3;
   let hidden = 0;
 
-  if (open.length) {
-    blocks.push({ type: "divider" }, { type: "section", text: { type: "mrkdwn", text: `:red_circle: *Still open (${open.length})*` } });
+  const openSection = (rows: BotRow[], heading: string) => {
+    if (!rows.length) return;
+    blocks.push({ type: "divider" }, { type: "section", text: { type: "mrkdwn", text: heading } });
     budget -= 2;
-    open.forEach((row, i) => {
+    rows.forEach((row, i) => {
       const cost = i === 0 ? 2 : 3;
       if (cost > budget) {
         hidden++;
@@ -170,7 +192,9 @@ export function renderPost(rows: BotRow[], postId: string, postDate: string, app
       blocks.push(...renderOpenRow(row, postId, postDate, appUrl));
       budget -= cost;
     });
-  }
+  };
+  openSection(open, `:red_circle: *Still open (${open.length})*`);
+  openSection(later, `:hourglass_flowing_sand: *Asking again later (${later.length})*`);
 
   if (done.length) {
     blocks.push({ type: "divider" }, { type: "section", text: { type: "mrkdwn", text: `:white_check_mark: *Done today (${done.length})*` } });
@@ -189,14 +213,14 @@ export function renderPost(rows: BotRow[], postId: string, postDate: string, app
     blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: `+${hidden} more - see Requests in the Pique app.` }] });
   }
 
-  return { text: `Morning check-ins - ${open.length} still open, ${done.length} done`, blocks };
+  return { text: `Morning check-ins - ${open.length + later.length} still open, ${done.length} done`, blocks };
 }
 
-/** What the morning post for one channel asks about: due within the type's lead time, or overdue up to the limit, and not already finished. */
+/** What the morning post for one channel asks about: due within the type's lead time, or overdue up to the limit, not finished, and not waiting on a later ask-again date. */
 export function pickForMorning(rows: BotRow[], today: string, channel: string): BotRow[] {
   return rows.filter((r) => {
     const rule = BOT_RULES[r.type];
-    if (!rule || rule.channel !== channel || !r.checkIn || isFinished(r)) return false;
+    if (!rule || rule.channel !== channel || !r.checkIn || isFinished(r) || isSnoozed(r, today)) return false;
     const d = daysBetween(today, r.checkIn);
     return d <= rule.leadDays && d >= -OVERDUE_LIMIT_DAYS;
   });
