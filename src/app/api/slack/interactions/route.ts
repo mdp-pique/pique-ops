@@ -98,15 +98,32 @@ export async function POST(request: NextRequest) {
     if (typedDate && typedDate <= today && !flags.has("not_needed")) {
       return NextResponse.json({ response_action: "errors", errors: { date: "Pick a day after today, or leave it blank." } });
     }
+    // Picking the date can take a few seconds, so the form turns into a
+    // "Saving..." screen at once and then shows what was decided.
+    const viewId: string = payload.view.id;
     after(async () => {
-      const post = await loadPost(admin, postId, ticketId);
-      if (!post) return;
-      const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
-      if (flags.has("not_needed")) await closeNotNeeded(admin, postId, ticketId, note, actor);
-      else await snooze(admin, post, ticketId, { note, typedDate, problem: flags.has("problem"), today }, actor);
-      await redraw(admin, post);
+      let outcome = "Something went wrong saving this. Try again, or update the ticket in the app.";
+      try {
+        const post = await loadPost(admin, postId, ticketId);
+        if (!post) {
+          outcome = "This post is out of date, so nothing was saved. Use the latest morning post or the app.";
+          return;
+        }
+        const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
+        if (flags.has("not_needed")) {
+          await closeNotNeeded(admin, postId, ticketId, note, actor);
+          outcome = ":white_check_mark: Saved. The ticket is closed as not needed.";
+        } else {
+          const saved = await snooze(admin, post, ticketId, { note, typedDate, problem: flags.has("problem"), today }, actor);
+          outcome = `:white_check_mark: Saved. I'll ask again *${shortDate(saved.askAfter)}*${saved.reason ? ` (${saved.reason})` : ""}.`;
+          if (saved.escalated) outcome += "\nA manager has been tagged in the thread to take a look.";
+        }
+        await redraw(admin, post);
+      } finally {
+        await slackApi("views.update", { view_id: viewId, view: messageView("Not yet", outcome) });
+      }
     });
-    return new NextResponse(null, { status: 200 });
+    return NextResponse.json({ response_action: "update", view: messageView("Not yet", ":hourglass_flowing_sand: Saving... picking a day to ask again.") });
   }
 
   return new NextResponse(null, { status: 200 });
@@ -180,7 +197,7 @@ async function snooze(
   ticketId: string,
   answer: { note: string; typedDate: string | null; problem: boolean; today: string },
   actor: { profileId: string | null; name: string },
-) {
+): Promise<{ askAfter: string; reason: string | null; escalated: boolean }> {
   const postId = post.id;
   const [row] = await loadRows(admin, { ticketIds: [ticketId] });
   let askAfter: string;
@@ -221,6 +238,7 @@ async function snooze(
   // A person always hears about a flagged problem, a note the AI couldn't read, or the AI failing.
   const why = answer.problem ? "problem" : pick?.needsHuman;
   if (why) await escalate(admin, post, ticketId, row, { why, detail: pick?.detail ?? null, note: answer.note, by: actor.name, askAfter });
+  return { askAfter, reason, escalated: !!why };
 }
 
 /**
@@ -342,6 +360,16 @@ function noteModal(postId: string, ticketId: string) {
         element: { type: "plain_text_input", action_id: "value", multiline: true, placeholder: { type: "plain_text", text: "e.g. Paid by e-transfer" } },
       },
     ],
+  };
+}
+
+/** A form screen with just a message and a Close button. */
+function messageView(title: string, text: string) {
+  return {
+    type: "modal",
+    title: { type: "plain_text", text: title },
+    close: { type: "plain_text", text: "Close" },
+    blocks: [{ type: "section", text: { type: "mrkdwn", text } }],
   };
 }
 

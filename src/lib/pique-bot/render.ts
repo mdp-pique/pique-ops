@@ -114,27 +114,32 @@ function waitingLines(row: BotRow, postDate: string): string[] {
   return lines;
 }
 
-/** An item that still needs an answer: the question plus Done / Not yet / Open. */
+/**
+ * An item that still needs an answer: the question plus Done / Not yet / Open.
+ * Once it's been answered for later, only Open is left - it's off today's list,
+ * and anyone who finishes it early ticks it in the app.
+ */
 export function renderOpenRow(row: BotRow, postId: string, postDate: string, appUrl: string | null): Block[] {
+  const later = isSnoozed(row, postDate);
   const item = nextItem(row)!;
   const lines = [titleOf(row), whenText(row, postDate), `${question(row, item)}${owner(row)}`];
   if (row.lastAnswer?.kind === "done") lines.push(`:white_check_mark: Previous step ticked by ${esc(row.lastAnswer.by)}`);
   lines.push(...waitingLines(row, postDate), ...noteLines(row));
 
   const value = `${postId}|${row.ticketId}|${item.id}`;
-  const elements: Block[] = [
-    { type: "button", action_id: "pique_bot_done", style: "primary", text: { type: "plain_text", text: "Done" }, value },
-    { type: "button", action_id: "pique_bot_not_yet", text: { type: "plain_text", text: "Not yet" }, value },
-  ];
-  if (row.doneBy) elements.push(noteButton(row, postId));
+  const elements: Block[] = later
+    ? []
+    : [
+        { type: "button", action_id: "pique_bot_done", style: "primary", text: { type: "plain_text", text: "Done" }, value },
+        { type: "button", action_id: "pique_bot_not_yet", text: { type: "plain_text", text: "Not yet" }, value },
+      ];
+  if (row.doneBy && !later) elements.push(noteButton(row, postId));
   if (appUrl) {
     elements.push({ type: "button", action_id: "pique_bot_open", text: { type: "plain_text", text: "Open" }, url: `${appUrl}/tickets/requests?ticket=${row.ticketId}` });
   }
 
-  return [
-    { type: "section", block_id: `t:${row.ticketId}`, text: { type: "mrkdwn", text: lines.join("\n") } },
-    { type: "actions", block_id: `a:${row.ticketId}`, elements },
-  ];
+  const section: Block = { type: "section", block_id: `t:${row.ticketId}`, text: { type: "mrkdwn", text: lines.join("\n") } };
+  return elements.length ? [section, { type: "actions", block_id: `a:${row.ticketId}`, elements }] : [section];
 }
 
 /** A finished item, collapsed to one crossed-out line (plus any notes), with Add note on the right. */
