@@ -47,11 +47,11 @@ export async function POST(request: NextRequest) {
     if (action.action_id === "pique_bot_not_yet") {
       await admin.from("ticket_events").insert({
         ticket_id: ticketId,
-        event_type: "slack_not_yet",
+        event_type: "comment",
         actor_id: actor.profileId,
         note: `Not yet (answered in Slack by ${actor.name})`,
-        payload: { post_id: postId, by: actor.name },
-      });
+        payload: { source: "pique_bot", kind: "not_yet", post_id: postId, by: actor.name },
+      }).then(logError("not yet event"));
     }
 
     after(() => redraw(admin, post));
@@ -67,11 +67,11 @@ export async function POST(request: NextRequest) {
       await admin.from("ticket_comments").insert({ ticket_id: ticketId, author_id: actor.profileId, body: `Problem reported in Slack by ${actor.name}: ${problem}` });
       await admin.from("ticket_events").insert({
         ticket_id: ticketId,
-        event_type: "slack_problem",
+        event_type: "comment",
         actor_id: actor.profileId,
         note: `Problem reported in Slack by ${actor.name}`,
-        payload: { post_id: postId, by: actor.name, problem },
-      });
+        payload: { source: "pique_bot", kind: "problem", post_id: postId, by: actor.name, problem },
+      }).then(logError("problem event"));
       after(() => redraw(admin, post));
     }
     // An empty body closes the form.
@@ -79,6 +79,14 @@ export async function POST(request: NextRequest) {
   }
 
   return new NextResponse(null, { status: 200 });
+}
+
+// ticket_events only accepts its existing event types (a check constraint), so
+// Slack answers use item_done / comment and are marked with payload.source.
+function logError(what: string) {
+  return ({ error }: { error: { message: string } | null }) => {
+    if (error) console.error(`Pique Bot: ${what} failed: ${error.message}`);
+  };
 }
 
 function slackName(user: SlackUser): string {
@@ -111,12 +119,12 @@ async function markDone(admin: Admin, ticketId: string, itemId: string, actor: {
 
   await admin.from("ticket_events").insert({
     ticket_id: ticketId,
-    event_type: "slack_done",
+    event_type: "item_done",
     actor_id: actor.profileId,
     to_value: "true",
     note: `Checked off in Slack by ${actor.name}: ${item.label}`,
-    payload: { by: actor.name, item_id: itemId },
-  });
+    payload: { source: "pique_bot", kind: "done", by: actor.name, item_id: itemId },
+  }).then(logError("done event"));
 
   const { count } = await admin.from("ticket_items").select("id", { count: "exact", head: true }).eq("ticket_id", ticketId).eq("is_done", false);
   if (count !== 0) return;

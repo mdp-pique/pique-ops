@@ -58,14 +58,15 @@ export async function POST(request: NextRequest) {
     }
 
     await admin.from("pique_bot_posts").update({ slack_ts: sent.ts, updated_at: new Date().toISOString() }).eq("id", post.id);
-    await admin.from("ticket_events").insert(
+    const { error: logError } = await admin.from("ticket_events").insert(
       rows.map((r) => ({
         ticket_id: r.ticketId,
-        event_type: "slack_asked",
+        event_type: "comment",
         note: "Asked in the Pique Bot morning check-in",
-        payload: { post_id: post.id, channel, slack_ts: sent.ts },
+        payload: { source: "pique_bot", kind: "asked", post_id: post.id, channel, slack_ts: sent.ts },
       })),
     );
+    if (logError) console.error(`Pique Bot: logging asks failed: ${logError.message}`);
     results.push({ channel, asked: rows.length, slack_ts: sent.ts });
   }
 

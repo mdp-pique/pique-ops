@@ -41,7 +41,8 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
           .from("ticket_events")
           .select("ticket_id, event_type, note, payload, created_at")
           .in("ticket_id", ids)
-          .in("event_type", ["slack_done", "slack_not_yet", "slack_problem"])
+          .in("event_type", ["item_done", "comment"])
+          .contains("payload", { source: "pique_bot" })
           .gte("created_at", opts.since)
           .order("created_at", { ascending: true })
       : Promise.resolve({ data: [] as { ticket_id: string; event_type: string; note: string | null; payload: unknown }[] }),
@@ -54,9 +55,9 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
   const teamById = new Map((teams.data ?? []).map((t) => [t.id, t.name]));
   const lastAnswer = new Map<string, BotRow["lastAnswer"]>();
   for (const e of answers.data ?? []) {
-    const payload = (e.payload ?? {}) as { by?: string; problem?: string };
-    const kind = e.event_type === "slack_done" ? "done" : e.event_type === "slack_not_yet" ? "not_yet" : "problem";
-    lastAnswer.set(e.ticket_id, { kind, by: payload.by ?? "someone", note: payload.problem });
+    const payload = (e.payload ?? {}) as { kind?: string; by?: string; problem?: string };
+    if (payload.kind !== "done" && payload.kind !== "not_yet" && payload.kind !== "problem") continue;
+    lastAnswer.set(e.ticket_id, { kind: payload.kind, by: payload.by ?? "someone", note: payload.problem });
   }
 
   return tickets.map((t) => {

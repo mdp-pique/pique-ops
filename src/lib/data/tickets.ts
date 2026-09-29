@@ -434,7 +434,7 @@ function describeEvent(e: { event_type: string; from_value: string | null; to_va
     case "escalation":
       return e.note ?? `Escalated (#${e.to_value})`;
     case "item_done":
-      return e.to_value === "true" ? "Checked off an item" : "Un-checked an item";
+      return e.note ?? (e.to_value === "true" ? "Checked off an item" : "Un-checked an item");
     default:
       return e.note ?? e.event_type;
   }
