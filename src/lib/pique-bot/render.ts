@@ -202,7 +202,7 @@ export function renderPost(rows: BotRow[], postId: string, postDate: string, app
   openSection(later, `:hourglass_flowing_sand: *Asking again later (${later.length})*`);
 
   if (done.length) {
-    blocks.push({ type: "divider" }, { type: "section", text: { type: "mrkdwn", text: `:white_check_mark: *Done today (${done.length})*` } });
+    blocks.push({ type: "divider" }, { type: "section", text: { type: "mrkdwn", text: `:white_check_mark: *Done (${done.length})*` } });
     budget -= 2;
     for (const row of done) {
       if (budget < 1) {

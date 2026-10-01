@@ -3,7 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { addDays, pickAskAgain, type AskAgainPick } from "@/lib/pique-bot/askAgain";
 import { BOT_RULES, ESCALATE_PROFILE_ID } from "@/lib/pique-bot/config";
 import { appUrl, edmontonToday, loadRows, resolveActor } from "@/lib/pique-bot/data";
-import { nextItem, renderPost, shortDate, type BotRow } from "@/lib/pique-bot/render";
+import { isFinished, nextItem, shortDate, type BotRow } from "@/lib/pique-bot/render";
+import { redrawForTicket, type Post } from "@/lib/pique-bot/posts";
 import { slackApi, verifySlackSignature } from "@/lib/pique-bot/slack";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
         if (!post) return;
         const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
         await markDone(admin, ticketId, itemId, actor);
-        await redraw(admin, post);
+        await redrawForTicket(admin, ticketId);
       });
     }
     return new NextResponse(null, { status: 200 });
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
         note: `Note added in Slack by ${actor.name}`,
         payload: { source: "pique_bot", kind: "note", post_id: postId, by: actor.name, note: text },
       }).then(logError("note event"));
-      await redraw(admin, post);
+      await redrawForTicket(admin, ticketId);
     });
     // An empty body closes the form.
     return new NextResponse(null, { status: 200 });
@@ -113,12 +114,14 @@ export async function POST(request: NextRequest) {
         if (flags.has("not_needed")) {
           await closeNotNeeded(admin, postId, ticketId, note, actor);
           outcome = ":white_check_mark: Saved. The ticket is closed as not needed.";
+        } else if (await isFinishedTicket(admin, ticketId)) {
+          outcome = ":white_check_mark: This one is already done, so nothing was changed.";
         } else {
           const saved = await snooze(admin, post, ticketId, { note, typedDate, problem: flags.has("problem"), today }, actor);
           outcome = `:white_check_mark: Saved. I'll ask again *${shortDate(saved.askAfter)}*${saved.reason ? ` (${saved.reason})` : ""}.`;
           if (saved.escalated) outcome += "\nA manager has been tagged in the thread to take a look.";
         }
-        await redraw(admin, post);
+        await redrawForTicket(admin, ticketId);
       } finally {
         await slackApi("views.update", { view_id: viewId, view: messageView("Not yet", outcome) });
       }
@@ -310,6 +313,11 @@ async function escalateSlackId(admin: Admin): Promise<string | null> {
   return id;
 }
 
+async function isFinishedTicket(admin: Admin, ticketId: string): Promise<boolean> {
+  const [row] = await loadRows(admin, { ticketIds: [ticketId] });
+  return !row || isFinished(row);
+}
+
 /** "Not needed anymore": closes the ticket, whatever is left on its checklist. */
 async function closeNotNeeded(admin: Admin, postId: string, ticketId: string, note: string, actor: { profileId: string | null; name: string }) {
   const { data: ticket } = await admin.from("tickets").select("status").eq("id", ticketId).maybeSingle();
@@ -333,15 +341,6 @@ async function closeNotNeeded(admin: Admin, postId: string, ticketId: string, no
   if (note) {
     await admin.from("ticket_comments").insert({ ticket_id: ticketId, author_id: actor.profileId, body: `Not needed anymore (${actor.name}, from Slack): ${note}` });
   }
-}
-
-type Post = { id: string; post_date: string; channel_id: string; slack_ts: string | null; ticket_ids: string[]; created_at: string };
-
-async function redraw(admin: Admin, post: Post) {
-  if (!post.slack_ts) return;
-  const rows = await loadRows(admin, { ticketIds: post.ticket_ids, since: post.created_at });
-  const message = renderPost(rows, post.id, post.post_date, appUrl());
-  await slackApi("chat.update", { channel: post.channel_id, ts: post.slack_ts, text: message.text, blocks: message.blocks });
 }
 
 function noteModal(postId: string, ticketId: string) {

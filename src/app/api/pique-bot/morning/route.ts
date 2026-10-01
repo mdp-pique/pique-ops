@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { CHANNELS } from "@/lib/pique-bot/config";
 import { appUrl, edmontonToday, loadRows } from "@/lib/pique-bot/data";
 import { pickForMorning, renderPost } from "@/lib/pique-bot/render";
+import { redrawEarlier } from "@/lib/pique-bot/posts";
 import { slackApi } from "@/lib/pique-bot/slack";
 
 /**
@@ -27,6 +28,8 @@ export async function POST(request: NextRequest) {
   const results: Record<string, unknown>[] = [];
 
   for (const channel of Object.values(CHANNELS)) {
+    // Earlier posts first, so anything finished in the app shows crossed off there too.
+    if (!dry) await redrawEarlier(admin, channel, today);
     const rows = pickForMorning(all, today, channel);
     if (rows.length === 0) {
       results.push({ channel, asked: 0 });
