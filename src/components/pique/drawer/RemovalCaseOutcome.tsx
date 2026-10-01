@@ -4,6 +4,15 @@ import { useState, useTransition } from "react";
 import { Btn } from "@/components/pique/primitives";
 import { useDrawer } from "./DrawerContext";
 import { closeRemovalCase, escalateRemovalCase } from "./reviewRemovalActions";
+import { MAX_AIRBNB_APPEALS } from "@/lib/reviewAppeals";
+
+// Two appeals go to Airbnb; the third step is Robert, our account manager.
+function outcomeHint(sent: number | null, rejected: number | null) {
+  if (rejected != null && rejected >= MAX_AIRBNB_APPEALS)
+    return "Both appeals to Airbnb were rejected. The next step is Robert, or close the case if it isn't worth pursuing.";
+  if (!sent) return "No appeal has gone to Airbnb yet. Escalating is for after two rejected appeals.";
+  return `${sent} of ${MAX_AIRBNB_APPEALS} appeals sent to Airbnb. Usually send the second appeal before escalating to Robert.`;
+}
 
 /**
  * The end of a review removal case: hand it to Robert (PRD §9, review_removal_escalation)
@@ -11,13 +20,13 @@ import { closeRemovalCase, escalateRemovalCase } from "./reviewRemovalActions";
  */
 export function RemovalCaseOutcome({
   ticketId,
-  attempts,
-  lastStatus,
+  appealsSent,
+  appealsRejected,
   onMutated,
 }: {
   ticketId: string;
-  attempts: number | null;
-  lastStatus: string | null;
+  appealsSent: number | null;
+  appealsRejected: number | null;
   onMutated?: () => void;
 }) {
   const { openTicket } = useDrawer();
@@ -60,10 +69,7 @@ export function RemovalCaseOutcome({
   return (
     <div className="card">
       <h3>Done appealing?</h3>
-      <div className="d" style={{ marginBottom: 10 }}>
-        {attempts ? `${attempts} attempt${attempts === 1 ? "" : "s"} on file` : "Attempts on file"}
-        {lastStatus ? `, latest ${lastStatus}` : ""}. After two denials, escalate it to Robert, or close the case if it isn&apos;t worth pursuing.
-      </div>
+      <div className="d" style={{ marginBottom: 10 }}>{outcomeHint(appealsSent, appealsRejected)}</div>
       {closing ? (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <label className="sr-only" htmlFor={`close-reason-${ticketId}`}>

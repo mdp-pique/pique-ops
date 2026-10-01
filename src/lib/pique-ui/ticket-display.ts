@@ -32,8 +32,13 @@ export function ticketTitle(t: { type: string; metadata: Metadata }): string {
       return typeof m.check_date === "string" ? `Cleaner no-show – ${m.check_date} shift` : "Cleaner no-show";
     case "review_flag":
       return typeof m.reason === "string" && m.reason.trim() ? m.reason : "Review flagged for suppression review";
-    case "review_removal_case":
-      return `Review removal – attempt #${typeof m.attempt_number === "number" ? m.attempt_number : 1}`;
+    case "review_removal_case": {
+      // Only appeals sent to Airbnb count (see src/lib/reviewAppeals.ts); the team sends two, then escalates.
+      const sent = typeof m.appeals_sent === "number" ? m.appeals_sent : null;
+      if (sent === null) return "Review removal";
+      if (sent === 0) return "Review removal – no appeal sent yet";
+      return sent <= 2 ? `Review removal – ${sent} of 2 appeals sent` : `Review removal – ${sent} appeals sent`;
+    }
     default:
       // Manually created tickets carry the staff-entered summary.
       return typeof m.title === "string" && m.title.trim() ? m.title : ticketTypeLabel(t.type);

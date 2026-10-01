@@ -328,8 +328,8 @@ export function TicketPanel({
         {data.type === "review_removal_case" && data.status !== "resolved" && data.status !== "closed" && (
           <RemovalCaseOutcome
             ticketId={data.id}
-            attempts={Number(data.metadata.attempt_number) || null}
-            lastStatus={typeof data.metadata.draft_status === "string" ? data.metadata.draft_status : null}
+            appealsSent={typeof data.metadata.appeals_sent === "number" ? data.metadata.appeals_sent : null}
+            appealsRejected={typeof data.metadata.appeals_rejected === "number" ? data.metadata.appeals_rejected : null}
             onMutated={onMutated}
           />
         )}

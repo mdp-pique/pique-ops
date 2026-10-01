@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Btn } from "@/components/pique/primitives";
 import { VIOLATION_HINTS, type DraftResult, type Odds } from "@/lib/ai/reviewRemoval";
 import type { ReviewRemovalContext } from "@/lib/data/reviews";
+import { isAppeal, MAX_AIRBNB_APPEALS } from "@/lib/reviewAppeals";
 import {
   fetchReviewContext,
   fetchReviewContextForReservation,
@@ -47,7 +48,27 @@ const MANUAL_STATUS_OPTIONS: { value: "sent" | "rejected" | "removed"; label: st
 type Attempt = ReviewRemovalContext["priorAttempts"][number];
 
 /** One past (or just-saved) attempt: its own status, draft text, and evidence - evidence stays scoped to whichever round it was gathered for, not lumped in one pile across every appeal. */
-function AttemptRow({ attempt, ticketId, onUploaded }: { attempt: Attempt; ticketId: string; onUploaded: () => void }) {
+function appealCount(attempts: Attempt[]) {
+  return attempts.filter(isAppeal).length;
+}
+
+function numberAppeals(attempts: Attempt[]) {
+  let n = 0;
+  return attempts.map((attempt) => ({ attempt, appealNumber: isAppeal(attempt) ? ++n : null }));
+}
+
+function AttemptRow({
+  attempt,
+  appealNumber,
+  ticketId,
+  onUploaded,
+}: {
+  attempt: Attempt;
+  /** Position among real appeals; null for the monitor's automatic check. */
+  appealNumber: number | null;
+  ticketId: string;
+  onUploaded: () => void;
+}) {
   const [isPending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,7 +85,7 @@ function AttemptRow({ attempt, ticketId, onUploaded }: { attempt: Attempt; ticke
     <div style={{ padding: "10px 0", borderTop: "1px solid var(--line)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <b style={{ fontSize: 12.5 }}>
-          Attempt #{attempt.attemptNumber} &middot; {attempt.status}
+          {appealNumber ? `Appeal ${appealNumber}` : "Automatic check (not sent)"} &middot; {attempt.status}
         </b>
         <span className="d" style={{ color: "var(--ink-3)" }}>
           {new Date(attempt.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
@@ -315,10 +336,12 @@ export function ReviewRemovalPanel({
           {ctx.priorAttempts.length > 0 && (
             <details style={{ marginBottom: 10 }}>
               <summary style={{ cursor: "pointer", color: "var(--ink-3)", fontSize: 12.5 }}>
-                {ctx.priorAttempts.length} prior attempt{ctx.priorAttempts.length === 1 ? "" : "s"} on file
+                {appealCount(ctx.priorAttempts) === 0
+                  ? "No appeal sent yet - history"
+                  : `${appealCount(ctx.priorAttempts)} of ${MAX_AIRBNB_APPEALS} appeals sent - history`}
               </summary>
-              {ctx.priorAttempts.map((a) => (
-                <AttemptRow key={a.id} attempt={a} ticketId={ticketId} onUploaded={loadCtx} />
+              {numberAppeals(ctx.priorAttempts).map(({ attempt, appealNumber }) => (
+                <AttemptRow key={attempt.id} attempt={attempt} appealNumber={appealNumber} ticketId={ticketId} onUploaded={loadCtx} />
               ))}
             </details>
           )}

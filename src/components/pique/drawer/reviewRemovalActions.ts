@@ -6,6 +6,7 @@ import { requireUser, claimTicketIfUnassigned } from "./actions";
 import { getReviewRemovalContext, getReviewIdForReservation, type ReviewRemovalContext } from "@/lib/data/reviews";
 import { generateReviewRemovalDraft, type DraftRequest, type DraftResult } from "@/lib/ai/reviewRemoval";
 import type { Database } from "@/lib/supabase/database.types";
+import { isAppeal } from "@/lib/reviewAppeals";
 
 const SIGNED_URL_TTL_SECONDS = 3600;
 
@@ -388,9 +389,11 @@ export async function escalateRemovalCase(ticketId: string): Promise<{ id: strin
   const { data: existing } = await supabase.from("tickets").select("id").eq("external_ref", externalRef).maybeSingle();
   if (existing) return { id: existing.id };
 
-  const attempts = ctx.priorAttempts.map(
-    (a) =>
-      `#${a.attemptNumber} (${a.createdAt.slice(0, 10)}) - ${a.status}${a.violationTypes ? ` - ${a.violationTypes}` : ""}` +
+  // Only what actually went to Airbnb - not the monitor's automatic check.
+  const appeals = ctx.priorAttempts.filter(isAppeal);
+  const attempts = appeals.map(
+    (a, i) =>
+      `Appeal ${i + 1} (${a.createdAt.slice(0, 10)}) - ${a.status}` +
       (a.draftEmail && a.draftEmail !== "N/A" ? `\n${a.draftEmail}` : ""),
   );
   const pack = [
@@ -401,14 +404,14 @@ export async function escalateRemovalCase(ticketId: string): Promise<{ id: strin
     `Review: "${ctx.reviewText}"`,
     ctx.privateFeedback ? `Private feedback: "${ctx.privateFeedback}"` : "",
     ``,
-    `Attempts so far (${attempts.length}):`,
+    `Appeals sent to Airbnb (${attempts.length}):`,
     ...attempts.map((a) => `${a}\n`),
   ]
     .filter((l) => l !== "")
     .join("\n");
 
   const grounds = Array.from(
-    new Set(ctx.priorAttempts.map((a) => a.violationTypes).filter((v) => v && v !== "logged manually" && v !== "DID NOT VIOLATE")),
+    new Set(appeals.map((a) => a.violationTypes).filter((v) => v && v !== "logged manually")),
   ).join("; ");
 
   const { data: esc, error } = await supabase
@@ -430,7 +433,7 @@ export async function escalateRemovalCase(ticketId: string): Promise<{ id: strin
         title: `Escalate ${ctx.guestName}'s review to Robert`,
         grounds: grounds || "See attempts",
         review_id: c.reviewId,
-        attempts: ctx.priorAttempts.length,
+        appeals_sent: appeals.length,
       },
     })
     .select("id")

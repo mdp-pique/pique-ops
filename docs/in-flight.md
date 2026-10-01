@@ -10,7 +10,7 @@ Several Claude chats work on this repo at the same time. This file is how they a
 
 | Branch | Working on | Touches | Updated | Status |
 |---|---|---|---|---|
-| `claude/github-setup-question-9b4s3w` | Cleaning shifts from bookings (Zap replacement), calendar, review flag "no review" close | `cleaning_shift_*`, `cleaning_property_jobs`, `plan/run/complete_cleaning_shift_*`, `cleaning_schedule_*` views, `src/lib/data/calendar.ts`, `CalendarView.tsx`, `ReviewRemovalPanel.tsx` (flag decision only), `RemovalCaseOutcome.tsx` + `closeRemovalCase`/`escalateRemovalCase` | 2026-10-01 | Live; monitoring |
+| `claude/github-setup-question-9b4s3w` | Cleaning shifts from bookings (Zap replacement), calendar, review flag "no review" close | `cleaning_shift_*`, `cleaning_property_jobs`, `plan/run/complete_cleaning_shift_*`, `cleaning_schedule_*` views, `src/lib/data/calendar.ts`, `CalendarView.tsx`, `ReviewRemovalPanel.tsx` (flag decision only), `RemovalCaseOutcome.tsx` + `closeRemovalCase`/`escalateRemovalCase`, appeal counting (`reviewAppeals.ts`, `tally_review_removal_appeals`, case title) | 2026-10-01 | Live; monitoring |
 | `claude/charming-franklin-q8mryy` | Pique Bot Slack check-ins, review removal drafting, cleaning chat check-ins | `src/lib/pique-bot/`, `pique_bot_posts`, `src/lib/ai/reviewRemoval.ts`, `connecteam_chat_messages` | 2026-09-29 | From commit history - owner chat please confirm |
 
 ## Who owns live automations
