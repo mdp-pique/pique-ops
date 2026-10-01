@@ -52,7 +52,7 @@ async function resolveIfReviewFlagTicket(supabase: SupabaseClient<Database>, tic
  * review_flags has no authenticated write policy, only service_role - same
  * pattern as markUnansweredMessageResolved.
  */
-export async function suppressReviewFlag(ticketId: string) {
+export async function suppressReviewFlag(ticketId: string, note?: string) {
   const { supabase, user } = await requireUser();
 
   // Derived server-side from the ticket's trigger-set external_ref, never
@@ -79,7 +79,7 @@ export async function suppressReviewFlag(ticketId: string) {
   await supabase.from("ticket_comments").insert({
     ticket_id: ticketId,
     author_id: user.id,
-    body: "Decided not to pursue removal for this review.",
+    body: note || "Decided not to pursue removal for this review.",
   });
 
   revalidatePath("/", "layout");

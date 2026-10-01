@@ -243,10 +243,10 @@ export function ReviewRemovalPanel({
     });
   };
 
-  const dontAppeal = () => {
+  const dontAppeal = (note?: string) => {
     if (flagReviewFlagsId == null) return;
     startTransition(async () => {
-      await suppressReviewFlag(ticketId);
+      await suppressReviewFlag(ticketId, note);
       setSuppressed(true);
       onMutated?.();
     });
@@ -294,7 +294,20 @@ export function ReviewRemovalPanel({
       {loadingCtx ? (
         <div style={{ color: "var(--ink-3)", fontSize: 12.5 }}>Loading review…</div>
       ) : !ctx ? (
-        <div style={{ color: "var(--ink-3)", fontSize: 12.5 }}>Couldn&apos;t load this review.</div>
+        isFlag ? (
+          // Most flags with no review row are stays where the guest never left one:
+          // nothing to appeal, but the flag still needs closing.
+          <>
+            <div className="d" style={{ marginBottom: 10 }}>
+              No review from this guest is on file. If they didn&apos;t leave one, there&apos;s nothing to appeal.
+            </div>
+            <Btn onClick={() => dontAppeal("Closed - the guest did not leave a review.")} disabled={isPending}>
+              {isPending ? "Saving…" : "Close - no review to appeal"}
+            </Btn>
+          </>
+        ) : (
+          <div style={{ color: "var(--ink-3)", fontSize: 12.5 }}>Couldn&apos;t load this review.</div>
+        )
       ) : (
         <>
           <div className="d" style={{ marginBottom: 10 }}>
@@ -319,7 +332,7 @@ export function ReviewRemovalPanel({
               <Btn variant="primary" onClick={startAppeal}>
                 Start the appeal
               </Btn>
-              <Btn onClick={dontAppeal} disabled={isPending}>
+              <Btn onClick={() => dontAppeal()} disabled={isPending}>
                 {isPending ? "Saving…" : "Don't appeal"}
               </Btn>
             </div>
