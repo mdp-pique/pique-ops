@@ -323,3 +323,135 @@ export async function deletePendingAttachment(ticketId: string, attachmentId: st
   await supabase.storage.from("ticket-attachments").remove([row.storage_path]);
   await supabase.from("ticket_attachments").delete().eq("id", attachmentId);
 }
+
+const ESCALATION_ITEMS = ["Sent to Robert", "Robert responded", "Outcome recorded"];
+
+/** The open review_removal_case ticket and its review, read through RLS - never ids from the client. */
+async function loadOpenCase(supabase: SupabaseClient<Database>, ticketId: string) {
+  const { data: t } = await supabase
+    .from("tickets")
+    .select("id, type, status, property_id, reservation_id, guest_name, metadata")
+    .eq("id", ticketId)
+    .maybeSingle();
+  if (!t || t.type !== "review_removal_case") return { ok: false as const, error: "Not a review removal ticket." };
+  if (t.status === "resolved" || t.status === "closed") return { ok: false as const, error: "This case is already closed." };
+  const reviewId = (t.metadata as Record<string, unknown> | null)?.review_id;
+  return { ok: true as const, ticket: t, reviewId: typeof reviewId === "string" ? reviewId : null };
+}
+
+async function resolveCase(supabase: SupabaseClient<Database>, ticketId: string, fromStatus: string, actorId: string, note: string) {
+  await supabase.from("tickets").update({ status: "resolved", closed_at: new Date().toISOString() }).eq("id", ticketId);
+  await supabase.from("ticket_events").insert({
+    ticket_id: ticketId,
+    event_type: "status_change",
+    actor_id: actorId,
+    from_value: fromStatus,
+    to_value: "resolved",
+    note,
+  });
+}
+
+/**
+ * "Stop appealing": the team is done with this review (Airbnb said no and it isn't
+ * worth escalating). A later attempt logged for the same review reopens the case
+ * through the existing review_removal_drafts mirror, which is what we want.
+ */
+export async function closeRemovalCase(ticketId: string, reason?: string): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+  const c = await loadOpenCase(supabase, ticketId);
+  if (!c.ok) return { error: c.error };
+
+  const why = reason?.trim() || "Airbnb rejected the removal requests.";
+  await resolveCase(supabase, ticketId, c.ticket.status, user.id, `Stopped appealing - ${why}`);
+  await supabase.from("ticket_comments").insert({ ticket_id: ticketId, author_id: user.id, body: `Closed without removal: ${why}` });
+
+  revalidatePath("/", "layout");
+  return {};
+}
+
+/**
+ * Hand a denied review to Robert (PRD §9: external, no app login). Opens one
+ * review_removal_escalation ticket per review, linked to this case, carrying
+ * everything to forward in one message, then closes the case - the escalation
+ * ticket tracks it from here.
+ */
+export async function escalateRemovalCase(ticketId: string): Promise<{ id: string } | { error: string }> {
+  const { supabase, user } = await requireUser();
+  const c = await loadOpenCase(supabase, ticketId);
+  if (!c.ok) return { error: c.error };
+  if (!c.reviewId) return { error: "This case has no review attached." };
+
+  const ctx = await getReviewRemovalContext(c.reviewId);
+  if (!ctx) return { error: "Couldn't load the review." };
+
+  const externalRef = `review_escalation:${c.reviewId}`;
+  const { data: existing } = await supabase.from("tickets").select("id").eq("external_ref", externalRef).maybeSingle();
+  if (existing) return { id: existing.id };
+
+  const attempts = ctx.priorAttempts.map(
+    (a) =>
+      `#${a.attemptNumber} (${a.createdAt.slice(0, 10)}) - ${a.status}${a.violationTypes ? ` - ${a.violationTypes}` : ""}` +
+      (a.draftEmail && a.draftEmail !== "N/A" ? `\n${a.draftEmail}` : ""),
+  );
+  const pack = [
+    `Review removal escalation for Robert`,
+    `Property: ${ctx.propertyName}`,
+    `Guest: ${ctx.guestName} - stay ${ctx.checkIn ?? "?"} to ${ctx.checkOut ?? "?"}${ctx.confirmationCode ? ` - ${ctx.confirmationCode}` : ""}`,
+    `Rating: ${ctx.reviewRating ?? "?"}/5`,
+    `Review: "${ctx.reviewText}"`,
+    ctx.privateFeedback ? `Private feedback: "${ctx.privateFeedback}"` : "",
+    ``,
+    `Attempts so far (${attempts.length}):`,
+    ...attempts.map((a) => `${a}\n`),
+  ]
+    .filter((l) => l !== "")
+    .join("\n");
+
+  const grounds = Array.from(
+    new Set(ctx.priorAttempts.map((a) => a.violationTypes).filter((v) => v && v !== "logged manually" && v !== "DID NOT VIOLATE")),
+  ).join("; ");
+
+  const { data: esc, error } = await supabase
+    .from("tickets")
+    .insert({
+      type: "review_removal_escalation",
+      status: "open",
+      priority: "normal",
+      stage: "accountability",
+      property_id: c.ticket.property_id,
+      reservation_id: c.ticket.reservation_id,
+      guest_name: c.ticket.guest_name ?? ctx.guestName,
+      assignee_id: user.id,
+      created_by: user.id,
+      source: "manual",
+      parent_ticket_id: ticketId,
+      external_ref: externalRef,
+      metadata: {
+        title: `Escalate ${ctx.guestName}'s review to Robert`,
+        grounds: grounds || "See attempts",
+        review_id: c.reviewId,
+        attempts: ctx.priorAttempts.length,
+      },
+    })
+    .select("id")
+    .single();
+  if (error || !esc) {
+    console.error("escalateRemovalCase:", error);
+    return { error: "Couldn't create the escalation ticket." };
+  }
+
+  await supabase.from("ticket_items").insert(ESCALATION_ITEMS.map((label, i) => ({ ticket_id: esc.id, label, sort_order: i })));
+  await supabase.from("ticket_events").insert({
+    ticket_id: esc.id,
+    event_type: "status_change",
+    actor_id: user.id,
+    to_value: "open",
+    note: "Escalated from the review removal case",
+  });
+  await supabase.from("ticket_comments").insert({ ticket_id: esc.id, author_id: user.id, body: pack });
+
+  await resolveCase(supabase, ticketId, c.ticket.status, user.id, "Escalated to Robert - tracked on its escalation ticket.");
+
+  revalidatePath("/", "layout");
+  return { id: esc.id };
+}

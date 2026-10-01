@@ -1,0 +1,101 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { Btn } from "@/components/pique/primitives";
+import { useDrawer } from "./DrawerContext";
+import { closeRemovalCase, escalateRemovalCase } from "./reviewRemovalActions";
+
+/**
+ * The end of a review removal case: hand it to Robert (PRD §9, review_removal_escalation)
+ * or stop appealing. Shown on open review_removal_case tickets only.
+ */
+export function RemovalCaseOutcome({
+  ticketId,
+  attempts,
+  lastStatus,
+  onMutated,
+}: {
+  ticketId: string;
+  attempts: number | null;
+  lastStatus: string | null;
+  onMutated?: () => void;
+}) {
+  const { openTicket } = useDrawer();
+  const [isPending, startTransition] = useTransition();
+  const [closing, setClosing] = useState(false);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  const escalate = () => {
+    setError(null);
+    startTransition(async () => {
+      const r = await escalateRemovalCase(ticketId);
+      if ("error" in r) return setError(r.error);
+      setDone("Escalated. The escalation ticket has everything to send Robert, and this case is closed.");
+      onMutated?.();
+      openTicket(r.id);
+    });
+  };
+
+  const close = () => {
+    setError(null);
+    startTransition(async () => {
+      const r = await closeRemovalCase(ticketId, reason);
+      if (r.error) return setError(r.error);
+      setDone("Closed. If you log another attempt for this review later, the case reopens.");
+      onMutated?.();
+    });
+  };
+
+  if (done) {
+    return (
+      <div className="card">
+        <h3>Case outcome</h3>
+        <div className="d" style={{ color: "var(--ok)" }}>{done}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <h3>Done appealing?</h3>
+      <div className="d" style={{ marginBottom: 10 }}>
+        {attempts ? `${attempts} attempt${attempts === 1 ? "" : "s"} on file` : "Attempts on file"}
+        {lastStatus ? `, latest ${lastStatus}` : ""}. After two denials, escalate it to Robert, or close the case if it isn&apos;t worth pursuing.
+      </div>
+      {closing ? (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <label className="sr-only" htmlFor={`close-reason-${ticketId}`}>
+            Why are you closing it?
+          </label>
+          <input
+            id={`close-reason-${ticketId}`}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Why (optional), e.g. denied twice, not worth escalating"
+            style={{ flex: "1 1 220px", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 10, background: "var(--surface)", color: "var(--ink)" }}
+          />
+          <Btn variant="primary" onClick={close} disabled={isPending}>
+            {isPending ? "Closing…" : "Close the case"}
+          </Btn>
+          <Btn onClick={() => setClosing(false)}>Cancel</Btn>
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Btn variant="primary" onClick={escalate} disabled={isPending}>
+            {isPending ? "Escalating…" : "Escalate to Robert"}
+          </Btn>
+          <Btn onClick={() => setClosing(true)} disabled={isPending}>
+            Close - stop appealing
+          </Btn>
+        </div>
+      )}
+      {error && (
+        <p className="form-err" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}

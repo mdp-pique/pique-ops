@@ -7,6 +7,7 @@ import { Tag, StatusPill, Btn, IconBtn } from "@/components/pique/primitives";
 import { useDrawer } from "./DrawerContext";
 import { addTicketComment, rollOverTicket, markUnansweredMessageResolved, uploadTicketAttachment } from "./actions";
 import { ReviewRemovalPanel } from "./ReviewRemovalPanel";
+import { RemovalCaseOutcome } from "./RemovalCaseOutcome";
 import { setTicketStatus, toggleTicketItem, addTicketItem, setTicketDueDate, assignTicketTo } from "./ticketActions";
 import { specFor } from "@/lib/pique-ui/domains";
 import { healthLabel, healthVariant, formatClockDate } from "@/lib/pique-ui/clock";
@@ -322,6 +323,15 @@ export function TicketPanel({
 
         {data.type === "review_removal_case" && typeof data.metadata.review_id === "string" && (
           <ReviewRemovalPanel ticketId={data.id} reviewId={data.metadata.review_id} onMutated={onMutated} />
+        )}
+
+        {data.type === "review_removal_case" && data.status !== "resolved" && data.status !== "closed" && (
+          <RemovalCaseOutcome
+            ticketId={data.id}
+            attempts={Number(data.metadata.attempt_number) || null}
+            lastStatus={typeof data.metadata.draft_status === "string" ? data.metadata.draft_status : null}
+            onMutated={onMutated}
+          />
         )}
 
         {data.type === "review_flag" && typeof data.metadata.review_flags_id === "number" && (
