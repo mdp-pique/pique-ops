@@ -28,9 +28,13 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
+  // Pique Bot routes have no browser session: Slack taps are checked against
+  // Slack's signing secret and the morning run against PIQUE_BOT_CRON_SECRET.
   const isAuthRoute =
     request.nextUrl.pathname.startsWith("/login") ||
-    request.nextUrl.pathname.startsWith("/auth/callback");
+    request.nextUrl.pathname.startsWith("/auth/callback") ||
+    request.nextUrl.pathname.startsWith("/api/slack/") ||
+    request.nextUrl.pathname.startsWith("/api/pique-bot/");
 
   if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone();
