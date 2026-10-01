@@ -2,6 +2,10 @@
 
 Internal ticketing & conversations platform for Pique Properties. Full spec: `docs/PRD.md` — read it before working on any feature. This file is quick orientation + conventions; the PRD is the source of truth.
 
+## Working alongside other chats
+
+Several Claude chats work on this repo and the same production systems at once. At the start of every session, before starting any feature, and before every push to main, use the `housekeeping` skill (`.claude/skills/housekeeping/SKILL.md`): run `scripts/housekeeping.sh`, check `docs/in-flight.md` for overlapping work and live-automation owners, and add your own row. If another chat already built what you were asked for, tell the user before building a second one.
+
 ## Stack
 
 - Next.js (App Router, TypeScript, Tailwind), deployed on Vercel.
