@@ -80,7 +80,7 @@ export function EscalationDraftPanel({ ticketId, onMutated }: { ticketId: string
             value={extraContext}
             onChange={(e) => setExtraContext(e.target.value)}
             rows={3}
-            placeholder="e.g. what Airbnb's agent said on the phone, photos we have, house rule she broke…"
+            placeholder="e.g. Airbnb case ID, what an Airbnb case manager said, photos we have, a house rule they broke…"
             style={TEXTAREA_STYLE}
           />
           <div style={{ marginTop: 8 }}>

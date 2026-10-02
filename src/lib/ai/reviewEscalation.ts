@@ -84,11 +84,22 @@ ${WRITING_RULES}
 
 == HOW THIS DIFFERS FROM A REMOVAL REQUEST ==
 - Ignore writing rules 9 and 11. There is NO length limit. Be complete rather than short, but every sentence must still add a point.
-- Argue EVERY policy violation the review commits, not just the strongest one or two. Give each its own numbered section with the citation and the policy's elements as points.
-- The reader is Robert, who works with us. Open with a short summary he can act on: the guest, property, stay dates, confirmation code, that both appeals were rejected, and what we're asking (that he escalate and have the review removed). Then the grounds, then the history.
-- Include a short "History" section listing each appeal: date, the grounds we argued, and what Airbnb said. Where Airbnb's rejection missed or misread something, say so plainly and point to the evidence.
-- Keep the "we" voice as the host. Close by thanking him and asking him to confirm next steps.
-- Never invent facts. Use only the review, the conversation, the appeals, Airbnb's responses and team input.
+- Argue EVERY policy violation the review commits, not just the strongest. The team's rule: "we don't have to choose one or the other when we're communicating with him directly - cover both options." Retaliation for a declined refund and extortion/pressure often apply together; so does misleading content.
+
+== STRUCTURE (follow the team's escalations that worked) ==
+Write it so Robert can forward it to Airbnb as-is.
+1. Open with "Hi Robert," then one short paragraph: we are escalating our request to remove [guest]'s [N]-star review for [listing], reservation [confirmation code], stay [dates]; both removal requests were declined; we believe the central violation was not fully assessed. Mention any Airbnb case ID from the team input.
+2. "Policy provisions violated": quote each relevant line of the Reviews Policy exactly, as bullets, naming the section (e.g. "Reviews involving bias, deception, extortion, incentivization, or pressure") and its Help Article. Note that the policy's Enforcing section lets Airbnb remove a violating review with its ratings.
+3. "Documented timeline": a dated, timestamped list built from the guest-host conversation (state the time zone, e.g. "all times MST, January 31"). Quote the guest's own words at each step - especially any ultimatum, refund demand, or warning - and our response with how quickly we replied. End with what happened right before the review (e.g. "We declined the refund at 10:30 PM. The review was published after this refusal.").
+4. One section per violation ("Violation 1: Extortion and pressure for unwarranted compensation", "Violation 2: Retaliation for a declined refund", "Violation 3: Misleading and deceptive content", ...). Tie each to the timeline and to the review's own words.
+5. Misleading claims: bullet each claim in the review against what the thread actually shows (amounts, times, durations, what we said). Use the exact figures from the messages - e.g. the guest wrote "over $150" but the review says $200.
+6. Anything Airbnb staff already said in our favour (case manager quotes, prior findings) if it appears in the team input or conversation.
+7. "Our conduct throughout": short, factual - response times, what we offered and did.
+8. "Request": remove the review and its ratings; because two requests were declined, ask that a senior specialist review the full message thread (name the key messages by time); ask Airbnb to confirm the outcome and its reasoning in writing.
+9. Close: "Thank you for your time and continued support." then "Michael & Katrina" and "Pique Properties" on their own lines.
+
+- Keep the "we" voice as the host throughout.
+- Never invent facts, times, amounts, case IDs or staff names. Use only the review, the conversation, the appeals, Airbnb's responses and team input. If something important is missing (e.g. a case ID), list it under VERIFY instead.
 
 ---
 ${OUTPUT_FORMAT}`;
