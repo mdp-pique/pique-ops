@@ -8,6 +8,7 @@ import { useDrawer } from "./DrawerContext";
 import { addTicketComment, rollOverTicket, markUnansweredMessageResolved, uploadTicketAttachment } from "./actions";
 import { ReviewRemovalPanel } from "./ReviewRemovalPanel";
 import { RemovalCaseOutcome } from "./RemovalCaseOutcome";
+import { EscalationDraftPanel } from "./EscalationDraftPanel";
 import { setTicketStatus, toggleTicketItem, addTicketItem, setTicketDueDate, assignTicketTo } from "./ticketActions";
 import { specFor } from "@/lib/pique-ui/domains";
 import { healthLabel, healthVariant, formatClockDate } from "@/lib/pique-ui/clock";
@@ -332,6 +333,10 @@ export function TicketPanel({
             appealsRejected={typeof data.metadata.appeals_rejected === "number" ? data.metadata.appeals_rejected : null}
             onMutated={onMutated}
           />
+        )}
+
+        {data.type === "review_removal_escalation" && typeof data.metadata.review_id === "string" && (
+          <EscalationDraftPanel ticketId={data.id} onMutated={onMutated} />
         )}
 
         {data.type === "review_flag" && typeof data.metadata.review_flags_id === "number" && (

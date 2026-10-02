@@ -46,7 +46,7 @@ export interface DraftResult {
 // used to pick grounds and judge the odds, not to decide whether to draft:
 // the team appeals every review it wants removed, so every run returns the
 // strongest honest request it can make.
-const RUBRIC = `PIQUE PROPERTIES CONTEXT (applies to ALL reviews):
+export const RUBRIC = `PIQUE PROPERTIES CONTEXT (applies to ALL reviews):
 - Pique Properties collects a damage/security deposit from all guests. This is explicitly listed in the property description as a mandatory requirement before check-in. It is a legitimate, disclosed host requirement and is NOT against Airbnb policy.
 - Pet fees work the same way: they are disclosed in the listing, must be paid before check-in, and the door code is only activated once required payments are complete. Enforcing that is enforcing a disclosed booking requirement.
 - If any guest's review claims that being asked for a damage/security deposit or pet fee was "against Airbnb policy," improper, or unauthorized - that is a FALSE STATEMENT. Consider False/Misleading (Help Article 546) and Retaliatory (Help Article 2673).
@@ -96,7 +96,7 @@ If evidence photos or documents are attached to this message, actually look at t
 // stronger hand-built appeal: agents respond to a checklist of the policy's
 // elements, a house rule tied back to Airbnb policy, the obvious objection
 // answered up front, and the guest's own words.
-const WRITING_RULES = `== HOW TO WRITE THE REQUEST ==
+export const WRITING_RULES = `== HOW TO WRITE THE REQUEST ==
 1. One numbered section per ground, headed with the ground and its citation in the form "Help Article 2673". Inside each section, walk the policy's elements as short labelled points the agent can tick off. For Retaliatory that is: the violation, the notice, the enforcement, and the review that followed.
 2. When the guest broke a house rule, connect it to Airbnb policy: Airbnb's Ground Rules for guests require guests to follow house rules, so breaking a disclosed house rule is a policy violation. Name the Ground Rules; do not give them an article number.
 3. Answer the most obvious counterargument before the agent raises it (e.g. "this is not a fee dispute", "this is not a complaint about the stay itself").

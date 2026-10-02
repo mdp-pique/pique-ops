@@ -7,6 +7,7 @@ import { getReviewRemovalContext, getReviewIdForReservation, type ReviewRemovalC
 import { generateReviewRemovalDraft, type DraftRequest, type DraftResult } from "@/lib/ai/reviewRemoval";
 import type { Database } from "@/lib/supabase/database.types";
 import { isAppeal } from "@/lib/reviewAppeals";
+import { generateEscalationDraft, type EscalationResult } from "@/lib/ai/reviewEscalation";
 
 const SIGNED_URL_TTL_SECONDS = 3600;
 
@@ -457,4 +458,59 @@ export async function escalateRemovalCase(ticketId: string): Promise<{ id: strin
 
   revalidatePath("/", "layout");
   return { id: esc.id };
+}
+
+/** The review behind an escalation ticket, read through RLS from the ticket itself. */
+async function loadEscalation(supabase: SupabaseClient<Database>, ticketId: string) {
+  const { data: t } = await supabase.from("tickets").select("id, type, metadata").eq("id", ticketId).maybeSingle();
+  if (!t || t.type !== "review_removal_escalation") return { ok: false as const, error: "Not an escalation ticket." };
+  const reviewId = (t.metadata as Record<string, unknown> | null)?.review_id;
+  if (typeof reviewId !== "string") return { ok: false as const, error: "This escalation has no review attached." };
+  return { ok: true as const, reviewId };
+}
+
+/** AI draft of the message to Robert: no length limit, every policy violation, answers each rejection. */
+export async function draftEscalationMessage(
+  ticketId: string,
+  req: { extraContext: string; priorDraft?: string; feedback?: string },
+): Promise<EscalationResult | { error: string }> {
+  const { supabase } = await requireUser();
+  const e = await loadEscalation(supabase, ticketId);
+  if (!e.ok) return { error: e.error };
+
+  const ctx = await getReviewRemovalContext(e.reviewId);
+  if (!ctx) return { error: "Couldn't load the review." };
+
+  const { data: rows } = await supabase
+    .from("review_removal_drafts")
+    .select("violation_types, status, draft_email, airbnb_response, created_at")
+    .eq("review_id", e.reviewId)
+    .order("attempt_number", { ascending: true });
+  const appeals = (rows ?? [])
+    .filter((r) => isAppeal({ violationTypes: r.violation_types, status: r.status ?? "" }))
+    .map((r, i) => ({
+      number: i + 1,
+      status: r.status ?? "unknown",
+      sentText: r.draft_email && r.draft_email !== "N/A" ? r.draft_email : "",
+      airbnbResponse: r.airbnb_response,
+      date: (r.created_at ?? "").slice(0, 10),
+    }));
+
+  try {
+    return await generateEscalationDraft(ctx, appeals, req);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Couldn't draft the message." };
+  }
+}
+
+/** Keeps the final message on the escalation ticket, so the team can see exactly what Robert got. */
+export async function saveEscalationMessage(ticketId: string, text: string): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+  const e = await loadEscalation(supabase, ticketId);
+  if (!e.ok) return { error: e.error };
+  if (!text.trim()) return { error: "The message is empty." };
+
+  await supabase.from("ticket_comments").insert({ ticket_id: ticketId, author_id: user.id, body: `Message for Robert:\n\n${text.trim()}` });
+  revalidatePath("/", "layout");
+  return {};
 }
