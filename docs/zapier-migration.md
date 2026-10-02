@@ -42,8 +42,8 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P1-25 | New Main - Connecteam Accepted/Booking | New Edmonton/Calgary booking → creates an open Connecteam shift; moves an open one if found | Shifts-from-bookings flow (live). This Zap still creates a duplicate for nearly every new Edmonton booking (29 of 37 since go-live), which the flow then deletes. | S | off (10-02) |
 | P2-75 | New Main - Connecteam Cancelled Booking | Edmonton booking cancelled → deletes the shift | Shifts-from-bookings flow `remove` | S | off (10-02) |
 | P2-14 | Connecteam Cancelled - 268lw0o | Hospitable webhook (older payload format) on cancel → deletes the shift | Shifts-from-bookings flow `remove`. Once off, delete the webhook in Hospitable's settings that points at Zapier. | S | off (10-02) |
-| P2-31 | New - Cleaning from Padmore to Connecteam | Booking created/changed on Padmore's own Hospitable account → creates/moves the shift | Padmore is an active cleaning client (Laurice 10-02). Extend the shifts flow to read their account's bookings. | S | todo |
-| P2-51 | New - Cleaning from Stephan to Connecteam | Same, for Stephan's account (different shift window) | Stephan is an active cleaning client. Same extension. | S | todo |
+| P2-31 | New - Cleaning from Padmore to Connecteam | Hospitable "reservation" trigger on Padmore's own Hospitable login (a separate Zapier connection from the main account). New or changed accepted booking → finds the job in the property → Connecteam sheet (column B) → creates an open shift 12 h to 6 h before checkout, or moves an open one. | Active cleaning client (Laurice 10-02). Extend the shifts flow with that account's bookings and job rows. | S | todo |
+| P2-51 | New - Cleaning from Stephan to Connecteam | Same trigger on Stephen's own Hospitable login (its own Zapier connection). Same steps; it searches for an existing shift 12 h to 9 h before checkout. | Active cleaning client. Same extension. Needs that login in n8n ("Hospitable API 2" may already be one of the two). | S | todo |
 | P1-96 | Cancelled Reservation → Slack | Cancelled booking → tags 4 people to try to save it, ✅ when done | `save_booking` ticket from a `reservations` trigger; resolves on rebook or after the original check-in | B | todo |
 | P2-92 | New Reservations - 1 Guest Only | New booking with 1 guest → ask the guest for the real count, ✅ | `guest_count_check` ticket from a `reservations` trigger | B | todo |
 | P2-98 | New Reservations - Pet | New booking with a pet → ask for the pet fee, ✅ | `pet_fee` tickets already exist, and Pique Bot asks from 2 days before check-in. MDP 10-02: that's enough. | B | off (10-02) |
@@ -95,32 +95,21 @@ Still to add (MDP, in n8n → Credentials):
 - **Circle**, for P2-1.
 - **Gmail:** confirm the existing credential is `info@piquepropertiesinc.com`, the inbox the email Zaps read.
 
-## Pique Bot notification legend (draft, MDP to confirm)
+## Pique Bot notification legend
 
-MDP 10-02: this branch may extend Pique Bot. The goal is daily updates plus immediate posts for high-risk items, without notification overload. Each ticket type gets one tier in `src/lib/pique-bot/config.ts`, so changing a tier is one line.
+MDP 10-02: this branch may extend Pique Bot (daily updates plus immediate posts for high-risk items). The levels and the four lists (Urgent / Today / Morning / FYI) are in `docs/pique-bot-notification-legend.md`, and each list is approved separately.
 
-| Tier | When it posts | Tags | Follow-up |
-|---|---|---|---|
-| Urgent | Right away | The owner or team | One nudge in the thread if nobody taps Done / Not yet within 1 business hour; top of the next morning post |
-| Today | Right away, in its channel | The owner only if assigned | None; next morning post if still open |
-| Morning | Only in the 7 AM post (today's behaviour) | None | Daily until done (existing overdue rule) |
-| FYI | Plain post, no buttons, no ticket | None | None |
+## Lookup sheets
 
-Against overload:
-- Each ticket gets at most one immediate post. Later changes edit that post instead of adding new ones.
-- At most one nudge per ticket.
-- Quiet hours 21:00-07:00 Edmonton: nothing posts; it waits for the morning post.
-- One morning post per channel, grouped by tier.
-
-Proposed tiers:
-- **Urgent:** cancelled booking (try to save), Airbnb Support email, reply from Robert.
-- **Today:** invoice, e-Transfer, invoice reviewed (Cristine), Aircover / Truvi emails, damage and linens forms, supply order, QC form, MyKey, Sinistar, Ondilo, low cleanliness review.
-- **Morning:** pet fee, direct booking ID, parking, pack 'n play, 1-guest check, 5-star cleaner congrats.
-- **FYI:** new booking, Stripe payment, Hubstaff timers, N2P message.
+Every lookup sheet a Zap reads, and what replaces it:
+- **Bookings sheet**: "Stripe Payment Success Notification to Slack" finds the reservation code from the Stripe payment and gets the property and dates. Replaced by `reservations`.
+- **213 FML sheet**: "213 FML Parking Registration Reminder" finds today's check-ins and gets the guest name and code. Replaced by `reservations`.
+- **QC sheet**: "Finding Clean when Review is Submitted" finds the clean by reservation code and gets the cleaner and clean times. It also logs every congrats / needs-attention post on a third tab. Replaced by `connecteam_shifts` / `cleaning_shift_check` plus `guest_reviews`.
+- **Property → Connecteam job sheet** (a fourth one): the shift Zaps find the Connecteam job for a property here (main account by column C, Padmore / Stephan by column B, the old cancel webhook by property id). Replaced by `cleaning_property_jobs` for the main account; Padmore / Stephan properties need rows added.
 
 ## Open questions
 
 1. P2-6 / P2-8 (Hubstaff timers): Laurice isn't sure whether Michael and Katrina still use them.
-2. Confirm the notification legend above.
+2. Approve each list in `docs/pique-bot-notification-legend.md`.
 
 Answered 10-02: P2-14 is a Hospitable webhook. Pet fee timing is fine. Cassidy is unused (P1-71 off). Padmore and Stephan are active cleaning clients. The three sheets exist only as lookups for the Zaps, so they retire with their replacements, and lookup data (Connecteam job ids, GHL ids) moves to DB tables (`cleaning_property_jobs` already covers Connecteam jobs).
