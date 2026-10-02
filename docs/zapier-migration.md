@@ -26,7 +26,7 @@ The source is the two Zap exports MDP shared on 2026-10-02: 24 Zaps in page 1 an
 
 | When | What |
 |---|---|
-| 10-02 | S: P1-25 and P2-75 off (MDP) |
+| 10-02 | Off: P1-25, P2-75, P2-14, P2-98 (MDP) |
 | 10-03 → 10-07 | B and E built, in shadow |
 | 10-06 → 10-10 | N ported (needs credentials, below) |
 | 10-08 → 10-15 | B and E Zaps off after parity; C and Q built |
@@ -39,14 +39,14 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 
 | Zap | Name | What it does today | Replacement | Lane | Status |
 |---|---|---|---|---|---|
-| P1-25 | New Main - Connecteam Accepted/Booking | New Edmonton/Calgary booking → creates an open Connecteam shift; moves an open one if found | Shifts-from-bookings flow (live). This Zap still creates a duplicate for nearly every new Edmonton booking (29 of 37 since go-live), which the flow then deletes. | S | ready to turn off |
-| P2-75 | New Main - Connecteam Cancelled Booking | Edmonton booking cancelled → deletes the shift | Shifts-from-bookings flow `remove` | S | ready to turn off |
-| P2-14 | Connecteam Cancelled - 268lw0o | Hospitable webhook (older payload format) on cancel → deletes the shift | Shifts-from-bookings flow `remove`. Once off, delete the webhook in Hospitable's settings that points at Zapier. | S | ready to turn off |
+| P1-25 | New Main - Connecteam Accepted/Booking | New Edmonton/Calgary booking → creates an open Connecteam shift; moves an open one if found | Shifts-from-bookings flow (live). This Zap still creates a duplicate for nearly every new Edmonton booking (29 of 37 since go-live), which the flow then deletes. | S | off (10-02) |
+| P2-75 | New Main - Connecteam Cancelled Booking | Edmonton booking cancelled → deletes the shift | Shifts-from-bookings flow `remove` | S | off (10-02) |
+| P2-14 | Connecteam Cancelled - 268lw0o | Hospitable webhook (older payload format) on cancel → deletes the shift | Shifts-from-bookings flow `remove`. Once off, delete the webhook in Hospitable's settings that points at Zapier. | S | off (10-02) |
 | P2-31 | New - Cleaning from Padmore to Connecteam | Booking created/changed on a separate Hospitable connection → creates/moves the shift | Extend the flow if these properties aren't already in `reservations` | S | question |
 | P2-51 | New - Cleaning from Stephan to Connecteam | Same, for Stephan's connection (different shift window) | Same | S | question |
 | P1-96 | Cancelled Reservation → Slack | Cancelled booking → tags 4 people to try to save it, ✅ when done | `save_booking` ticket from a `reservations` trigger; resolves on rebook or after the original check-in | B | todo |
 | P2-92 | New Reservations - 1 Guest Only | New booking with 1 guest → ask the guest for the real count, ✅ | `guest_count_check` ticket from a `reservations` trigger | B | todo |
-| P2-98 | New Reservations - Pet | New booking with a pet → ask for the pet fee, ✅ | `pet_fee` tickets already exist, and Pique Bot asks from 2 days before check-in. MDP 10-02: that's enough. | B | ready to turn off |
+| P2-98 | New Reservations - Pet | New booking with a pet → ask for the pet fee, ✅ | `pet_fee` tickets already exist, and Pique Bot asks from 2 days before check-in. MDP 10-02: that's enough. | B | off (10-02) |
 | P2-103 | 213 FML Parking Registration Reminder | 11 AM daily → reminds the group on check-in day to register the guest's vehicle | A `vehicle_registration` ticket for every 213 FML booking, not only when the form comes in; Pique Bot asks on check-in day | B | todo |
 | P1-127 | 213 FML New Reservations → Sheet | Logs 213 FML bookings to a sheet for P2-103 | Not needed once P2-103 reads `reservations` | B | todo |
 | P1-5 | Invoice To Slack - Email | Inbox subject contains "invoice" → finance channel, ✅ | Email rule → `invoice_review` ticket | E | todo |
