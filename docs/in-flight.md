@@ -22,7 +22,7 @@ Only the owning chat edits these. Anyone else asks the user first, even for a on
 |---|---|---|
 | n8n `Pique-Cleaning-Shifts-From-Bookings` (`TCsHEpxNcHxqFOKd`) | `claude/github-setup-question-9b4s3w` | `automation_flags.cleaning_shifts_mode = 'dry_run'` |
 | n8n `Pique-Connecteam-Shifts-Sync` (`rfFercNzL7BUJQfM`) | `claude/github-setup-question-9b4s3w` | unpublish the workflow (read-only sync) |
-| Pique Bot (`src/lib/pique-bot/`, Slack app) | `claude/charming-franklin-q8mryy` | ask the owner chat |
+| Pique Bot (`src/lib/pique-bot/`, Slack app) | `claude/charming-franklin-q8mryy`; `claude/github-setup-question-9b4s3w` may extend it for the Zapier migration (MDP, 2026-10-02): immediate posts and tiers, morning behaviour kept | ask the owner chat |
 | `automation_flags` keys `front_desk_notices_*` | unknown - claim it | ask before changing |
 
 ## Shared conventions

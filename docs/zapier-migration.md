@@ -42,8 +42,8 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P1-25 | New Main - Connecteam Accepted/Booking | New Edmonton/Calgary booking → creates an open Connecteam shift; moves an open one if found | Shifts-from-bookings flow (live). This Zap still creates a duplicate for nearly every new Edmonton booking (29 of 37 since go-live), which the flow then deletes. | S | off (10-02) |
 | P2-75 | New Main - Connecteam Cancelled Booking | Edmonton booking cancelled → deletes the shift | Shifts-from-bookings flow `remove` | S | off (10-02) |
 | P2-14 | Connecteam Cancelled - 268lw0o | Hospitable webhook (older payload format) on cancel → deletes the shift | Shifts-from-bookings flow `remove`. Once off, delete the webhook in Hospitable's settings that points at Zapier. | S | off (10-02) |
-| P2-31 | New - Cleaning from Padmore to Connecteam | Booking created/changed on a separate Hospitable connection → creates/moves the shift | Extend the flow if these properties aren't already in `reservations` | S | question |
-| P2-51 | New - Cleaning from Stephan to Connecteam | Same, for Stephan's connection (different shift window) | Same | S | question |
+| P2-31 | New - Cleaning from Padmore to Connecteam | Booking created/changed on Padmore's own Hospitable account → creates/moves the shift | Padmore is an active cleaning client (Laurice 10-02). Extend the shifts flow to read their account's bookings. | S | todo |
+| P2-51 | New - Cleaning from Stephan to Connecteam | Same, for Stephan's account (different shift window) | Stephan is an active cleaning client. Same extension. | S | todo |
 | P1-96 | Cancelled Reservation → Slack | Cancelled booking → tags 4 people to try to save it, ✅ when done | `save_booking` ticket from a `reservations` trigger; resolves on rebook or after the original check-in | B | todo |
 | P2-92 | New Reservations - 1 Guest Only | New booking with 1 guest → ask the guest for the real count, ✅ | `guest_count_check` ticket from a `reservations` trigger | B | todo |
 | P2-98 | New Reservations - Pet | New booking with a pet → ask for the pet fee, ✅ | `pet_fee` tickets already exist, and Pique Bot asks from 2 days before check-in. MDP 10-02: that's enough. | B | off (10-02) |
@@ -95,9 +95,32 @@ Still to add (MDP, in n8n → Credentials):
 - **Circle**, for P2-1.
 - **Gmail:** confirm the existing credential is `info@piquepropertiesinc.com`, the inbox the email Zaps read.
 
+## Pique Bot notification legend (draft, MDP to confirm)
+
+MDP 10-02: this branch may extend Pique Bot. The goal is daily updates plus immediate posts for high-risk items, without notification overload. Each ticket type gets one tier in `src/lib/pique-bot/config.ts`, so changing a tier is one line.
+
+| Tier | When it posts | Tags | Follow-up |
+|---|---|---|---|
+| Urgent | Right away | The owner or team | One nudge in the thread if nobody taps Done / Not yet within 1 business hour; top of the next morning post |
+| Today | Right away, in its channel | The owner only if assigned | None; next morning post if still open |
+| Morning | Only in the 7 AM post (today's behaviour) | None | Daily until done (existing overdue rule) |
+| FYI | Plain post, no buttons, no ticket | None | None |
+
+Against overload:
+- Each ticket gets at most one immediate post. Later changes edit that post instead of adding new ones.
+- At most one nudge per ticket.
+- Quiet hours 21:00-07:00 Edmonton: nothing posts; it waits for the morning post.
+- One morning post per channel, grouped by tier.
+
+Proposed tiers:
+- **Urgent:** cancelled booking (try to save), Airbnb Support email, reply from Robert.
+- **Today:** invoice, e-Transfer, invoice reviewed (Cristine), Aircover / Truvi emails, damage and linens forms, supply order, QC form, MyKey, Sinistar, Ondilo, low cleanliness review.
+- **Morning:** pet fee, direct booking ID, parking, pack 'n play, 1-guest check, 5-star cleaner congrats.
+- **FYI:** new booking, Stripe payment, Hubstaff timers, N2P message.
+
 ## Open questions
 
-1. P2-31 / P2-51: are Padmore's and Stephan's properties in our own Hospitable account, or only on their own accounts? Claude can check by listing the properties on n8n's second Hospitable credential. Until then, both Zaps stay on.
-2. P1-88, P1-127, P1-55: does anyone open these sheets directly? P1-88 is the bookings sheet the Stripe Zap reads, P1-127 the 213 FML sheet the parking reminder reads, and P1-55 the clock-out tab of the QC sheet. If only the Zaps read them, they go away with their replacements.
+1. P2-6 / P2-8 (Hubstaff timers): Laurice isn't sure whether Michael and Katrina still use them.
+2. Confirm the notification legend above.
 
-Answered 10-02: P2-14 is a Hospitable webhook, so it's replaced by the flow. Pet fee timing from Pique Bot is enough. Cassidy isn't used. Hubstaff posts are in daily use.
+Answered 10-02: P2-14 is a Hospitable webhook. Pet fee timing is fine. Cassidy is unused (P1-71 off). Padmore and Stephan are active cleaning clients. The three sheets exist only as lookups for the Zaps, so they retire with their replacements, and lookup data (Connecteam job ids, GHL ids) moves to DB tables (`cleaning_property_jobs` already covers Connecteam jobs).
