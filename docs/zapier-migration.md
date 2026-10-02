@@ -15,12 +15,12 @@ The source is the two Zap exports MDP shared on 2026-10-02: 24 Zaps in page 1 an
 
 | Lane | What | Zaps |
 |---|---|---|
-| **S. Shifts** | Already replaced by `Pique-Cleaning-Shifts-From-Bookings` | P1-25, P2-75 (P2-14, P2-31, P2-51 pending answers) |
+| **S. Shifts** | Already replaced by `Pique-Cleaning-Shifts-From-Bookings` | P1-25, P2-75, P2-14 (P2-31, P2-51 pending an answer) |
 | **B. Booking events → tickets** | DB triggers on `reservations`, same pattern as `pet_fee` | P1-96, P2-92, P2-98, P2-103 + P1-127 |
 | **E. Email → tickets** | One n8n Gmail flow with a rules table. Each rule makes a ticket, posts to its channel, and links the email. | P1-5, P1-8, P1-22, P1-85, P1-91, P1-94, P1-99, P2-26, P2-28, P2-87 |
 | **C. Claims & damage** | Connecteam forms and Slack emoji → claim / maintenance tickets, payout tracked on the ticket | P1-18, P2-22, P1-109, P1-125, P1-111, P1-118 |
-| **Q. QC & cleaning** | Review ratings → clean → cleaner from the DB; QC and supply forms → tickets | P1-55, P1-76, P1-102, P2-90, P2-12 |
-| **N. Straight port to n8n** | Plumbing and notifications for other systems; same behaviour | P1-1, P1-11, P1-13, P1-45, P1-71, P1-88, P2-1, P2-6, P2-8, P2-10, P2-71 |
+| **Q. QC & cleaning** | Review ratings → clean → cleaner from the DB; QC and supply forms → tickets | P1-71, P1-55, P1-76, P1-102, P2-90, P2-12 |
+| **N. Straight port to n8n** | Plumbing and notifications for other systems; same behaviour | P1-1, P1-11, P1-13, P1-45, P1-88, P2-1, P2-6, P2-8, P2-10, P2-71 |
 
 ## Schedule
 
@@ -41,12 +41,12 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 |---|---|---|---|---|---|
 | P1-25 | New Main - Connecteam Accepted/Booking | New Edmonton/Calgary booking → creates an open Connecteam shift; moves an open one if found | Shifts-from-bookings flow (live). This Zap still creates a duplicate for nearly every new Edmonton booking (29 of 37 since go-live), which the flow then deletes. | S | ready to turn off |
 | P2-75 | New Main - Connecteam Cancelled Booking | Edmonton booking cancelled → deletes the shift | Shifts-from-bookings flow `remove` | S | ready to turn off |
-| P2-14 | Connecteam Cancelled - 268lw0o | Webhook from another booking system (`listing.nickname`, `checkout_time`) → deletes the shift | Depends on what sends the webhook | S | question |
+| P2-14 | Connecteam Cancelled - 268lw0o | Hospitable webhook (older payload format) on cancel → deletes the shift | Shifts-from-bookings flow `remove`. Once off, delete the webhook in Hospitable's settings that points at Zapier. | S | ready to turn off |
 | P2-31 | New - Cleaning from Padmore to Connecteam | Booking created/changed on a separate Hospitable connection → creates/moves the shift | Extend the flow if these properties aren't already in `reservations` | S | question |
 | P2-51 | New - Cleaning from Stephan to Connecteam | Same, for Stephan's connection (different shift window) | Same | S | question |
 | P1-96 | Cancelled Reservation → Slack | Cancelled booking → tags 4 people to try to save it, ✅ when done | `save_booking` ticket from a `reservations` trigger; resolves on rebook or after the original check-in | B | todo |
 | P2-92 | New Reservations - 1 Guest Only | New booking with 1 guest → ask the guest for the real count, ✅ | `guest_count_check` ticket from a `reservations` trigger | B | todo |
-| P2-98 | New Reservations - Pet | New booking with a pet → ask for the pet fee, ✅ | `pet_fee` tickets already exist, and Pique Bot asks from 2 days before check-in. Gap: the Zap pings at booking time. | B | parity check |
+| P2-98 | New Reservations - Pet | New booking with a pet → ask for the pet fee, ✅ | `pet_fee` tickets already exist, and Pique Bot asks from 2 days before check-in. MDP 10-02: that's enough. | B | ready to turn off |
 | P2-103 | 213 FML Parking Registration Reminder | 11 AM daily → reminds the group on check-in day to register the guest's vehicle | A `vehicle_registration` ticket for every 213 FML booking, not only when the form comes in; Pique Bot asks on check-in day | B | todo |
 | P1-127 | 213 FML New Reservations → Sheet | Logs 213 FML bookings to a sheet for P2-103 | Not needed once P2-103 reads `reservations` | B | todo |
 | P1-5 | Invoice To Slack - Email | Inbox subject contains "invoice" → finance channel, ✅ | Email rule → `invoice_review` ticket | E | todo |
@@ -75,10 +75,10 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P1-13 | Stripe Payment Success | Stripe `payment_intent.succeeded` → looks up the reservation in a sheet → channel | n8n Stripe trigger, reservation from `reservations` instead of the sheet | N | todo |
 | P1-88 | Hospitable New Reservations → Sheet | Accepted booking → sheet (feeds P1-13) | Not needed once P1-13 reads `reservations`, unless someone uses the sheet | N | question |
 | P1-45 | New Reservations | Hospitable webhook → booking post + GHL contact upsert | n8n: post from `reservations`; GHL upsert via API | N | todo |
-| P1-71 | Reviews for Connecteam Clockouts | Hospitable review → sheet + CassidyAI webhook | n8n from `guest_reviews` → same sheet row + same Cassidy webhook | N / Q | question |
+| P1-71 | Reviews for Connecteam Clockouts | Hospitable review → sheet + CassidyAI webhook | Cassidy is no longer used (MDP 10-02), so drop it. The sheet row feeds P1-76 / P1-102, which move to the DB (`guest_reviews`). | Q | todo |
 | P2-1 | Payment success → Sheet | Stripe (payfunnel) → sheet + Slack + Circle community invite | n8n straight port | N | todo |
-| P2-6 | Stopped Timer | Hubstaff timer stop → channel | n8n straight port (or drop) | N | todo |
-| P2-8 | Started Timer | Hubstaff timer start → channel | n8n straight port (or drop) | N | todo |
+| P2-6 | Stopped Timer | Hubstaff timer stop → #hubstaff-monitor | n8n straight port. In daily use (Laurice, Glenn, Cristine, Janina). | N | todo |
+| P2-8 | Started Timer | Hubstaff timer start → #hubstaff-monitor | n8n straight port. In daily use. | N | todo |
 | P2-10 | Zoom to Drive Recordings | New Zoom recording → Drive folder | n8n straight port | N | todo |
 | P2-71 | Onboarding | GHL pipeline stage → Drive folder + copy of the owner guide | n8n straight port | N | todo |
 
@@ -91,15 +91,13 @@ Still to add (MDP, in n8n → Credentials):
 - **HighLevel / GHL**, for P1-45 and P2-71, plus the N2P location if it's separate.
 - **Google Drive**, for P2-10 and P2-71.
 - **Zoom**, for P2-10.
-- **Hubstaff**, for P2-6 and P2-8, unless dropped.
+- **Hubstaff**, for P2-6 and P2-8.
 - **Circle**, for P2-1.
 - **Gmail:** confirm the existing credential is `info@piquepropertiesinc.com`, the inbox the email Zaps read.
 
 ## Open questions
 
-1. P2-14: what sends the "Connecteam Cancelled - 268lw0o" webhook? Another booking platform?
-2. P2-31 / P2-51: are Padmore's and Stephan's properties in our `reservations` table, or only on their own Hospitable accounts?
-3. P2-98: is a pet-fee ask from 2 days before check-in enough, or do you want a ping at booking time too?
-4. P1-88, P1-127, P1-55: does anyone still use those sheets directly?
-5. P1-71: what does the CassidyAI workflow do with the reviews?
-6. P2-6 / P2-8: are the Hubstaff timer posts still wanted?
+1. P2-31 / P2-51: are Padmore's and Stephan's properties in our own Hospitable account, or only on their own accounts? Claude can check by listing the properties on n8n's second Hospitable credential. Until then, both Zaps stay on.
+2. P1-88, P1-127, P1-55: does anyone open these sheets directly? P1-88 is the bookings sheet the Stripe Zap reads, P1-127 the 213 FML sheet the parking reminder reads, and P1-55 the clock-out tab of the QC sheet. If only the Zaps read them, they go away with their replacements.
+
+Answered 10-02: P2-14 is a Hospitable webhook, so it's replaced by the flow. Pet fee timing from Pique Bot is enough. Cassidy isn't used. Hubstaff posts are in daily use.
