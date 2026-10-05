@@ -41,8 +41,8 @@ export interface BotRule {
 
 // The four people "Cancelled Reservation -> Slack Notification" tagged.
 const BOOKINGS_TEAM = ["U078P07JGGY", "U077KS6VC7R", "U06SZU27S5B", "U051SQ08E75"];
-// Tagged by the Airbnb Support / Robert / Aircover / Truvi / Ondilo Zaps.
-const MDP = "U049F2880MR";
+// Tagged by the Robert / Aircover / Truvi / Ondilo Zaps.
+const LAURICE = "U049F2880MR";
 const TAMMY = "U05QG0BUP0E";
 const CRISTINE = "U077KS6VC7R";
 
@@ -63,10 +63,10 @@ export const BOT_RULES: Record<string, BotRule> = {
   guest_count_check: { label: "Only 1 guest - confirm the count", channel: CHANNELS.guestCount, leadDays: 0, tier: "morning", askFrom: "created", gated: true },
   // Email alerts (replace ten Zaps; docs/zapier-migration.md lane E).
   "email:airbnb_support": emailRule("Airbnb Support email", "C09NZ05SYQ6", "urgent", ["U078P07JGGY", "U051SQ08E75", CRISTINE, "U06SZU27S5B"]),
-  "email:robert_reply": emailRule("Reply from Robert", "C09DPRG1CD9", "urgent", [MDP, TAMMY]),
-  "email:aircover": emailRule("Airbnb reimbursement email", "C08JYPWKV09", "today", [MDP]),
-  "email:truvi": emailRule("Truvi resolution email", "C08JYPWKV09", "today", [MDP]),
-  "email:ondilo": emailRule("Ondilo / Booking.com email", "C0ATUL9R3C1", "today", [MDP]),
+  "email:robert_reply": emailRule("Reply from Robert", "C09DPRG1CD9", "urgent", [LAURICE, TAMMY]),
+  "email:aircover": emailRule("Airbnb reimbursement email", "C08JYPWKV09", "today", [LAURICE]),
+  "email:truvi": emailRule("Truvi resolution email", "C08JYPWKV09", "today", [LAURICE]),
+  "email:ondilo": emailRule("Ondilo / Booking.com email", "C0ATUL9R3C1", "today", [LAURICE]),
   "email:mykey": emailRule("MyKey housing request", "C04B37U1SSJ", "today"),
   "email:sinistar": emailRule("Sinistar rental offer", "C04B37U1SSJ", "today"),
   "email:invoice": emailRule("Invoice to review", "C07VCQ4ECBV", "today"),
