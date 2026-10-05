@@ -54,7 +54,7 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P2-28 | e-Transfer To Slack - Email | Interac email → channel, ✅ | Email rule → ticket; later match to a pet fee / direct-booking ticket | E | blocked: needs invoices@ Gmail login in n8n |
 | P1-8 | MyKey Housing Request | Subject match → channel, ✅ | Email rule → ticket | E | off (10-05); Pique Bot live |
 | P1-91 | Sinistar Rental Offer | Sender + subject match → channel, ✅ | Email rule → ticket | E | off (10-05); Pique Bot live |
-| P1-99 | Ondilo Email | Ondilo support / one Booking.com contact → channel, ✅ | Email rule → ticket | E | shadow; waiting on Pique Bot invite to a private channel (Laurice) - keep Zap on |
+| P1-99 | Ondilo Email | Ondilo support / one Booking.com contact → channel, ✅ | Email rule → ticket | E | live 10-05 (#email-support-ticket-reply-notification); MDP turning Zap off |
 | P2-87 | Airbnb Support Email | Airbnb support messaging → tags 4, ✅ | Email rule → ticket | E | off (10-05); Pique Bot live |
 | P1-85 | Reply from Robert | Email from Robert → tags 2, ✅ | Email rule → comment on the open `review_removal_escalation`, tick "Robert responded"; plain ticket if none open | E | off (10-05); Pique Bot live |
 | P1-22 | Aircover Gmail | Labelled Aircover email → MDP, ✅ | Email rule → attach to the open claim, else a claim ticket | E / C | live 10-05 (#new-reply-from-aircover); MDP turning Zap off |
