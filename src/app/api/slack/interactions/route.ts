@@ -212,7 +212,7 @@ async function snooze(
     pick = await pickAskAgain({
       today: answer.today,
       checkIn: row?.checkIn ?? null,
-      typeLabel: (row && BOT_RULES[row.type]?.label) || "Request",
+      typeLabel: (row && BOT_RULES[row.ruleKey]?.label) || "Request",
       itemLabel: (row && nextItem(row)?.label) || "",
       note: answer.note,
     });
@@ -256,7 +256,7 @@ async function escalate(
   row: BotRow | undefined,
   info: { why: "problem" | "unsure" | "failed"; detail: string | null; note: string; by: string; askAfter: string },
 ) {
-  const title = [row && (BOT_RULES[row.type]?.label ?? row.type), row?.guestName, row?.property].filter(Boolean).join(" · ") || "a request";
+  const title = [row && (BOT_RULES[row.ruleKey]?.label ?? row.type), row?.guestName, row?.property].filter(Boolean).join(" · ") || "a request";
   const noteText = info.note ? `: "${info.note.slice(0, 300)}"` : " (no note)";
   const opener = {
     problem: `${info.by} flagged a problem on *${title}*${noteText}`,

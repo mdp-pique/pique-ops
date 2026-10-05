@@ -9,6 +9,10 @@
  * in the 7 AM post. "urgent" and "today" items are also posted the moment they
  * come in, and an urgent one gets a single reminder if nobody answers within the hour.
  *
+ * Rules are keyed by ticket type, except email_alert tickets, which are keyed
+ * "email:{rule}" (their email_alert_rules key) because each rule posts to its
+ * own channel - see ruleKeyFor().
+ *
  * gated: a type taken over from a Zap. Pique Bot says nothing about it (no
  * immediate post, nothing in the 7 AM post) until it's listed in
  * automation_flags.pique_bot_alerts_live_types, so it can run in shadow first.
@@ -37,6 +41,15 @@ export interface BotRule {
 
 // The four people "Cancelled Reservation -> Slack Notification" tagged.
 const BOOKINGS_TEAM = ["U078P07JGGY", "U077KS6VC7R", "U06SZU27S5B", "U051SQ08E75"];
+// Tagged by the Airbnb Support / Robert / Aircover / Truvi / Ondilo Zaps.
+const MDP = "U049F2880MR";
+const TAMMY = "U05QG0BUP0E";
+const CRISTINE = "U077KS6VC7R";
+
+/** Email rules (email_alert_rules.key), posted where each Zap posted and tagging who it tagged. */
+function emailRule(label: string, channel: string, tier: Tier, tag?: string[]): BotRule {
+  return { label, channel, leadDays: 0, tier, askFrom: "created", tag, gated: true };
+}
 
 export const BOT_RULES: Record<string, BotRule> = {
   // Due before check-in: start asking two mornings ahead, urgent on the day.
@@ -48,7 +61,30 @@ export const BOT_RULES: Record<string, BotRule> = {
   // Booking events (replace Zaps; docs/zapier-migration.md lane B).
   save_booking: { label: "Cancelled booking - try to save it", channel: CHANNELS.cancellations, leadDays: 0, tier: "urgent", askFrom: "created", tag: BOOKINGS_TEAM, gated: true },
   guest_count_check: { label: "Only 1 guest - confirm the count", channel: CHANNELS.guestCount, leadDays: 0, tier: "morning", askFrom: "created", gated: true },
+  // Email alerts (replace ten Zaps; docs/zapier-migration.md lane E).
+  "email:airbnb_support": emailRule("Airbnb Support email", "C09NZ05SYQ6", "urgent", ["U078P07JGGY", "U051SQ08E75", CRISTINE, "U06SZU27S5B"]),
+  "email:robert_reply": emailRule("Reply from Robert", "C09DPRG1CD9", "urgent", [MDP, TAMMY]),
+  "email:aircover": emailRule("Airbnb reimbursement email", "C08JYPWKV09", "today", [MDP]),
+  "email:truvi": emailRule("Truvi resolution email", "C08JYPWKV09", "today", [MDP]),
+  "email:ondilo": emailRule("Ondilo / Booking.com email", "C0ATUL9R3C1", "today", [MDP]),
+  "email:mykey": emailRule("MyKey housing request", "C04B37U1SSJ", "today"),
+  "email:sinistar": emailRule("Sinistar rental offer", "C04B37U1SSJ", "today"),
+  "email:invoice": emailRule("Invoice to review", "C07VCQ4ECBV", "today"),
+  "email:invoice_reviewed": emailRule("Enter invoice in QBO and Plooto", "C07VCQ4ECBV", "today", [CRISTINE]),
+  "email:etransfer": emailRule("Interac e-Transfer", "C09RZ1ERTK8", "today"),
 };
+
+/** The BOT_RULES key for a ticket: its type, or "email:{rule}" for email alerts. */
+export function ruleKeyFor(type: string, metadata: unknown): string {
+  if (type !== "email_alert") return type;
+  const rule = (metadata as { rule?: unknown } | null)?.rule;
+  return typeof rule === "string" ? `email:${rule}` : type;
+}
+
+/** The ticket type a BOT_RULES key belongs to. */
+export function ticketTypeFor(ruleKey: string): string {
+  return ruleKey.startsWith("email:") ? "email_alert" : ruleKey;
+}
 
 export const OVERDUE_LIMIT_DAYS = 30;
 

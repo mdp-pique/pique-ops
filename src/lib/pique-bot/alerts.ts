@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { BOT_RULES, OPEN_STATUSES, QUIET_HOURS, REMIND_AFTER_MINUTES } from "./config";
+import { BOT_RULES, OPEN_STATUSES, QUIET_HOURS, REMIND_AFTER_MINUTES, ticketTypeFor } from "./config";
 import { appUrl, edmontonToday, loadRows } from "./data";
 import { POST_COLUMNS, type Post } from "./posts";
 import { isFinished, renderAlert, type BotRow } from "./render";
@@ -42,13 +42,13 @@ export async function loadLiveTypes(admin: Admin): Promise<Set<string>> {
   );
 }
 
-/** Whether Pique Bot may post about this type at all: ungated, or switched on. */
-export function isLive(type: string, live: Set<string>): boolean {
-  const rule = BOT_RULES[type];
-  return !!rule && (!rule.gated || live.has(type));
+/** Whether Pique Bot may post about this rule at all: ungated, or switched on. */
+export function isLive(ruleKey: string, live: Set<string>): boolean {
+  const rule = BOT_RULES[ruleKey];
+  return !!rule && (!rule.gated || live.has(ruleKey));
 }
 
-/** Types posted the moment they come in: urgent / today tier, and live. */
+/** Rule keys posted the moment they come in: urgent / today tier, and live. */
 async function alertTypes(admin: Admin): Promise<string[]> {
   const live = await loadLiveTypes(admin);
   return Object.entries(BOT_RULES)
@@ -80,7 +80,7 @@ async function postNew(admin: Admin, ctx: { types: string[]; since: string; toda
   const { data: fresh } = await admin
     .from("tickets")
     .select("id")
-    .in("type", ctx.types)
+    .in("type", [...new Set(ctx.types.map(ticketTypeFor))])
     .in("status", OPEN_STATUSES)
     .gte("created_at", ctx.since);
   const ids = (fresh ?? []).map((t) => t.id);
@@ -90,11 +90,11 @@ async function postNew(admin: Admin, ctx: { types: string[]; since: string; toda
   const done = new Set((already ?? []).flatMap((p) => p.ticket_ids as string[]));
   const pending = ids.filter((id) => !done.has(id));
   if (!pending.length) return [];
-  const rows = (await loadRows(admin, { ticketIds: pending })).filter((r) => !isFinished(r));
+  const rows = (await loadRows(admin, { ticketIds: pending })).filter((r) => ctx.types.includes(r.ruleKey) && !isFinished(r));
 
   const results: Record<string, unknown>[] = [];
   for (const row of rows) {
-    const channel = BOT_RULES[row.type].channel;
+    const channel = BOT_RULES[row.ruleKey].channel;
     if (ctx.dry) {
       results.push({ ticket: row.ticketId, channel, message: renderAlert(row, "dry-run", ctx.today, appUrl()) });
       continue;
@@ -145,8 +145,8 @@ async function remind(admin: Admin, ctx: { types: string[]; since: string; now: 
   const results: Record<string, unknown>[] = [];
   for (const post of (posts ?? []) as Post[]) {
     const [row] = await loadRows(admin, { ticketIds: post.ticket_ids, since: post.created_at });
-    const rule = row && BOT_RULES[row.type];
-    const untouched = row && rule?.tier === "urgent" && ctx.types.includes(row.type) && !isFinished(row) && !row.waiting && !row.doneBy && row.status === "open";
+    const rule = row && BOT_RULES[row.ruleKey];
+    const untouched = row && rule?.tier === "urgent" && ctx.types.includes(row.ruleKey) && !isFinished(row) && !row.waiting && !row.doneBy && row.status === "open";
     if (!untouched) {
       if (!ctx.dry) await admin.from("pique_bot_posts").update({ reminded_at: ctx.now.toISOString() }).eq("id", post.id);
       continue;

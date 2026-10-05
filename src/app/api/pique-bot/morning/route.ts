@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
   // Types taken over from a Zap stay silent until switched on.
   const live = await loadLiveTypes(admin);
-  const all = (await loadRows(admin, {})).filter((r) => isLive(r.type, live));
+  const all = (await loadRows(admin, {})).filter((r) => isLive(r.ruleKey, live));
   const results: Record<string, unknown>[] = [];
 
   // Every channel a rule posts to, in config order.

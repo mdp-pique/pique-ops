@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { BOT_RULES, OPEN_STATUSES } from "./config";
+import { BOT_RULES, OPEN_STATUSES, ruleKeyFor, ticketTypeFor } from "./config";
 import type { BotRow } from "./render";
 import { slackApi } from "./slack";
 
@@ -23,8 +23,8 @@ export function appUrl(): string | null {
 export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since?: string }): Promise<BotRow[]> {
   let query = admin
     .from("tickets")
-    .select("id, type, status, guest_name, due_at, property_id, reservation_id, assignee_id, assignee_team_id, created_at")
-    .in("type", Object.keys(BOT_RULES));
+    .select("id, type, status, guest_name, due_at, property_id, reservation_id, assignee_id, assignee_team_id, created_at, metadata")
+    .in("type", [...new Set(Object.keys(BOT_RULES).map(ticketTypeFor))]);
   query = opts.ticketIds ? query.in("id", opts.ticketIds) : query.in("status", OPEN_STATUSES);
   const { data: tickets } = await query;
   if (!tickets?.length) return [];
@@ -89,6 +89,8 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
     return {
       ticketId: t.id,
       type: t.type,
+      ruleKey: ruleKeyFor(t.type, t.metadata),
+      context: emailContext(t.type, t.metadata),
       status: t.status,
       guestName: t.guest_name,
       property: (t.property_id && propById.get(t.property_id)) || null,
@@ -108,6 +110,19 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
       notNeeded: notNeeded.get(t.id) ?? null,
     };
   });
+}
+
+/** For email alerts: who sent it, the subject, and a link, shown in place of the check-in date. */
+function emailContext(type: string, metadata: unknown): BotRow["context"] {
+  if (type !== "email_alert" || !metadata || typeof metadata !== "object") return null;
+  const m = metadata as Record<string, unknown>;
+  const str = (k: string) => (typeof m[k] === "string" ? (m[k] as string) : "");
+  return {
+    from: [str("from_name"), str("from_email") && `<${str("from_email")}>`].filter(Boolean).join(" ") || null,
+    subject: str("subject") || null,
+    url: str("gmail_url") || null,
+    receivedAt: str("received_at") || null,
+  };
 }
 
 /**

@@ -11,6 +11,10 @@ export interface BotItem {
 export interface BotRow {
   ticketId: string;
   type: string;
+  /** The BOT_RULES key: the type, or "email:{rule}" for email alerts. */
+  ruleKey: string;
+  /** Email alerts: sender, subject and link, shown instead of the check-in date. */
+  context: { from: string | null; subject: string | null; url: string | null; receivedAt: string | null } | null;
   status: string;
   guestName: string | null;
   property: string | null;
@@ -61,7 +65,25 @@ export function isFinished(row: BotRow): boolean {
   return !["open", "in_progress", "blocked"].includes(row.status) || nextItem(row) === null;
 }
 
+function receivedText(iso: string): string {
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return "";
+  return when.toLocaleString("en-CA", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Edmonton" });
+}
+
+/** Sender, subject and link for an email alert (Slack link text can't contain | or >). */
+function emailLines(c: NonNullable<BotRow["context"]>): string {
+  const lines: string[] = [];
+  if (c.from) lines.push(`From: ${esc(c.from)}`);
+  if (c.subject) lines.push(`Subject: ${esc(c.subject)}`);
+  const received = c.receivedAt ? receivedText(c.receivedAt) : "";
+  const link = c.url ? `<${c.url}|Open the email>` : "";
+  if (received || link) lines.push([received && `Received ${received}`, link].filter(Boolean).join(" · "));
+  return lines.join("\n");
+}
+
 function whenText(row: BotRow, postDate: string): string {
+  if (row.context) return emailLines(row.context);
   if (!row.checkIn) return "No check-in date";
   const d = daysBetween(postDate, row.checkIn);
   if (d < 0) return `:warning: *Overdue* - checked in ${shortDate(row.checkIn)}`;
@@ -85,7 +107,7 @@ function owner(row: BotRow): string {
 const TIER_RANK: Record<Tier, number> = { urgent: 0, today: 1, morning: 2 };
 
 function tierRank(row: BotRow): number {
-  return TIER_RANK[BOT_RULES[row.type]?.tier ?? "morning"];
+  return TIER_RANK[BOT_RULES[row.ruleKey]?.tier ?? "morning"];
 }
 
 /** Sort order: urgent items first, then overdue, today, later, each by check-in. */
@@ -94,7 +116,7 @@ export function sortRows(rows: BotRow[]): BotRow[] {
 }
 
 function titleOf(row: BotRow): string {
-  const rule = BOT_RULES[row.type];
+  const rule = BOT_RULES[row.ruleKey];
   return [`*${rule?.label ?? row.type}*`, row.guestName && esc(row.guestName), row.property && esc(row.property)]
     .filter(Boolean)
     .join(" · ");
@@ -237,7 +259,7 @@ export function renderPost(rows: BotRow[], postId: string, postDate: string, app
  */
 export function pickForMorning(rows: BotRow[], today: string, channel: string, createdDate: (iso: string) => string): BotRow[] {
   return rows.filter((r) => {
-    const rule = BOT_RULES[r.type];
+    const rule = BOT_RULES[r.ruleKey];
     if (!rule || rule.channel !== channel || isFinished(r) || isSnoozed(r, today)) return false;
     if (rule.askFrom === "created") {
       const age = daysBetween(createdDate(r.createdAt), today);
@@ -259,7 +281,7 @@ const ALERT_HEADING: Record<Exclude<Tier, "morning">, string> = {
  * Same buttons as the morning post; collapses to a crossed-out line once done.
  */
 export function renderAlert(row: BotRow, postId: string, postDate: string, appUrl: string | null): { text: string; blocks: Block[] } {
-  const rule = BOT_RULES[row.type];
+  const rule = BOT_RULES[row.ruleKey];
   const tier = rule?.tier === "urgent" ? "urgent" : "today";
   const finished = isFinished(row);
   const tags = !finished && rule?.tag?.length && !row.assigneeSlackId ? ` ${rule.tag.map((id) => `<@${id}>`).join(" ")}` : "";
