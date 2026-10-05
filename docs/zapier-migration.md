@@ -52,13 +52,13 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P1-5 | Invoice To Slack - Email | Inbox subject contains "invoice" → finance channel, ✅ | Email rule → `invoice_review` ticket | E | blocked: needs invoices@ Gmail login in n8n |
 | P2-26 | Gmail Tagged 'Reviewed' → Notify Cristine | Label "Reviewed" → Cristine enters it in QBO and Plooto, ✅ | Same ticket, next step: label → "Enter in QBO/Plooto" item assigned to Cristine | E | blocked: needs invoices@ Gmail login in n8n |
 | P2-28 | e-Transfer To Slack - Email | Interac email → channel, ✅ | Email rule → ticket; later match to a pet fee / direct-booking ticket | E | blocked: needs invoices@ Gmail login in n8n |
-| P1-8 | MyKey Housing Request | Subject match → channel, ✅ | Email rule → ticket | E | shadow |
-| P1-91 | Sinistar Rental Offer | Sender + subject match → channel, ✅ | Email rule → ticket | E | shadow |
-| P1-99 | Ondilo Email | Ondilo support / one Booking.com contact → channel, ✅ | Email rule → ticket | E | shadow |
-| P2-87 | Airbnb Support Email | Airbnb support messaging → tags 4, ✅ | Email rule → ticket | E | shadow |
-| P1-85 | Reply from Robert | Email from Robert → tags 2, ✅ | Email rule → comment on the open `review_removal_escalation`, tick "Robert responded"; plain ticket if none open | E | shadow |
-| P1-22 | Aircover Gmail | Labelled Aircover email → MDP, ✅ | Email rule → attach to the open claim, else a claim ticket | E / C | shadow |
-| P1-94 | Truvi Resolution Email | Labelled Truvi email → MDP, ✅ | Same, for Truvi | E / C | shadow |
+| P1-8 | MyKey Housing Request | Subject match → channel, ✅ | Email rule → ticket | E | live 10-05; MDP turning Zap off |
+| P1-91 | Sinistar Rental Offer | Sender + subject match → channel, ✅ | Email rule → ticket | E | live 10-05; MDP turning Zap off |
+| P1-99 | Ondilo Email | Ondilo support / one Booking.com contact → channel, ✅ | Email rule → ticket | E | live 10-05; MDP turning Zap off |
+| P2-87 | Airbnb Support Email | Airbnb support messaging → tags 4, ✅ | Email rule → ticket | E | live 10-05; MDP turning Zap off |
+| P1-85 | Reply from Robert | Email from Robert → tags 2, ✅ | Email rule → comment on the open `review_removal_escalation`, tick "Robert responded"; plain ticket if none open | E | live 10-05; MDP turning Zap off |
+| P1-22 | Aircover Gmail | Labelled Aircover email → MDP, ✅ | Email rule → attach to the open claim, else a claim ticket | E / C | live 10-05; MDP turning Zap off |
+| P1-94 | Truvi Resolution Email | Labelled Truvi email → MDP, ✅ | Same, for Truvi | E / C | live 10-05; MDP turning Zap off |
 | P2-22 | Connecteam to Slack - Damages | Damage form + photos → "add to damages list", react with the Aircover / Truvi / maintenance emoji | Form → damage ticket with photos; the team picks Aircover / Truvi / maintenance in the app (or by the same emoji) | C | todo |
 | P1-18 | Connecteam - Linens Damaged by Guest | Linens form + photos → claim or wear-and-tear emoji, ✅ | Same as P2-22 | C | todo |
 | P1-109 | New Aircover Claim | Aircover emoji in the damages channel → "add to sheet, prepare claim" | Choosing Aircover on the damage ticket opens the claim ticket | C | todo |
