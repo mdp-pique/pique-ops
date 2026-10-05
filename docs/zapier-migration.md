@@ -44,8 +44,8 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P2-14 | Connecteam Cancelled - 268lw0o | Hospitable webhook (older payload format) on cancel → deletes the shift | Shifts-from-bookings flow `remove`. Once off, delete the webhook in Hospitable's settings that points at Zapier. | S | off (10-02) |
 | P2-31 | New - Cleaning from Padmore to Connecteam | Hospitable "reservation" trigger on Padmore's own Hospitable login (a separate Zapier connection from the main account). New or changed accepted booking → finds the job in the property → Connecteam sheet (column B) → creates an open shift 12 h to 6 h before checkout, or moves an open one. | Active cleaning client (Laurice 10-02). Extend the shifts flow with that account's bookings and job rows. | S | todo |
 | P2-51 | New - Cleaning from Stephan to Connecteam | Same trigger on Stephen's own Hospitable login (its own Zapier connection). Same steps; it searches for an existing shift 12 h to 9 h before checkout. | Active cleaning client. Same extension. Needs that login in n8n ("Hospitable API 2" may already be one of the two). | S | todo |
-| P1-96 | Cancelled Reservation → Slack | Cancelled booking → tags 4 people to try to save it, ✅ when done | `save_booking` ticket from a `reservations` trigger; resolves on rebook or after the original check-in | B | todo |
-| P2-92 | New Reservations - 1 Guest Only | New booking with 1 guest → ask the guest for the real count, ✅ | `guest_count_check` ticket from a `reservations` trigger | B | todo |
+| P1-96 | Cancelled Reservation → Slack | Cancelled booking → tags 4 people to try to save it, ✅ when done | `save_booking` ticket from a `reservations` trigger; resolves on rebook or after the original check-in | B | shadow |
+| P2-92 | New Reservations - 1 Guest Only | New booking with 1 guest → ask the guest for the real count, ✅ | `guest_count_check` ticket from a `reservations` trigger | B | shadow |
 | P2-98 | New Reservations - Pet | New booking with a pet → ask for the pet fee, ✅ | `pet_fee` tickets already exist, and Pique Bot asks from 2 days before check-in. MDP 10-02: that's enough. | B | off (10-02) |
 | P2-103 | 213 FML Parking Registration Reminder | 11 AM daily → reminds the group on check-in day to register the guest's vehicle | A `vehicle_registration` ticket for every 213 FML booking, not only when the form comes in; Pique Bot asks on check-in day | B | todo |
 | P1-127 | 213 FML New Reservations → Sheet | Logs 213 FML bookings to a sheet for P2-103 | Not needed once P2-103 reads `reservations` | B | todo |
@@ -106,6 +106,10 @@ Every lookup sheet a Zap reads, and what replaces it:
 - **213 FML sheet**: "213 FML Parking Registration Reminder" finds today's check-ins and gets the guest name and code. Replaced by `reservations`.
 - **QC sheet**: "Finding Clean when Review is Submitted" finds the clean by reservation code and gets the cleaner and clean times. It also logs every congrats / needs-attention post on a third tab. Replaced by `connecteam_shifts` / `cleaning_shift_check` plus `guest_reviews`.
 - **Property → Connecteam job sheet** (a fourth one): the shift Zaps find the Connecteam job for a property here (main account by column C, Padmore / Stephan by column B, the old cancel webhook by property id). Replaced by `cleaning_property_jobs` for the main account; Padmore / Stephan properties need rows added.
+
+## Slack channels to retire (MDP 10-05, later)
+
+Once the Zaps that post into a channel are replaced, check whether anything else still posts there and retire the channel. To list when lane B / E are done.
 
 ## Open questions
 

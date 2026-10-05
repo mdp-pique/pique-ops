@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { CHANNELS } from "@/lib/pique-bot/config";
+import { isLive, loadLiveTypes } from "@/lib/pique-bot/alerts";
+import { BOT_RULES } from "@/lib/pique-bot/config";
 import { appUrl, edmontonToday, loadRows } from "@/lib/pique-bot/data";
 import { pickForMorning, renderPost } from "@/lib/pique-bot/render";
 import { redrawEarlier } from "@/lib/pique-bot/posts";
@@ -24,13 +25,17 @@ export async function POST(request: NextRequest) {
   const today = dry && dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : edmontonToday();
 
   const admin = createAdminClient();
-  const all = await loadRows(admin, {});
+  // Types taken over from a Zap stay silent until switched on.
+  const live = await loadLiveTypes(admin);
+  const all = (await loadRows(admin, {})).filter((r) => isLive(r.type, live));
   const results: Record<string, unknown>[] = [];
 
-  for (const channel of Object.values(CHANNELS)) {
+  // Every channel a rule posts to, in config order.
+  const channels = [...new Set(Object.values(BOT_RULES).map((r) => r.channel))];
+  for (const channel of channels) {
     // Earlier posts first, so anything finished in the app shows crossed off there too.
     if (!dry) await redrawEarlier(admin, channel, today);
-    const rows = pickForMorning(all, today, channel);
+    const rows = pickForMorning(all, today, channel, (iso) => edmontonToday(new Date(iso)));
     if (rows.length === 0) {
       results.push({ channel, asked: 0 });
       continue;

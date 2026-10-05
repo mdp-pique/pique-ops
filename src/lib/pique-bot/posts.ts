@@ -1,15 +1,16 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { appUrl, edmontonToday, loadRows } from "./data";
-import { renderPost } from "./render";
+import { renderAlert, renderPost } from "./render";
 import { slackApi } from "./slack";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
-export type Post = { id: string; post_date: string; channel_id: string; slack_ts: string | null; ticket_ids: string[]; created_at: string };
+/** kind: "morning" = the 7 AM check-in for a channel; "alert" = one ticket posted the moment it came in. */
+export type Post = { id: string; kind: string; post_date: string; channel_id: string; slack_ts: string | null; ticket_ids: string[]; created_at: string };
 
 // Older posts stay in sync for this long; past that nobody scrolls back to them.
 const SYNC_DAYS = 14;
-const POST_COLUMNS = "id, post_date, channel_id, slack_ts, ticket_ids, created_at";
+export const POST_COLUMNS = "id, kind, post_date, channel_id, slack_ts, ticket_ids, created_at";
 
 function syncFrom(): string {
   const d = new Date(`${edmontonToday()}T12:00:00Z`);
@@ -21,7 +22,8 @@ function syncFrom(): string {
 export async function redraw(admin: Admin, post: Post) {
   if (!post.slack_ts) return;
   const rows = await loadRows(admin, { ticketIds: post.ticket_ids, since: post.created_at });
-  const message = renderPost(rows, post.id, post.post_date, appUrl());
+  if (post.kind === "alert" && !rows[0]) return;
+  const message = post.kind === "alert" ? renderAlert(rows[0], post.id, post.post_date, appUrl()) : renderPost(rows, post.id, post.post_date, appUrl());
   await slackApi("chat.update", { channel: post.channel_id, ts: post.slack_ts, text: message.text, blocks: message.blocks });
 }
 

@@ -25,6 +25,8 @@ const TAG_CLASS_BY_TYPE: Record<string, string> = {
   pet_fee: "vet",
   vehicle_registration: "vet",
   extension_request: "vet",
+  save_booking: "vet",
+  guest_count_check: "vet",
   claim_tracker: "claim",
   guest_block_report: "claim",
   property_security_check: "maint",
@@ -73,6 +75,8 @@ const TYPE_LABELS: Record<string, string> = {
   unanswered_message: "Unanswered message",
   missed_call: "Missed call",
   extension_request: "Extension request",
+  save_booking: "Save a cancelled booking",
+  guest_count_check: "Guest count check",
   system_health: "System health",
 };
 

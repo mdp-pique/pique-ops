@@ -282,6 +282,27 @@ export type Database = {
           },
         ]
       }
+      automation_flags: {
+        Row: {
+          key: string
+          note: string | null
+          updated_at: string | null
+          value: string | null
+        }
+        Insert: {
+          key: string
+          note?: string | null
+          updated_at?: string | null
+          value?: string | null
+        }
+        Update: {
+          key?: string
+          note?: string | null
+          updated_at?: string | null
+          value?: string | null
+        }
+        Relationships: []
+      }
       calendar: {
         Row: {
           available: boolean | null
@@ -1359,7 +1380,9 @@ export type Database = {
           channel_id: string
           created_at: string
           id: string
+          kind: string
           post_date: string
+          reminded_at: string | null
           slack_ts: string | null
           ticket_ids: string[]
           updated_at: string
@@ -1368,7 +1391,9 @@ export type Database = {
           channel_id: string
           created_at?: string
           id?: string
+          kind?: string
           post_date: string
+          reminded_at?: string | null
           slack_ts?: string | null
           ticket_ids?: string[]
           updated_at?: string
@@ -1377,7 +1402,9 @@ export type Database = {
           channel_id?: string
           created_at?: string
           id?: string
+          kind?: string
           post_date?: string
+          reminded_at?: string | null
           slack_ts?: string | null
           ticket_ids?: string[]
           updated_at?: string

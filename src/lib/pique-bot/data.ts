@@ -23,7 +23,7 @@ export function appUrl(): string | null {
 export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since?: string }): Promise<BotRow[]> {
   let query = admin
     .from("tickets")
-    .select("id, type, status, guest_name, due_at, property_id, reservation_id, assignee_id, assignee_team_id")
+    .select("id, type, status, guest_name, due_at, property_id, reservation_id, assignee_id, assignee_team_id, created_at")
     .in("type", Object.keys(BOT_RULES));
   query = opts.ticketIds ? query.in("id", opts.ticketIds) : query.in("status", OPEN_STATUSES);
   const { data: tickets } = await query;
@@ -93,6 +93,7 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
       guestName: t.guest_name,
       property: (t.property_id && propById.get(t.property_id)) || null,
       checkIn,
+      createdAt: t.created_at,
       items: (items.data ?? [])
         .filter((i) => i.ticket_id === t.id)
         .sort((a, b) => a.sort_order - b.sort_order)

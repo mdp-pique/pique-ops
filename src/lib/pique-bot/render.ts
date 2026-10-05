@@ -1,6 +1,6 @@
 // Pure layout for Pique Bot's Slack messages - no I/O, so it can be checked on
 // its own. The same function draws the 7 AM post and every update after a tap.
-import { BOT_RULES, OVERDUE_LIMIT_DAYS } from "./config";
+import { BOT_RULES, OVERDUE_LIMIT_DAYS, type Tier } from "./config";
 
 export interface BotItem {
   id: string;
@@ -16,6 +16,8 @@ export interface BotRow {
   property: string | null;
   /** Local YYYY-MM-DD: the reservation's check-in, or the ticket's due date when it has no reservation. */
   checkIn: string | null;
+  /** When the ticket was created (ISO). */
+  createdAt: string;
   items: BotItem[];
   /** Slack user id to tag, when the assignee has linked Slack. */
   assigneeSlackId: string | null;
@@ -80,9 +82,15 @@ function owner(row: BotRow): string {
   return "";
 }
 
-/** Sort order: overdue first, then today, then later, each by check-in. */
+const TIER_RANK: Record<Tier, number> = { urgent: 0, today: 1, morning: 2 };
+
+function tierRank(row: BotRow): number {
+  return TIER_RANK[BOT_RULES[row.type]?.tier ?? "morning"];
+}
+
+/** Sort order: urgent items first, then overdue, today, later, each by check-in. */
 export function sortRows(rows: BotRow[]): BotRow[] {
-  return [...rows].sort((a, b) => (a.checkIn ?? "9999").localeCompare(b.checkIn ?? "9999"));
+  return [...rows].sort((a, b) => tierRank(a) - tierRank(b) || (a.checkIn ?? "9999").localeCompare(b.checkIn ?? "9999"));
 }
 
 function titleOf(row: BotRow): string {
@@ -221,12 +229,43 @@ export function renderPost(rows: BotRow[], postId: string, postDate: string, app
   return { text: `Morning check-ins - ${open.length + later.length} still open, ${done.length} done`, blocks };
 }
 
-/** What the morning post for one channel asks about: due within the type's lead time, or overdue up to the limit, not finished, and not waiting on a later ask-again date. */
-export function pickForMorning(rows: BotRow[], today: string, channel: string): BotRow[] {
+/**
+ * What the morning post for one channel asks about: not finished, not waiting on
+ * a later ask-again date, and either due within the type's lead time (overdue
+ * up to the limit), or - for types asked from creation - created before this
+ * morning and not older than the limit.
+ */
+export function pickForMorning(rows: BotRow[], today: string, channel: string, createdDate: (iso: string) => string): BotRow[] {
   return rows.filter((r) => {
     const rule = BOT_RULES[r.type];
-    if (!rule || rule.channel !== channel || !r.checkIn || isFinished(r) || isSnoozed(r, today)) return false;
+    if (!rule || rule.channel !== channel || isFinished(r) || isSnoozed(r, today)) return false;
+    if (rule.askFrom === "created") {
+      const age = daysBetween(createdDate(r.createdAt), today);
+      return age >= 0 && age <= OVERDUE_LIMIT_DAYS;
+    }
+    if (!r.checkIn) return false;
     const d = daysBetween(today, r.checkIn);
     return d <= rule.leadDays && d >= -OVERDUE_LIMIT_DAYS;
   });
+}
+
+const ALERT_HEADING: Record<Exclude<Tier, "morning">, string> = {
+  urgent: ":rotating_light: *Urgent*",
+  today: ":large_yellow_circle: *New*",
+};
+
+/**
+ * A post about one ticket, sent the moment it comes in (urgent / today tiers).
+ * Same buttons as the morning post; collapses to a crossed-out line once done.
+ */
+export function renderAlert(row: BotRow, postId: string, postDate: string, appUrl: string | null): { text: string; blocks: Block[] } {
+  const rule = BOT_RULES[row.type];
+  const tier = rule?.tier === "urgent" ? "urgent" : "today";
+  const finished = isFinished(row);
+  const tags = !finished && rule?.tag?.length && !row.assigneeSlackId ? ` ${rule.tag.map((id) => `<@${id}>`).join(" ")}` : "";
+  const heading: Block = { type: "context", elements: [{ type: "mrkdwn", text: finished ? ":white_check_mark: *Handled*" : `${ALERT_HEADING[tier]}${tags}` }] };
+  const body = finished ? [renderDoneRow(row, postId)] : renderOpenRow(row, postId, postDate, appUrl);
+  const title = titleOf(row).replace(/\*/g, "");
+  // Mentions also go in the fallback text, which is what Slack notifies from.
+  return { text: `${finished ? "Done: " : tier === "urgent" ? "Urgent: " : ""}${title}${tags}`, blocks: [heading, ...body] };
 }

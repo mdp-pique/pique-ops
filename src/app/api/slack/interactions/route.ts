@@ -4,7 +4,7 @@ import { addDays, pickAskAgain, type AskAgainPick } from "@/lib/pique-bot/askAga
 import { BOT_RULES, ESCALATE_PROFILE_ID } from "@/lib/pique-bot/config";
 import { appUrl, edmontonToday, loadRows, resolveActor } from "@/lib/pique-bot/data";
 import { isFinished, nextItem, shortDate, type BotRow } from "@/lib/pique-bot/render";
-import { redrawForTicket, type Post } from "@/lib/pique-bot/posts";
+import { POST_COLUMNS, redrawForTicket, type Post } from "@/lib/pique-bot/posts";
 import { slackApi, verifySlackSignature } from "@/lib/pique-bot/slack";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -148,7 +148,7 @@ async function loadPost(admin: Admin, postId: string, ticketId: string) {
   if (!postId || !ticketId) return null;
   const { data: post } = await admin
     .from("pique_bot_posts")
-    .select("id, post_date, channel_id, slack_ts, ticket_ids, created_at")
+    .select(POST_COLUMNS)
     .eq("id", postId)
     .maybeSingle();
   if (!post || !post.ticket_ids.includes(ticketId)) return null;
