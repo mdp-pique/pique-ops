@@ -1375,6 +1375,42 @@ export type Database = {
           },
         ]
       }
+      changelog_entries: {
+        Row: {
+          areas: string[]
+          body: string
+          branch: string | null
+          commit_sha: string | null
+          created_at: string
+          id: number
+          posted_at: string | null
+          slack_ts: string | null
+          title: string
+        }
+        Insert: {
+          areas?: string[]
+          body: string
+          branch?: string | null
+          commit_sha?: string | null
+          created_at?: string
+          id?: never
+          posted_at?: string | null
+          slack_ts?: string | null
+          title: string
+        }
+        Update: {
+          areas?: string[]
+          body?: string
+          branch?: string | null
+          commit_sha?: string | null
+          created_at?: string
+          id?: never
+          posted_at?: string | null
+          slack_ts?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       pique_bot_booking_posts: {
         Row: {
           channel_id: string
