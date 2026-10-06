@@ -78,5 +78,7 @@ export async function POST(request: NextRequest) {
     results.push({ channel, asked: rows.length, slack_ts: sent.ts });
   }
 
-  return NextResponse.json({ date: today, dry, results });
+  // A failed Slack post fails the request, so n8n's error alert fires instead of the run looking green.
+  const failed = results.some((r) => "error" in r);
+  return NextResponse.json({ date: today, dry, results }, { status: failed ? 502 : 200 });
 }

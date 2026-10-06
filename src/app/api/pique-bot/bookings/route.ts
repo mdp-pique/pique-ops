@@ -15,5 +15,7 @@ export async function POST(request: NextRequest) {
   }
   const dry = request.nextUrl.searchParams.get("dry") === "1";
   const posted = await runBookingFeed(createAdminClient(), { dry });
-  return NextResponse.json({ dry, posted });
+  // A failed Slack post fails the request, so n8n's error alert fires instead of the run looking green.
+  const failed = posted.some((r) => "error" in r);
+  return NextResponse.json({ dry, posted }, { status: failed ? 502 : 200 });
 }
