@@ -28,8 +28,8 @@ export const DOMAINS: Domain[] = [
   {
     key: "claims",
     label: "Claims",
-    blurb: "AirCover and Truvi claims against their filing deadline, and guest blocks.",
-    types: ["claim_tracker", "guest_block_report"],
+    blurb: "Damage reported by cleaners, AirCover and Truvi claims against their filing deadline, and guest blocks.",
+    types: ["damage_report", "claim_tracker", "guest_block_report"],
   },
   {
     key: "requests",

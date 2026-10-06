@@ -55,6 +55,21 @@ export async function POST(request: NextRequest) {
       return new NextResponse(null, { status: 200 });
     }
 
+    // Damage report: AirCover claim / Truvi claim / Wear and tear. decide_damage_report()
+    // resolves it and opens the claim or maintenance ticket; a second tap changes nothing.
+    const damageChoice = DAMAGE_CHOICES[action.action_id as string];
+    if (damageChoice) {
+      after(async () => {
+        const post = await loadPost(admin, postId, ticketId);
+        if (!post) return;
+        const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
+        const { error } = await admin.rpc("decide_damage_report", { p_ticket: ticketId, p_choice: damageChoice, p_actor: actor.profileId, p_actor_name: actor.name });
+        if (error) console.error(`Pique Bot: damage decision failed: ${error.message}`);
+        await redrawForTicket(admin, ticketId);
+      });
+      return new NextResponse(null, { status: 200 });
+    }
+
     if (action.action_id === "pique_bot_done") {
       after(async () => {
         const post = await loadPost(admin, postId, ticketId);
@@ -131,6 +146,12 @@ export async function POST(request: NextRequest) {
 
   return new NextResponse(null, { status: 200 });
 }
+
+const DAMAGE_CHOICES: Record<string, string> = {
+  pique_bot_damage_aircover: "aircover",
+  pique_bot_damage_truvi: "truvi",
+  pique_bot_damage_wear: "wear",
+};
 
 // ticket_events only accepts its existing event types (a check constraint), so
 // Slack answers use item_done / comment and are marked with payload.source.

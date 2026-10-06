@@ -1,5 +1,6 @@
 // Pure layout for Pique Bot's Slack messages - no I/O, so it can be checked on
 // its own. The same function draws the 7 AM post and every update after a tap.
+import { domainForType } from "@/lib/pique-ui/domains";
 import { BOT_RULES, OVERDUE_LIMIT_DAYS, type Tier } from "./config";
 
 export interface BotItem {
@@ -15,6 +16,8 @@ export interface BotRow {
   ruleKey: string;
   /** Email alerts: sender, subject and link, shown instead of the check-in date. */
   context: { from: string | null; subject: string | null; url: string | null; receivedAt: string | null } | null;
+  /** Damage reports and claims: what was reported and its photos, shown instead of the check-in date. */
+  details: { lines: string[]; photos: string[]; decision: string | null } | null;
   status: string;
   guestName: string | null;
   property: string | null;
@@ -82,8 +85,21 @@ function emailLines(c: NonNullable<BotRow["context"]>): string {
   return lines.join("\n");
 }
 
+/** Slack shows at most this many photo links per item. */
+const PHOTO_LIMIT = 10;
+
+function detailLines(d: NonNullable<BotRow["details"]>): string {
+  const lines = d.lines.map(esc);
+  if (d.photos.length) {
+    const links = d.photos.slice(0, PHOTO_LIMIT).map((url, i) => `<${url}|${i + 1}>`).join(" ");
+    lines.push(`:camera: Photos: ${links}${d.photos.length > PHOTO_LIMIT ? ` (+${d.photos.length - PHOTO_LIMIT} more in the app)` : ""}`);
+  }
+  return lines.join("\n");
+}
+
 function whenText(row: BotRow, postDate: string): string {
   if (row.context) return emailLines(row.context);
+  if (row.details) return detailLines(row.details);
   if (!row.checkIn) return "No check-in date";
   const d = daysBetween(postDate, row.checkIn);
   if (d < 0) return `:warning: *Overdue* - checked in ${shortDate(row.checkIn)}`;
@@ -93,6 +109,7 @@ function whenText(row: BotRow, postDate: string): string {
 }
 
 function question(row: BotRow, item: BotItem): string {
+  if (row.type === "damage_report") return "AirCover claim, Truvi claim, or wear and tear?";
   if (row.type === "pack_n_play") return `Was the pack 'n play brought to ${esc(row.property ?? "the unit")}?`;
   return `${esc(item.label)}?`;
 }
@@ -157,15 +174,22 @@ export function renderOpenRow(row: BotRow, postId: string, postDate: string, app
   lines.push(...waitingLines(row, postDate), ...noteLines(row));
 
   const value = `${postId}|${row.ticketId}|${item.id}`;
-  const elements: Block[] = later
-    ? []
-    : [
-        { type: "button", action_id: "pique_bot_done", style: "primary", text: { type: "plain_text", text: "Done" }, value },
-        { type: "button", action_id: "pique_bot_not_yet", text: { type: "plain_text", text: "Not yet" }, value },
-      ];
+  const notYet: Block = { type: "button", action_id: "pique_bot_not_yet", text: { type: "plain_text", text: "Not yet" }, value };
+  // A damage report is a choice, not a tick: each button opens the matching follow-up ticket.
+  const answers: Block[] =
+    row.type === "damage_report"
+      ? [
+          { type: "button", action_id: "pique_bot_damage_aircover", style: "primary", text: { type: "plain_text", text: "AirCover claim" }, value },
+          { type: "button", action_id: "pique_bot_damage_truvi", style: "primary", text: { type: "plain_text", text: "Truvi claim" }, value },
+          { type: "button", action_id: "pique_bot_damage_wear", text: { type: "plain_text", text: "Wear and tear" }, value },
+          notYet,
+        ]
+      : [{ type: "button", action_id: "pique_bot_done", style: "primary", text: { type: "plain_text", text: "Done" }, value }, notYet];
+  const elements: Block[] = later ? [] : answers;
   if (row.doneBy && !later) elements.push(noteButton(row, postId));
   if (appUrl) {
-    elements.push({ type: "button", action_id: "pique_bot_open", text: { type: "plain_text", text: "Open" }, url: `${appUrl}/tickets/requests?ticket=${row.ticketId}` });
+    const domain = domainForType(row.type) ?? "requests";
+    elements.push({ type: "button", action_id: "pique_bot_open", text: { type: "plain_text", text: "Open" }, url: `${appUrl}/tickets/${domain}?ticket=${row.ticketId}` });
   }
 
   const section: Block = { type: "section", block_id: `t:${row.ticketId}`, text: { type: "mrkdwn", text: lines.join("\n") } };
@@ -177,9 +201,11 @@ export function renderDoneRow(row: BotRow, postId: string): Block {
   const plainTitle = titleOf(row).replace(/\*/g, "");
   const how = row.notNeeded
     ? ` - not needed (${esc(row.notNeeded.by)})${row.notNeeded.note ? `: "${esc(row.notNeeded.note.slice(0, 200))}"` : ""}`
-    : row.doneBy
-      ? ` - done by ${esc(row.doneBy)}`
-      : " - done";
+    : row.details?.decision
+      ? ` - ${esc(row.details.decision)}${row.doneBy ? ` (${esc(row.doneBy)})` : ""}`
+      : row.doneBy
+        ? ` - done by ${esc(row.doneBy)}`
+        : " - done";
   const lines = [`:white_check_mark: ~${plainTitle}~${how}`, ...noteLines(row)];
   const section: Block = { type: "section", block_id: `t:${row.ticketId}`, text: { type: "mrkdwn", text: lines.join("\n") } };
   if (row.doneBy) section.accessory = noteButton(row, postId);

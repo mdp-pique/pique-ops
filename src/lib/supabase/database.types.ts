@@ -3524,6 +3524,10 @@ export type Database = {
     }
     Functions: {
       ask_pique_run_sql: { Args: { query: string }; Returns: Json[] }
+      decide_damage_report: {
+        Args: { p_ticket: string; p_choice: string; p_actor: string | null; p_actor_name: string }
+        Returns: Json
+      }
       get_checkout_evidence: {
         Args: { day: string }
         Returns: {

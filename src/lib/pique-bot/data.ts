@@ -91,6 +91,7 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
       type: t.type,
       ruleKey: ruleKeyFor(t.type, t.metadata),
       context: emailContext(t.type, t.metadata),
+      details: detailsFor(t.type, t.metadata, t.due_at),
       status: t.status,
       guestName: t.guest_name,
       property: (t.property_id && propById.get(t.property_id)) || null,
@@ -123,6 +124,28 @@ function emailContext(type: string, metadata: unknown): BotRow["context"] {
     url: str("gmail_url") || null,
     receivedAt: str("received_at") || null,
   };
+}
+
+const DECISION_LABEL: Record<string, string> = { aircover: "AirCover claim", truvi: "Truvi claim", wear: "Wear and tear" };
+
+/** Damage reports and the claims they open: what was reported, by whom, the photos, and the decision. */
+function detailsFor(type: string, metadata: unknown, dueAt: string | null): BotRow["details"] {
+  if ((type !== "damage_report" && type !== "claim_tracker") || !metadata || typeof metadata !== "object") return null;
+  const m = metadata as Record<string, unknown>;
+  const str = (k: string) => (typeof m[k] === "string" ? (m[k] as string) : "");
+  const photos = Array.isArray(m.photos) ? m.photos.filter((p): p is string => typeof p === "string") : [];
+  const lines: string[] = [];
+  if (type === "damage_report") {
+    if (str("location")) lines.push(`Where: ${str("location").replace(/\*+$/, "")}`);
+    if (str("description")) lines.push(`"${str("description").slice(0, 500)}"`);
+    const when = str("submitted_at") ? new Date(str("submitted_at")).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Edmonton" }) : "";
+    if (str("submitted_by") || when) lines.push(`Reported${str("submitted_by") ? ` by ${str("submitted_by")}` : ""}${when ? ` · ${when}` : ""}`);
+  } else {
+    if (str("platform")) lines.push(`${str("platform")} claim${str("location") ? ` · ${str("location").replace(/\*+$/, "")}` : ""}`);
+    if (str("charges_summary")) lines.push(`"${str("charges_summary").slice(0, 500)}"`);
+    if (dueAt) lines.push(`File by ${new Date(dueAt).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric", timeZone: "America/Edmonton" })}`);
+  }
+  return { lines, photos, decision: DECISION_LABEL[str("decision")] ?? null };
 }
 
 /**

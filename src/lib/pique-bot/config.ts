@@ -9,9 +9,9 @@
  * in the 7 AM post. "urgent" and "today" items are also posted the moment they
  * come in, and an urgent one gets a single reminder if nobody answers within the hour.
  *
- * Rules are keyed by ticket type, except email_alert tickets, which are keyed
- * "email:{rule}" (their email_alert_rules key) because each rule posts to its
- * own channel - see ruleKeyFor().
+ * Rules are keyed by ticket type, except email_alert tickets, keyed
+ * "email:{rule}" (their email_alert_rules key), and damage_report tickets, keyed
+ * "damage:{form}", because each posts to its own channel - see ruleKeyFor().
  *
  * gated: a type taken over from a Zap. Pique Bot says nothing about it (no
  * immediate post, nothing in the 7 AM post) until it's listed in
@@ -24,6 +24,9 @@ export const CHANNELS = {
   guestCount: "C0A1G739VFW", // where "New Reservations - 1 Guest Only" posted
   newBookings: "C09PB2MBJC9", // #new-reservations, where the "New Reservations" Zap posted (booking feed, bookings.ts)
   changelog: "C0C6QFWPJET", // #change-logs (changelog.ts)
+  damages: "C05SX0T7NKE", // #damages-complaints-refunds-notification, where "Connecteam to Slack - Damages" posted
+  linens: "C08BWP97S3Z", // #damaged-linens-by-guests-notification, where the linens form Zap posted
+  newClaims: "C09P72Z8RK8", // #new-claim-notification, where the Truvi / Aircover claim Zaps posted
 } as const;
 
 export type Tier = "urgent" | "today" | "morning";
@@ -74,18 +77,27 @@ export const BOT_RULES: Record<string, BotRule> = {
   "email:invoice": emailRule("Invoice to review", "C07VCQ4ECBV", "today"),
   "email:invoice_reviewed": emailRule("Enter invoice in QBO and Plooto", "C07VCQ4ECBV", "today", [CRISTINE]),
   "email:etransfer": emailRule("Interac e-Transfer", "C09RZ1ERTK8", "today"),
+  // Damage forms from Connecteam (replace four Zaps; docs/zapier-migration.md lane C). The post
+  // asks AirCover claim / Truvi claim / Wear and tear instead of Done (see render.ts); a claim
+  // opens a claim_tracker ticket, asked in #new-claim-notification tagging Laurice.
+  "damage:damage": { label: "Damage reported", channel: CHANNELS.damages, leadDays: 0, tier: "today", askFrom: "created", gated: true },
+  "damage:linens": { label: "Linens damaged by guest", channel: CHANNELS.linens, leadDays: 0, tier: "today", askFrom: "created", gated: true },
+  claim_tracker: { label: "Claim to prepare", channel: CHANNELS.newClaims, leadDays: 0, tier: "today", askFrom: "created", tag: [LAURICE], gated: true },
 };
 
 /** The BOT_RULES key for a ticket: its type, or "email:{rule}" for email alerts. */
 export function ruleKeyFor(type: string, metadata: unknown): string {
-  if (type !== "email_alert") return type;
-  const rule = (metadata as { rule?: unknown } | null)?.rule;
-  return typeof rule === "string" ? `email:${rule}` : type;
+  const m = metadata as { rule?: unknown; form?: unknown } | null;
+  if (type === "email_alert") return typeof m?.rule === "string" ? `email:${m.rule}` : type;
+  if (type === "damage_report") return `damage:${m?.form === "linens" ? "linens" : "damage"}`;
+  return type;
 }
 
 /** The ticket type a BOT_RULES key belongs to. */
 export function ticketTypeFor(ruleKey: string): string {
-  return ruleKey.startsWith("email:") ? "email_alert" : ruleKey;
+  if (ruleKey.startsWith("email:")) return "email_alert";
+  if (ruleKey.startsWith("damage:")) return "damage_report";
+  return ruleKey;
 }
 
 export const OVERDUE_LIMIT_DAYS = 30;
