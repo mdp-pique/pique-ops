@@ -118,6 +118,8 @@ The team's explicit rule for this project: build and extend freely and fast, but
 
 Every n8n workflow, new or edited, must set Settings -> Error Workflow to `Pique-Error-Handler` (id `1KKf5vPmG6xhoPK8`), which posts the failed workflow, step and execution link to the n8n errors channel (`C0BL9V43AUT`). As of 2026-10-06 all 45 active workflows have it. A job that can fail without erroring must make the failure visible: the Pique Bot routes return 502 when a Slack post fails so n8n marks the run failed. Steps set to "continue on error" swallow failures - avoid that for anything that matters.
 
+**Silence check** (migration `20261006020000`): the error alert can't see an automation that quietly stopped. `public.automation_silence_check()` lists those gaps from the data each one leaves behind (reservation / message / Connecteam syncs going stale, bookings not posted to #new-reservations, live Pique Bot tickets never posted, no 7 AM post, no new email recorded in 48 h). n8n `Pique-Silence-Check` (id `48FYEiIkO8jQwGzu`) runs it daily at 9:00 Edmonton and posts any rows to the same errors channel; no rows, no post. When you build an automation that should produce something regularly, add a check for it there.
+
 ## Schema conventions (existing tables, follow for new ones)
 
 - snake_case tables and columns.
