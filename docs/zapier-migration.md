@@ -51,7 +51,7 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P1-127 | 213 FML New Reservations → Sheet | Logs 213 FML bookings to a sheet for P2-103 | Not needed once P2-103 reads `reservations` | B | todo |
 | P1-5 | Invoice To Slack - Email | Inbox subject contains "invoice" → finance channel, ✅ | Email rule → `invoice_review` ticket | E | off (10-06); Pique Bot live |
 | P2-26 | Gmail Tagged 'Reviewed' → Notify Cristine | Label "Reviewed" → Cristine enters it in QBO and Plooto, ✅ | Same ticket, next step: label → "Enter in QBO/Plooto" item assigned to Cristine | E | off (10-06); Pique Bot live |
-| P2-28 | e-Transfer To Slack - Email | Interac email → channel, ✅ | Email rule → ticket; later match to a pet fee / direct-booking ticket | E | tickets live 10-06, Slack posts wait for Pique Bot in #interac-etransfer-alert (Zap id 308322921) |
+| P2-28 | e-Transfer To Slack - Email | Interac email → channel, ✅ | Email rule → ticket; later match to a pet fee / direct-booking ticket | E | off (10-06); Pique Bot live |
 | P1-8 | MyKey Housing Request | Subject match → channel, ✅ | Email rule → ticket | E | off (10-05); Pique Bot live |
 | P1-91 | Sinistar Rental Offer | Sender + subject match → channel, ✅ | Email rule → ticket | E | off (10-05); Pique Bot live |
 | P1-99 | Ondilo Email | Ondilo support / one Booking.com contact → channel, ✅ | Email rule → ticket | E | off (10-05); Pique Bot live |
