@@ -59,10 +59,10 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P1-85 | Reply from Robert | Email from Robert → tags 2, ✅ | Email rule → comment on the open `review_removal_escalation`, tick "Robert responded"; plain ticket if none open | E | off (10-05); Pique Bot live |
 | P1-22 | Aircover Gmail | Labelled Aircover email → MDP, ✅ | Email rule → attach to the open claim, else a claim ticket | E / C | off (10-05); Pique Bot live |
 | P1-94 | Truvi Resolution Email | Labelled Truvi email → MDP, ✅ | Same, for Truvi | E / C | off (10-05); Pique Bot live |
-| P2-22 | Connecteam to Slack - Damages | Damage form + photos → "add to damages list", react with the Aircover / Truvi / maintenance emoji | Form → damage ticket with photos; the team picks Aircover / Truvi / maintenance in the app (or by the same emoji) | C | todo |
-| P1-18 | Connecteam - Linens Damaged by Guest | Linens form + photos → claim or wear-and-tear emoji, ✅ | Same as P2-22 | C | todo |
-| P1-109 | New Aircover Claim | Aircover emoji in the damages channel → "add to sheet, prepare claim" | Choosing Aircover on the damage ticket opens the claim ticket | C | todo |
-| P1-125 | New Truvi Claim | Same for Truvi | Same | C | todo |
+| P2-22 | Connecteam to Slack - Damages | Damage form + photos → "add to damages list", react with the Aircover / Truvi / maintenance emoji | Form → damage ticket with photos; the team picks Aircover / Truvi / maintenance in the app (or by the same emoji) | C | built 10-06, shadow (n8n `Pique-Damage-Forms`, Pique Bot buttons); goes live when the bot is in the channels and the Zap is off |
+| P1-18 | Connecteam - Linens Damaged by Guest | Linens form + photos → claim or wear-and-tear emoji, ✅ | Same as P2-22 | C | built 10-06, shadow (n8n `Pique-Damage-Forms`, Pique Bot buttons); goes live when the bot is in the channels and the Zap is off |
+| P1-109 | New Aircover Claim | Aircover emoji in the damages channel → "add to sheet, prepare claim" | Choosing Aircover on the damage ticket opens the claim ticket | C | built 10-06, shadow (n8n `Pique-Damage-Forms`, Pique Bot buttons); goes live when the bot is in the channels and the Zap is off |
+| P1-125 | New Truvi Claim | Same for Truvi | Same | C | built 10-06, shadow (n8n `Pique-Damage-Forms`, Pique Bot buttons); goes live when the bot is in the channels and the Zap is off |
 | P1-111 | Aircover Claim Payout Tracker | Claims sheet row paid → payout sheet + 🎉 to Cristine | Payout recorded on the claim ticket; summary view replaces the payout sheet | C | todo |
 | P1-118 | Truvi Claim Payout Tracker | Same for Truvi | Same | C | todo |
 | P1-55 | Clock out Tracker for reviews | Connecteam clock-out → sheet row (who cleaned which unit, when) | Already in `cleaning_shift_check` / `connecteam_shifts`; drop the sheet | Q | todo |

@@ -36,9 +36,9 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 | Interac e-Transfer received | "e-Transfer To Slack - Email" |
 | Aircover reimbursement email | "Aircover Gmail -> Slack Notification" |
 | Truvi resolution email | "Truvi Resolution Email -> Slack Notification" |
-| Damage reported by a cleaner (photos attached; choose Aircover / Truvi / maintenance) | "Connecteam to Slack - Damages" |
+| Damage reported by a cleaner (photos attached; buttons: AirCover claim / Truvi claim / Wear and tear; built 10-06) | "Connecteam to Slack - Damages" |
 | Linens damaged by guest (photos attached; claim or wear and tear) | "Connecteam to Slack - Linens Damaged by Guest" |
-| New Aircover / Truvi claim to prepare (opened by the choice on the damage ticket instead of an emoji) | "New Aircover Claim --> Slack Notification", "New Truvi Claim --> Slack Notification" |
+| New Aircover / Truvi claim to prepare (opened by the choice on the damage ticket instead of an emoji; built 10-06) | "New Aircover Claim --> Slack Notification", "New Truvi Claim --> Slack Notification" |
 | Claim approved: record the payout (Cristine) | "Aircover Claim Payout Tracker Spreadsheet", "Truvi Claim Payout Tracker Spreadsheet" |
 | Supply order form | "Connecteam Order Form To Slack" |
 | Cleaning QC form submitted | "Connecteam to Slack - Cleaning QC Form" |
