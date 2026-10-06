@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__n8n__get_workflow_details",
+      "mcp__n8n__get_execution",
+      "mcp__Zapier__execute_zapier_read_action",
+      "mcp__Zapier__inspect_zapier_actions",
+      "mcp__n8n__search_executions",
+      "mcp__n8n__validate_workflow",
+      "mcp__n8n__search_workflows",
+      "mcp__n8n__list_credentials",
+      "mcp__Gmail__get_thread",
+      "mcp__n8n__get_sdk_reference",
+      "mcp__n8n__get_node_types",
+      "mcp__Gmail__search_threads",
+      "Bash(npx tsc --noEmit -p .)",
+      "Bash(./node_modules/.bin/tsc --noEmit -p .)",
+      "Bash(git fetch origin main)",
+      "Bash(scripts/housekeeping.sh)",
+      "Bash(bash scripts/housekeeping.sh)"
+    ]
+  }
+}
