@@ -60,7 +60,7 @@ export const BOT_RULES: Record<string, BotRule> = {
   pack_n_play: { label: "Pack 'n play", channel: CHANNELS.canmoreCleaning, leadDays: 0, tier: "morning" },
   // Booking events (replace Zaps; docs/zapier-migration.md lane B).
   save_booking: { label: "Cancelled booking - try to save it", channel: CHANNELS.cancellations, leadDays: 0, tier: "urgent", askFrom: "created", tag: BOOKINGS_TEAM, gated: true },
-  guest_count_check: { label: "Only 1 guest - confirm the count", channel: CHANNELS.guestCount, leadDays: 0, tier: "morning", askFrom: "created", gated: true },
+  guest_count_check: { label: "Only 1 guest - confirm the count", channel: CHANNELS.guestCount, leadDays: 0, tier: "today", askFrom: "created", gated: true },
   // Email alerts (replace ten Zaps; docs/zapier-migration.md lane E).
   "email:airbnb_support": emailRule("Airbnb Support email", "C09NZ05SYQ6", "urgent", ["U078P07JGGY", "U051SQ08E75", CRISTINE, "U06SZU27S5B"]),
   "email:robert_reply": emailRule("Reply from Robert", "C09DPRG1CD9", "urgent", [LAURICE, TAMMY]),

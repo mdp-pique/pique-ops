@@ -46,6 +46,7 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 | MyKey housing request | "MyKey Housing Request" |
 | Sinistar rental offer | "Sinistar Rental Offer -> Slack Notification" |
 | Email from Ondilo / Booking.com contact | "Ondilo Email -> Slack Notification" |
+| Booking shows only 1 guest: confirm the count (moved from Morning 10-06: same-day bookings need asking right away) | "New Reservations - 1 Guest Only" |
 
 ## ⚪ Morning — status: proposed
 
@@ -55,7 +56,6 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 | Direct booking ID (already live) | - |
 | Parking registration, incl. 213 FML on check-in day (already live, extended to every 213 FML booking) | "213 FML Parking Registration Reminder -> Slack Notification" |
 | Pack 'n play (already live) | - |
-| Booking shows only 1 guest: confirm the count | "New Reservations - 1 Guest Only" |
 | 5-star cleanliness review: congratulate the cleaner | "Finding Clean when Review is Submitted", "Quality Control Reviews (Canmore and Calgary)" |
 
 ## FYI — status: proposed
