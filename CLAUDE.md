@@ -114,6 +114,10 @@ All 42 active Zaps are moving to n8n or into the app so Zapier can be cancelled 
 
 The team's explicit rule for this project: build and extend freely and fast, but **never edit an existing, currently-working system** (a live n8n workflow, an existing table's current writers/readers, existing behavior anyone depends on) without stopping and getting explicit sign-off first. Additive changes (new tables, new nullable columns, new triggers that are exception-safe and don't change existing return values, new n8n workflows) are fine to do proactively. Editing something that already runs in production (an active n8n workflow, an existing RLS policy, dropping/renaming an existing column) is not — flag it and wait for a yes, however good the reason.
 
+## n8n error alerts - required on every workflow (MDP, 2026-10-06)
+
+Every n8n workflow, new or edited, must set Settings -> Error Workflow to `Pique-Error-Handler` (id `1KKf5vPmG6xhoPK8`), which posts the failed workflow, step and execution link to the n8n errors channel (`C0BL9V43AUT`). As of 2026-10-06 all 45 active workflows have it. A job that can fail without erroring must make the failure visible: the Pique Bot routes return 502 when a Slack post fails so n8n marks the run failed. Steps set to "continue on error" swallow failures - avoid that for anything that matters.
+
 ## Schema conventions (existing tables, follow for new ones)
 
 - snake_case tables and columns.
