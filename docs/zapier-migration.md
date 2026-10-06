@@ -49,9 +49,9 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P2-98 | New Reservations - Pet | New booking with a pet → ask for the pet fee, ✅ | `pet_fee` tickets already exist, and Pique Bot asks from 2 days before check-in. MDP 10-02: that's enough. | B | off (10-02) |
 | P2-103 | 213 FML Parking Registration Reminder | 11 AM daily → reminds the group on check-in day to register the guest's vehicle | A `vehicle_registration` ticket for every 213 FML booking, not only when the form comes in; Pique Bot asks on check-in day | B | todo |
 | P1-127 | 213 FML New Reservations → Sheet | Logs 213 FML bookings to a sheet for P2-103 | Not needed once P2-103 reads `reservations` | B | todo |
-| P1-5 | Invoice To Slack - Email | Inbox subject contains "invoice" → finance channel, ✅ | Email rule → `invoice_review` ticket | E | blocked: needs invoices@ Gmail login in n8n |
-| P2-26 | Gmail Tagged 'Reviewed' → Notify Cristine | Label "Reviewed" → Cristine enters it in QBO and Plooto, ✅ | Same ticket, next step: label → "Enter in QBO/Plooto" item assigned to Cristine | E | blocked: needs invoices@ Gmail login in n8n |
-| P2-28 | e-Transfer To Slack - Email | Interac email → channel, ✅ | Email rule → ticket; later match to a pet fee / direct-booking ticket | E | blocked: needs invoices@ Gmail login in n8n |
+| P1-5 | Invoice To Slack - Email | Inbox subject contains "invoice" → finance channel, ✅ | Email rule → `invoice_review` ticket | E | live 10-06 (Zap id 173395838); turn the Zap off |
+| P2-26 | Gmail Tagged 'Reviewed' → Notify Cristine | Label "Reviewed" → Cristine enters it in QBO and Plooto, ✅ | Same ticket, next step: label → "Enter in QBO/Plooto" item assigned to Cristine | E | live 10-06 (Zap id 266204952); turn the Zap off |
+| P2-28 | e-Transfer To Slack - Email | Interac email → channel, ✅ | Email rule → ticket; later match to a pet fee / direct-booking ticket | E | tickets live 10-06, Slack posts wait for Pique Bot in #interac-etransfer-alert (Zap id 308322921) |
 | P1-8 | MyKey Housing Request | Subject match → channel, ✅ | Email rule → ticket | E | off (10-05); Pique Bot live |
 | P1-91 | Sinistar Rental Offer | Sender + subject match → channel, ✅ | Email rule → ticket | E | off (10-05); Pique Bot live |
 | P1-99 | Ondilo Email | Ondilo support / one Booking.com contact → channel, ✅ | Email rule → ticket | E | off (10-05); Pique Bot live |
@@ -84,7 +84,7 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 
 ## Credentials n8n needs
 
-- **Gmail, second account (the invoices inbox; likely invoices@piquepropertiesinc.com)**, for P1-5, P2-26, P2-28. Those Zaps read that account, not info@ (found 10-05).
+- ~~**Gmail, second account**~~ done 10-06: n8n credential "invoices" = invoices@piquepropertiesinc.com, for P1-5, P2-26, P2-28.
 
 n8n already has: Hospitable (2 accounts), Connecteam, Supabase Postgres, Gmail (one account), Slack, Google Sheets, QuickBooks, Anthropic.
 
