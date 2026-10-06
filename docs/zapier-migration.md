@@ -74,7 +74,7 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P1-11 | Pique N2P - IG & FB | N2P webhook → channel with CRM link | n8n webhook → same post (new URL set in N2P) | N | todo |
 | P1-13 | Stripe Payment Success | Stripe `payment_intent.succeeded` → looks up the reservation in a sheet → channel | n8n Stripe trigger, reservation from `reservations` instead of the sheet | N | todo |
 | P1-88 | Hospitable New Reservations → Sheet | Accepted booking → sheet (feeds P1-13) | Not needed once P1-13 reads `reservations`, unless someone uses the sheet | N | question |
-| P1-45 | New Reservations | Hospitable webhook → booking post + GHL contact upsert | n8n: post from `reservations`; GHL upsert via API | N | todo |
+| P1-45 | New Reservations | Hospitable webhook → booking post + GHL contact upsert | Booking post: Pique Bot booking feed (`src/lib/pique-bot/bookings.ts`, n8n `Pique-Bot-Bookings`), live 10-06 after the Zap stopped posting 10-05 ~2 PM. GHL upsert via API still to build | N | Slack post live; GHL todo |
 | P1-71 | Reviews for Connecteam Clockouts | Hospitable review → sheet + CassidyAI webhook | Turned off by MDP 10-02 (Cassidy unused). Side effect: no new review rows reach the QC sheet, so P1-76 / P1-102 post nothing until the DB-based QC replacement ships. | Q | off (10-02) |
 | P2-1 | Payment success → Sheet | Stripe (payfunnel) → sheet + Slack + Circle community invite | n8n straight port | N | todo |
 | P2-6 | Stopped Timer | Hubstaff timer stop → #hubstaff-monitor | n8n straight port. In daily use (Laurice, Glenn, Cristine, Janina). | N | todo |

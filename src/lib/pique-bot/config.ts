@@ -22,6 +22,7 @@ export const CHANNELS = {
   canmoreCleaning: "C057L8Z2DUK", // #canmore-cleaning
   cancellations: "C0ACP3E9LEA", // where "Cancelled Reservation -> Slack Notification" posted
   guestCount: "C0A1G739VFW", // where "New Reservations - 1 Guest Only" posted
+  newBookings: "C09PB2MBJC9", // #new-reservations, where the "New Reservations" Zap posted (booking feed, bookings.ts)
 } as const;
 
 export type Tier = "urgent" | "today" | "morning";

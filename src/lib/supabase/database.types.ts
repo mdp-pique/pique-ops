@@ -1375,6 +1375,35 @@ export type Database = {
           },
         ]
       }
+      pique_bot_booking_posts: {
+        Row: {
+          channel_id: string
+          created_at: string
+          reservation_id: string
+          slack_ts: string | null
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          reservation_id: string
+          slack_ts?: string | null
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          reservation_id?: string
+          slack_ts?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pique_bot_booking_posts_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: true
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pique_bot_posts: {
         Row: {
           channel_id: string

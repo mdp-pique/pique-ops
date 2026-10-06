@@ -62,7 +62,7 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 
 | Item | Replaces |
 |---|---|
-| New booking summary (the GHL contact update happens behind the scenes) | "New Reservations" |
+| New booking summary, posted as each booking comes in, around the clock (live 10-06; the GHL contact update is still to build) | "New Reservations" |
 | Stripe payment received | "Stripe Payment Success Notification to Slack" |
 | Payfunnel payment received (the Circle invite happens behind the scenes) | "Payment success -> Sheet" |
 | Hubstaff timer started / stopped (pending: still wanted?) | "Started Timer", "Stopped Timer" |
