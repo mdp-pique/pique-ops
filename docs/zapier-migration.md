@@ -61,8 +61,8 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P1-94 | Truvi Resolution Email | Labelled Truvi email → MDP, ✅ | Same, for Truvi | E / C | off (10-05); Pique Bot live |
 | P2-22 | Connecteam to Slack - Damages | Damage form + photos → "add to damages list", react with the Aircover / Truvi / maintenance emoji | Form → damage ticket with photos; the team picks Aircover / Truvi / maintenance in the app (or by the same emoji) | C | off (10-06); Pique Bot live |
 | P1-18 | Connecteam - Linens Damaged by Guest | Linens form + photos → claim or wear-and-tear emoji, ✅ | Same as P2-22 | C | off (10-06); Pique Bot live |
-| P1-109 | New Aircover Claim | Aircover emoji in the damages channel → "add to sheet, prepare claim" | Choosing Aircover on the damage ticket opens the claim ticket | C | replacement live 10-06; turn the Zap off ~10-08 (old emoji posts) |
-| P1-125 | New Truvi Claim | Same for Truvi | Same | C | replacement live 10-06; turn the Zap off ~10-08 (old emoji posts) |
+| P1-109 | New Aircover Claim | Aircover emoji in the damages channel → "add to sheet, prepare claim" | Choosing Aircover on the damage ticket opens the claim ticket | C | replacement live 10-06; turned off by MDP 10-07 |
+| P1-125 | New Truvi Claim | Same for Truvi | Same | C | replacement live 10-06; turned off by MDP 10-07 |
 | P1-111 | Aircover Claim Payout Tracker | Claims sheet row paid → payout sheet + 🎉 to Cristine | Payout recorded on the claim ticket; summary view replaces the payout sheet | C | todo |
 | P1-118 | Truvi Claim Payout Tracker | Same for Truvi | Same | C | todo |
 | P1-55 | Clock out Tracker for reviews | Connecteam clock-out → sheet row (who cleaned which unit, when) | Already in `cleaning_shift_check` / `connecteam_shifts`; only fed the QC sheet, which nothing reads now | Q | replacement live 10-07; turn off |
