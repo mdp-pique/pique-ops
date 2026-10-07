@@ -42,7 +42,7 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 | Claim approved: record the payout (Cristine) | "Aircover Claim Payout Tracker Spreadsheet", "Truvi Claim Payout Tracker Spreadsheet" |
 | Supply order form | "Connecteam Order Form To Slack" |
 | Cleaning QC form submitted | "Connecteam to Slack - Cleaning QC Form" |
-| Review rated cleanliness below 5: clean needs attention | "Finding Clean when Review is Submitted", "Quality Control Reviews (Canmore and Calgary)" |
+| Review rated cleanliness below 5: clean needs attention (built 10-07: a cleaning issue ticket, tags Tammy, cleaner named for Edmonton only) | "Finding Clean when Review is Submitted", "Quality Control Reviews (Canmore and Calgary)" |
 | MyKey housing request | "MyKey Housing Request" |
 | Sinistar rental offer | "Sinistar Rental Offer -> Slack Notification" |
 | Email from Ondilo / Booking.com contact | "Ondilo Email -> Slack Notification" |
@@ -56,13 +56,13 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 | Direct booking ID (already live) | - |
 | Parking registration, incl. 213 FML on check-in day (already live, extended to every 213 FML booking) | "213 FML Parking Registration Reminder -> Slack Notification" |
 | Pack 'n play (already live) | - |
-| 5-star cleanliness review: congratulate the cleaner | "Finding Clean when Review is Submitted", "Quality Control Reviews (Canmore and Calgary)" |
 
 ## FYI — status: proposed
 
 | Item | Replaces |
 |---|---|
 | New booking summary, posted as each booking comes in, around the clock (live 10-06; the GHL contact update is still to build) | "New Reservations" |
+| Every other guest review (5 for cleanliness: the cleaner might need a congrats), posted as it comes in (built 10-07; moved from Morning, same as the Zap did) | "Finding Clean when Review is Submitted", "Quality Control Reviews (Canmore and Calgary)" |
 | Stripe payment received | "Stripe Payment Success Notification to Slack" |
 | Payfunnel payment received (the Circle invite happens behind the scenes) | "Payment success -> Sheet" |
 | Hubstaff timer started / stopped (pending: still wanted?) | "Started Timer", "Stopped Timer" |

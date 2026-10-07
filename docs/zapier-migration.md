@@ -65,9 +65,9 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P1-125 | New Truvi Claim | Same for Truvi | Same | C | replacement live 10-06; turn the Zap off ~10-08 (old emoji posts) |
 | P1-111 | Aircover Claim Payout Tracker | Claims sheet row paid → payout sheet + 🎉 to Cristine | Payout recorded on the claim ticket; summary view replaces the payout sheet | C | todo |
 | P1-118 | Truvi Claim Payout Tracker | Same for Truvi | Same | C | todo |
-| P1-55 | Clock out Tracker for reviews | Connecteam clock-out → sheet row (who cleaned which unit, when) | Already in `cleaning_shift_check` / `connecteam_shifts`; drop the sheet | Q | todo |
-| P1-76 | Finding Clean when Review is Submitted | Review row → finds the cleaner → congrats or needs-attention post + log | DB match review → checkout clean → cleaner; post the same message; QC ticket when cleanliness < 5 | Q | todo |
-| P1-102 | Quality Control Reviews (Canmore and Calgary) | Same, for listed Canmore/Calgary units with no cleaner match | Same flow | Q | todo |
+| P1-55 | Clock out Tracker for reviews | Connecteam clock-out → sheet row (who cleaned which unit, when) | Already in `cleaning_shift_check` / `connecteam_shifts`; only fed the QC sheet, which nothing reads now | Q | replacement live 10-07; turn off |
+| P1-76 | Finding Clean when Review is Submitted | Review row → finds the cleaner → congrats or needs-attention post + log | `reviews` trigger → `review_qc` (cleaner from the checkout clean, Edmonton only) → Pique Bot review feed posts each review to #quality-control-reviews; cleanliness < 5 opens a `cleaning_issue` ticket tagging Tammy (rule `review_qc`). Backfilled the 22 reviews missed since 10-02. | Q | replacement live 10-07; turn off (334164334) |
+| P1-102 | Quality Control Reviews (Canmore and Calgary) | Same, for listed Canmore/Calgary units with no cleaner match | Same flow (Canmore / Calgary posts leave the cleaner out, MDP 10-07) | Q | replacement live 10-07; turn off (373307892) |
 | P2-90 | Connecteam - Cleaning QC Form | QC form → Tammy + one other with the 3 checks | QC ticket on the clean, or straight port | Q | todo |
 | P2-12 | Connecteam Order Form | Supply order form → channel, ✅ | `supply_order` ticket | Q | todo |
 | P1-1 | Monthly Payout Emails | 25th, 6 AM → Gmail drafts of owner payout emails (amount left as `$****`) | n8n schedule → same drafts (later: fill the amount from owner statements) | N | todo |
@@ -75,7 +75,7 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P1-13 | Stripe Payment Success | Stripe `payment_intent.succeeded` → looks up the reservation in a sheet → channel | n8n Stripe trigger, reservation from `reservations` instead of the sheet | N | todo |
 | P1-88 | Hospitable New Reservations → Sheet | Accepted booking → sheet (feeds P1-13) | Not needed once P1-13 reads `reservations`, unless someone uses the sheet | N | question |
 | P1-45 | New Reservations | Hospitable webhook → booking post + GHL contact upsert | Booking post: Pique Bot booking feed (`src/lib/pique-bot/bookings.ts`, n8n `Pique-Bot-Bookings`), live 10-06 after the Zap stopped posting 10-05 ~2 PM. GHL upsert via API still to build | N | Slack post live; GHL todo |
-| P1-71 | Reviews for Connecteam Clockouts | Hospitable review → sheet + CassidyAI webhook | Turned off by MDP 10-02 (Cassidy unused). Side effect: no new review rows reach the QC sheet, so P1-76 / P1-102 post nothing until the DB-based QC replacement ships. | Q | off (10-02) |
+| P1-71 | Reviews for Connecteam Clockouts | Hospitable review → sheet + CassidyAI webhook | Turned off by MDP 10-02 (Cassidy unused). Side effect: no new review rows reached the QC sheet, so P1-76 / P1-102 posted nothing 10-02 to 10-07; replaced by the review feed 10-07 (missed reviews backfilled). | Q | off (10-02) |
 | P2-1 | Payment success → Sheet | Stripe (payfunnel) → sheet + Slack + Circle community invite | n8n straight port | N | todo |
 | P2-6 | Stopped Timer | Hubstaff timer stop → #hubstaff-monitor | n8n straight port. In daily use (Laurice, Glenn, Cristine, Janina). | N | todo |
 | P2-8 | Started Timer | Hubstaff timer start → #hubstaff-monitor | n8n straight port. In daily use. | N | todo |
@@ -106,7 +106,7 @@ MDP 10-02: this branch may extend Pique Bot (daily updates plus immediate posts 
 Every lookup sheet a Zap reads, and what replaces it:
 - **Bookings sheet**: "Stripe Payment Success Notification to Slack" finds the reservation code from the Stripe payment and gets the property and dates. Replaced by `reservations`.
 - **213 FML sheet**: "213 FML Parking Registration Reminder" finds today's check-ins and gets the guest name and code. Replaced by `reservations`.
-- **QC sheet**: "Finding Clean when Review is Submitted" finds the clean by reservation code and gets the cleaner and clean times. It also logs every congrats / needs-attention post on a third tab. Replaced by `connecteam_shifts` / `cleaning_shift_check` plus `guest_reviews`.
+- **QC sheet**: "Finding Clean when Review is Submitted" finds the clean by reservation code and gets the cleaner and clean times. It also logs every congrats / needs-attention post on a third tab. Replaced by `reviews` + `connecteam_shifts` / `cleaning_shift_check`; the log is `review_qc` (10-07).
 - **Property → Connecteam job sheet** (a fourth one): the shift Zaps find the Connecteam job for a property here (main account by column C, Padmore / Stephan by column B, the old cancel webhook by property id). Replaced by `cleaning_property_jobs` for the main account; Padmore / Stephan properties need rows added.
 
 ## Slack channels to retire (MDP 10-05, later)

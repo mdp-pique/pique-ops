@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BOT_RULES, OPEN_STATUSES, ruleKeyFor, ticketTypeFor } from "./config";
 import type { BotRow } from "./render";
+import { reviewLines, summaryFromMetadata } from "./reviewFormat";
 import { slackApi } from "./slack";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -128,10 +129,15 @@ function emailContext(type: string, metadata: unknown): BotRow["context"] {
 
 const DECISION_LABEL: Record<string, string> = { aircover: "AirCover claim", truvi: "Truvi claim", wear: "Wear and tear" };
 
-/** Damage reports and the claims they open: what was reported, by whom, the photos, and the decision. */
+/**
+ * Damage reports and the claims they open: what was reported, by whom, the photos, and the decision.
+ * Cleaning issues from a review: the stay, the cleaner, the scores and what the guest wrote.
+ */
 function detailsFor(type: string, metadata: unknown, dueAt: string | null): BotRow["details"] {
-  if ((type !== "damage_report" && type !== "claim_tracker") || !metadata || typeof metadata !== "object") return null;
+  if (!metadata || typeof metadata !== "object") return null;
   const m = metadata as Record<string, unknown>;
+  if (type === "cleaning_issue" && m.source === "review") return { lines: reviewLines(summaryFromMetadata(m)), photos: [], decision: null };
+  if (type !== "damage_report" && type !== "claim_tracker") return null;
   const str = (k: string) => (typeof m[k] === "string" ? (m[k] as string) : "");
   const photos = Array.isArray(m.photos) ? m.photos.filter((p): p is string => typeof p === "string") : [];
   const lines: string[] = [];

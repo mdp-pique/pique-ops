@@ -2333,6 +2333,80 @@ export type Database = {
         }
         Relationships: []
       }
+      review_qc: {
+        Row: {
+          channel_id: string | null
+          cleaner_names: string | null
+          cleaning_date: string | null
+          cleanliness: number | null
+          created_at: string
+          flagged: boolean
+          posted_at: string | null
+          property_id: string | null
+          reservation_id: string | null
+          review_id: string
+          slack_ts: string | null
+          ticket_id: string | null
+        }
+        Insert: {
+          channel_id?: string | null
+          cleaner_names?: string | null
+          cleaning_date?: string | null
+          cleanliness?: number | null
+          created_at?: string
+          flagged?: boolean
+          posted_at?: string | null
+          property_id?: string | null
+          reservation_id?: string | null
+          review_id: string
+          slack_ts?: string | null
+          ticket_id?: string | null
+        }
+        Update: {
+          channel_id?: string | null
+          cleaner_names?: string | null
+          cleaning_date?: string | null
+          cleanliness?: number | null
+          created_at?: string
+          flagged?: boolean
+          posted_at?: string | null
+          property_id?: string | null
+          reservation_id?: string | null
+          review_id?: string
+          slack_ts?: string | null
+          ticket_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_qc_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_qc_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_qc_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: true
+            referencedRelation: "reviews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_qc_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reviews: {
         Row: {
           accuracy_rating: number | null

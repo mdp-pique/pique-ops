@@ -22,8 +22,8 @@ export const DOMAINS: Domain[] = [
   {
     key: "maintenance",
     label: "Maintenance",
-    blurb: "Issues in a unit, entry permission, and lock and camera checks.",
-    types: ["maintenance_ticket", "maintenance_access", "property_security_check"],
+    blurb: "Issues in a unit, cleaning problems from guest reviews, entry permission, and lock and camera checks.",
+    types: ["maintenance_ticket", "cleaning_issue", "maintenance_access", "property_security_check"],
   },
   {
     key: "claims",

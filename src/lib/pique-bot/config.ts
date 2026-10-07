@@ -10,8 +10,9 @@
  * come in, and an urgent one gets a single reminder if nobody answers within the hour.
  *
  * Rules are keyed by ticket type, except email_alert tickets, keyed
- * "email:{rule}" (their email_alert_rules key), and damage_report tickets, keyed
- * "damage:{form}", because each posts to its own channel - see ruleKeyFor().
+ * "email:{rule}" (their email_alert_rules key), damage_report tickets, keyed
+ * "damage:{form}", because each posts to its own channel, and cleaning_issue
+ * tickets opened from a guest review, keyed "review_qc" - see ruleKeyFor().
  *
  * gated: a type taken over from a Zap. Pique Bot says nothing about it (no
  * immediate post, nothing in the 7 AM post) until it's listed in
@@ -27,6 +28,7 @@ export const CHANNELS = {
   damages: "C05SX0T7NKE", // #damages-complaints-refunds-notification, where "Connecteam to Slack - Damages" posted
   linens: "C08BWP97S3Z", // #damaged-linens-by-guests-notification, where the linens form Zap posted
   newClaims: "C09P72Z8RK8", // #new-claim-notification, where the Truvi / Aircover claim Zaps posted
+  qualityControl: "C09T31NSAPR", // #quality-control-reviews, where the review QC Zaps posted (review feed, reviews.ts)
 } as const;
 
 export type Tier = "urgent" | "today" | "morning";
@@ -83,13 +85,18 @@ export const BOT_RULES: Record<string, BotRule> = {
   "damage:damage": { label: "Damage reported", channel: CHANNELS.damages, leadDays: 0, tier: "today", askFrom: "created", gated: true },
   "damage:linens": { label: "Linens damaged by guest", channel: CHANNELS.linens, leadDays: 0, tier: "today", askFrom: "created", gated: true },
   claim_tracker: { label: "Claim to prepare", channel: CHANNELS.newClaims, leadDays: 0, tier: "today", askFrom: "created", tag: [LAURICE], gated: true },
+  // A guest rated cleanliness below 5 (replaces the review QC Zaps; docs/zapier-migration.md lane Q).
+  // Every other review is an FYI post in the same channel from the review feed (reviews.ts).
+  review_qc: { label: "Cleanliness below 5", channel: CHANNELS.qualityControl, leadDays: 0, tier: "today", askFrom: "created", tag: [TAMMY], gated: true },
 };
 
 /** The BOT_RULES key for a ticket: its type, or "email:{rule}" for email alerts. */
 export function ruleKeyFor(type: string, metadata: unknown): string {
-  const m = metadata as { rule?: unknown; form?: unknown } | null;
+  const m = metadata as { rule?: unknown; form?: unknown; source?: unknown } | null;
   if (type === "email_alert") return typeof m?.rule === "string" ? `email:${m.rule}` : type;
   if (type === "damage_report") return `damage:${m?.form === "linens" ? "linens" : "damage"}`;
+  // Only review-flagged cleaning issues are posted; ones made by hand have no rule.
+  if (type === "cleaning_issue") return m?.source === "review" ? "review_qc" : type;
   return type;
 }
 
@@ -97,6 +104,7 @@ export function ruleKeyFor(type: string, metadata: unknown): string {
 export function ticketTypeFor(ruleKey: string): string {
   if (ruleKey.startsWith("email:")) return "email_alert";
   if (ruleKey.startsWith("damage:")) return "damage_report";
+  if (ruleKey === "review_qc") return "cleaning_issue";
   return ruleKey;
 }
 
