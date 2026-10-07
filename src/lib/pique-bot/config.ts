@@ -28,6 +28,7 @@ export const CHANNELS = {
   damages: "C05SX0T7NKE", // #damages-complaints-refunds-notification, where "Connecteam to Slack - Damages" posted
   linens: "C08BWP97S3Z", // #damaged-linens-by-guests-notification, where the linens form Zap posted
   newClaims: "C09P72Z8RK8", // #new-claim-notification, where the Truvi / Aircover claim Zaps posted
+  stripePayments: "C085EB5UR8C", // #stripe-payment-notification, where the Stripe payment Zap posted (src/lib/stripe/payments.ts)
   qualityControl: "C09T31NSAPR", // #quality-control-reviews, where the review QC Zaps posted (review feed, reviews.ts)
   petBookings: "C0A9RLU3F6H", // #new-reservation-with-pet, where the "New Reservations - Pet" Zap posted
   cleaningOps: "C07AP6KPV9V", // #pique-internal-cleaning-operations (separator doors)

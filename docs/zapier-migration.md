@@ -72,11 +72,11 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P2-12 | Connecteam Order Form | Supply order form → channel, ✅ | `supply_order` ticket | Q | todo |
 | P1-1 | Monthly Payout Emails | 25th, 6 AM → Gmail drafts of owner payout emails (amount left as `$****`) | n8n schedule → same drafts (later: fill the amount from owner statements) | N | todo |
 | P1-11 | Pique N2P - IG & FB | N2P webhook → channel with CRM link | n8n webhook → same post (new URL set in N2P) | N | todo |
-| P1-13 | Stripe Payment Success | Stripe `payment_intent.succeeded` → looks up the reservation in a sheet → channel | n8n Stripe trigger, reservation from `reservations` instead of the sheet | N | todo |
-| P1-88 | Hospitable New Reservations → Sheet | Accepted booking → sheet (feeds P1-13) | Not needed once P1-13 reads `reservations`, unless someone uses the sheet | N | question |
+| P1-13 | Stripe Payment Success | Stripe `payment_intent.succeeded` → looks up the reservation in a sheet → channel | Built 10-07: Pique Stripe account webhook → app `/api/stripe/webhook` (`src/lib/stripe/payments.ts`), stay from `reservations` by the charge's `reservation_code`, Pique Bot posts to #stripe-payment-notification (`C085EB5UR8C`), claimed in `stripe_payment_posts`. Waiting on MDP: Stripe webhook endpoint + `STRIPE_WEBHOOK_SECRET` in Vercel, Pique Bot invited to the channel | N | built, waiting on setup |
+| P1-88 | Hospitable New Reservations → Sheet | Accepted booking → sheet (feeds P1-13) | Not needed once P1-13 reads `reservations`, unless someone uses the sheet | N | turn off once P1-13 posts |
 | P1-45 | New Reservations | Hospitable webhook → booking post + GHL contact upsert | Booking post: Pique Bot booking feed (`src/lib/pique-bot/bookings.ts`, n8n `Pique-Bot-Bookings`), live 10-06 after the Zap stopped posting 10-05 ~2 PM. GHL upsert via API still to build | N | Slack post live; GHL todo |
 | P1-71 | Reviews for Connecteam Clockouts | Hospitable review → sheet + CassidyAI webhook | Turned off by MDP 10-02 (Cassidy unused). Side effect: no new review rows reached the QC sheet, so P1-76 / P1-102 posted nothing 10-02 to 10-07; replaced by the review feed 10-07 (missed reviews backfilled). | Q | off (10-02) |
-| P2-1 | Payment success → Sheet | Stripe (payfunnel) → sheet + Slack + Circle community invite | n8n straight port | N | todo |
+| P2-1 | Payment success → Sheet | Stripe (payfunnel) → sheet + Slack + Circle community invite | None: MDP 10-07, not used; turn off | N | turn off |
 | P2-6 | Stopped Timer | Hubstaff timer stop → #hubstaff-monitor | n8n straight port. In daily use (Laurice, Glenn, Cristine, Janina). | N | todo |
 | P2-8 | Started Timer | Hubstaff timer start → #hubstaff-monitor | n8n straight port. In daily use. | N | todo |
 | P2-10 | Zoom to Drive Recordings | New Zoom recording → Drive folder | n8n straight port | N | todo |
@@ -89,12 +89,11 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 n8n already has: Hospitable (2 accounts), Connecteam, Supabase Postgres, Gmail (one account), Slack, Google Sheets, QuickBooks, Anthropic.
 
 Still to add (MDP, in n8n → Credentials):
-- **Stripe**, for each account that P1-13 and P2-1 read (likely two: Pique and payfunnel).
+- ~~**Stripe**~~ no n8n credential needed: P1-13 is a webhook into the app (`STRIPE_WEBHOOK_SECRET`, optional `STRIPE_API_KEY` in Vercel); P2-1 is retired.
 - **HighLevel / GHL**, for P1-45 and P2-71, plus the N2P location if it's separate.
 - **Google Drive**, for P2-10 and P2-71.
 - **Zoom**, for P2-10.
 - **Hubstaff**, for P2-6 and P2-8.
-- **Circle**, for P2-1.
 - **Gmail:** confirm the existing credential is `info@piquepropertiesinc.com`, the inbox the email Zaps read.
 
 ## Pique Bot notification legend

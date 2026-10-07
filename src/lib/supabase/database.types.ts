@@ -2705,6 +2705,53 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_payment_posts: {
+        Row: {
+          amount: number
+          channel_id: string
+          created_at: string
+          currency: string
+          customer_name: string | null
+          event_id: string
+          payment_intent_id: string
+          reservation_code: string | null
+          reservation_id: string | null
+          slack_ts: string | null
+        }
+        Insert: {
+          amount: number
+          channel_id: string
+          created_at?: string
+          currency: string
+          customer_name?: string | null
+          event_id: string
+          payment_intent_id: string
+          reservation_code?: string | null
+          reservation_id?: string | null
+          slack_ts?: string | null
+        }
+        Update: {
+          amount?: number
+          channel_id?: string
+          created_at?: string
+          currency?: string
+          customer_name?: string | null
+          event_id?: string
+          payment_intent_id?: string
+          reservation_code?: string | null
+          reservation_id?: string | null
+          slack_ts?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_payment_posts_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_logs: {
         Row: {
           created_at: string | null
