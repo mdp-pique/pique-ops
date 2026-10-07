@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { BOT_RULES, OPEN_STATUSES, QUIET_HOURS, REMIND_AFTER_MINUTES, ticketTypeFor } from "./config";
+import { BOT_RULES, mention, OPEN_STATUSES, QUIET_HOURS, REMIND_AFTER_MINUTES, ticketTypeFor } from "./config";
 import { appUrl, edmontonToday, loadRows } from "./data";
 import { POST_COLUMNS, type Post } from "./posts";
 import { isFinished, isSnoozed, renderAlert, type BotRow } from "./render";
@@ -194,7 +194,7 @@ async function remind(admin: Admin, ctx: { types: string[]; since: string; now: 
       if (!ctx.dry) await admin.from("pique_bot_posts").update({ reminded_at: ctx.now.toISOString() }).eq("id", post.id);
       continue;
     }
-    const who = row.assigneeSlackId ? `<@${row.assigneeSlackId}>` : (rule.tag ?? []).map((id) => `<@${id}>`).join(" ");
+    const who = row.assigneeSlackId ? `<@${row.assigneeSlackId}>` : (rule.tag ?? []).map(mention).join(" ");
     const text = `${who} this is still open - can someone take it? Tap *Done* or *Not yet* above.`.trim();
     if (ctx.dry) {
       results.push({ ticket: row.ticketId, text });

@@ -45,7 +45,10 @@ export interface BotRule {
   tier: Tier;
   /** "created": asked from the first morning after the ticket appears, not counted from check-in. */
   askFrom?: "checkin" | "created";
-  /** Slack user ids tagged on the immediate post and its reminder (the people the Zap tagged). */
+  /**
+   * Slack user ids (U...) or user group ids (S...) tagged on the immediate post and its reminder (the
+   * people the Zap tagged). For a morning-tier rule, the 7 AM post tags them when it has one of its items.
+   */
   tag?: string[];
   /** Silent until listed in automation_flags.pique_bot_alerts_live_types. */
   gated?: boolean;
@@ -69,6 +72,14 @@ function emailRule(label: string, channel: string, tier: Tier, tag?: string[]): 
   return { label, channel, leadDays: 0, tier, askFrom: "created", tag, gated: true };
 }
 
+// Slack user group @customerservice (the group the 213 FML parking Zap and the GHL form post tag).
+const CUSTOMER_SERVICE = "S067WK5QW1Z";
+
+/** A Slack mention for a user id, or for a user group id (S...). */
+export function mention(id: string): string {
+  return id.startsWith("S") ? `<!subteam^${id}>` : `<@${id}>`;
+}
+
 export const BOT_RULES: Record<string, BotRule> = {
   // Due before check-in: start asking two mornings ahead, urgent on the day.
   // Posted in the pet channel as soon as the booking comes in, to request the fee (MDP 10-07, like the
@@ -79,8 +90,8 @@ export const BOT_RULES: Record<string, BotRule> = {
   // on a waitlist, so the vehicle can only be registered on the day of check-in. Two states, in the
   // channel the reminder Zap used: no form from the guest yet → the 7 AM post (get the plate, or make sure
   // they know there's no parking); form in (or plate ticked) → its own post at 11:00 to register it.
-  "parking:no_form": { label: "No parking form", channel: CHANNELS.parking213, leadDays: 0, tier: "morning" },
-  "parking:register": { label: "Register vehicle", channel: CHANNELS.parking213, leadDays: 0, tier: "morning", askAt: 11 },
+  "parking:no_form": { label: "No parking form", channel: CHANNELS.parking213, leadDays: 0, tier: "morning", tag: [CUSTOMER_SERVICE] },
+  "parking:register": { label: "Register vehicle", channel: CHANNELS.parking213, leadDays: 0, tier: "morning", askAt: 11, tag: [CUSTOMER_SERVICE] },
   // Brought the morning of check-in, so only asked that morning.
   pack_n_play: { label: "Pack 'n play", channel: CHANNELS.canmoreCleaning, leadDays: 0, tier: "morning" },
   // Booking events (replace Zaps; docs/zapier-migration.md lane B).

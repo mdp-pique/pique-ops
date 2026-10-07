@@ -1,7 +1,7 @@
 // Pure layout for Pique Bot's Slack messages - no I/O, so it can be checked on
 // its own. The same function draws the 7 AM post and every update after a tap.
 import { domainForType } from "@/lib/pique-ui/domains";
-import { BOT_RULES, OVERDUE_LIMIT_DAYS, type Tier } from "./config";
+import { BOT_RULES, mention, OVERDUE_LIMIT_DAYS, type Tier } from "./config";
 
 export interface BotItem {
   id: string;
@@ -241,12 +241,21 @@ export function renderPost(rows: BotRow[], postId: string, postDate: string, app
   const later = sorted.filter((r) => !isFinished(r) && isSnoozed(r, postDate));
   const done = sorted.filter((r) => isFinished(r));
 
+  // Morning-tier rules are only ever asked here, so their tags (e.g. @customerservice for parking) go on this post.
+  const tags = [
+    ...new Set(
+      open.flatMap((r) => {
+        const rule = BOT_RULES[r.ruleKey];
+        return rule?.tier === "morning" && !r.assigneeSlackId ? (rule.tag ?? []) : [];
+      }),
+    ),
+  ].map(mention);
   const blocks: Block[] = [
     {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `:sunrise: *Morning check-ins - ${shortDate(postDate)}*\n${
+        text: `:sunrise: *Morning check-ins - ${shortDate(postDate)}*${tags.length ? ` ${tags.join(" ")}` : ""}\n${
           open.length === 0
             ? "All done for today :tada:"
             : "Tap *Done* when it's handled, or *Not yet* to say what's going on and when to ask again. Anything else still open comes back tomorrow at 7."
@@ -332,7 +341,7 @@ export function renderAlert(row: BotRow, postId: string, postDate: string, appUr
   const rule = BOT_RULES[row.ruleKey];
   const tier = rule?.tier === "urgent" ? "urgent" : "today";
   const finished = isFinished(row);
-  const tags = !finished && rule?.tag?.length && !row.assigneeSlackId ? ` ${rule.tag.map((id) => `<@${id}>`).join(" ")}` : "";
+  const tags = !finished && rule?.tag?.length && !row.assigneeSlackId ? ` ${rule.tag.map(mention).join(" ")}` : "";
   const heading: Block = { type: "context", elements: [{ type: "mrkdwn", text: finished ? ":white_check_mark: *Handled*" : `${ALERT_HEADING[tier]}${tags}` }] };
   const body = finished ? [renderDoneRow(row, postId)] : renderOpenRow(row, postId, postDate, appUrl);
   const title = titleOf(row).replace(/\*/g, "");
