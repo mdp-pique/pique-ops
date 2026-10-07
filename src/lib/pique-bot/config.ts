@@ -29,6 +29,7 @@ export const CHANNELS = {
   linens: "C08BWP97S3Z", // #damaged-linens-by-guests-notification, where the linens form Zap posted
   newClaims: "C09P72Z8RK8", // #new-claim-notification, where the Truvi / Aircover claim Zaps posted
   stripePayments: "C085EB5UR8C", // #stripe-payment-success-notification, where the Stripe payment Zap posted (src/lib/stripe/payments.ts)
+  parking213: "C0C3RCDCAN6", // #213-fml-parking-registration-notification, where the 213 FML parking reminder Zap posted
   stripeFailed: "C085K9X9Z38", // #stripe-payment-failed-notification, where the failed payment and dispute Zaps posted
   qualityControl: "C09T31NSAPR", // #quality-control-reviews, where the review QC Zaps posted (review feed, reviews.ts)
   petBookings: "C0A9RLU3F6H", // #new-reservation-with-pet, where the "New Reservations - Pet" Zap posted
@@ -72,7 +73,9 @@ export const BOT_RULES: Record<string, BotRule> = {
   // old Zap); the 7 AM post in #pique-team-chat asks from 2 days before check-in until it's collected.
   pet_fee: { label: "Pet fee", channel: CHANNELS.teamChat, alertChannel: CHANNELS.petBookings, leadDays: 2, tier: "today" },
   direct_booking_id_check: { label: "Direct booking ID", channel: CHANNELS.teamChat, leadDays: 2, tier: "morning" },
-  vehicle_registration: { label: "Parking registration", channel: CHANNELS.teamChat, leadDays: 2, tier: "morning" },
+  // 213 FML (Lumos) only: the building has us on a waitlist, so the vehicle can only be registered on
+  // the day of check-in (MDP 10-07). Asked that morning in the channel the reminder Zap used.
+  vehicle_registration: { label: "Parking registration", channel: CHANNELS.parking213, leadDays: 0, tier: "morning" },
   // Brought the morning of check-in, so only asked that morning.
   pack_n_play: { label: "Pack 'n play", channel: CHANNELS.canmoreCleaning, leadDays: 0, tier: "morning" },
   // Booking events (replace Zaps; docs/zapier-migration.md lane B).

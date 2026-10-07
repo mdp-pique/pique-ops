@@ -57,7 +57,7 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 | Item | Replaces |
 |---|---|
 | Direct booking ID (already live) | - |
-| Parking registration, incl. 213 FML on check-in day (already live, extended to every 213 FML booking) | "213 FML Parking Registration Reminder -> Slack Notification" |
+| 213 FML parking registration, on check-in morning only (waitlist: can only register that day), every booking (built 10-07, #213-fml-parking-registration-notification) | "213 FML Parking Registration Reminder -> Slack Notification" |
 | Pack 'n play (already live) | - |
 
 ## FYI — status: proposed
