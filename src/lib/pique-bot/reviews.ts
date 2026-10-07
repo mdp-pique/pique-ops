@@ -9,12 +9,19 @@ type Admin = ReturnType<typeof createAdminClient>;
 /** Reviews recorded longer ago than this are never posted (keeps a long outage from flooding the channel). */
 const LOOKBACK_DAYS = 3;
 
+const QC_COLUMNS =
+  "review_id, reservation_id, cleaning_date, cleaner_names, cleanliness, channel_id, slack_ts, " +
+  "reviews(reviewer_name, booking_source, overall_rating, accuracy_rating, checkin_rating, communication_rating, location_rating, value_rating, review_text, raw_hospitable_data), " +
+  "properties(property_name, public_name, market), reservations(check_in, check_out)";
+
 type QcRow = {
   review_id: string;
   reservation_id: string | null;
   cleaning_date: string | null;
   cleaner_names: string | null;
   cleanliness: number | null;
+  channel_id: string | null;
+  slack_ts: string | null;
   reviews: {
     reviewer_name: string | null;
     booking_source: string | null;
@@ -51,11 +58,7 @@ export async function runReviewFeed(admin: Admin, opts: { dry: boolean; now?: Da
   const since = new Date(now.getTime() - LOOKBACK_DAYS * 86_400_000).toISOString();
   const { data } = await admin
     .from("review_qc")
-    .select(
-      "review_id, reservation_id, cleaning_date, cleaner_names, cleanliness, " +
-        "reviews(reviewer_name, booking_source, overall_rating, accuracy_rating, checkin_rating, communication_rating, location_rating, value_rating, review_text, raw_hospitable_data), " +
-        "properties(property_name, public_name, market), reservations(check_in, check_out)",
-    )
+    .select(QC_COLUMNS)
     .eq("flagged", false)
     .is("posted_at", null)
     .gte("created_at", since)
@@ -70,6 +73,22 @@ export async function runReviewFeed(admin: Admin, opts: { dry: boolean; now?: Da
       continue;
     }
     results.push(await postOne(admin, row.review_id, message));
+  }
+  return results;
+}
+
+/** Redraws posts already sent (e.g. after their stay or cleaner was filled in). */
+export async function redrawReviews(admin: Admin, reviewIds: string[], opts: { dry: boolean }) {
+  const { data } = await admin.from("review_qc").select(QC_COLUMNS).in("review_id", reviewIds).not("slack_ts", "is", null);
+  const results: Record<string, unknown>[] = [];
+  for (const row of (data ?? []) as unknown as QcRow[]) {
+    const message = renderReview(row);
+    if (opts.dry) {
+      results.push({ review: row.review_id, text: message.text });
+      continue;
+    }
+    const sent = await slackApi("chat.update", { channel: row.channel_id, ts: row.slack_ts, text: message.text, blocks: message.blocks });
+    results.push(sent.ok ? { review: row.review_id, redrawn: true } : { review: row.review_id, error: sent.error ?? "update failed" });
   }
   return results;
 }
