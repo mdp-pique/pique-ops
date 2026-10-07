@@ -42,7 +42,7 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 | Claim approved: record the payout (Cristine) | "Aircover Claim Payout Tracker Spreadsheet", "Truvi Claim Payout Tracker Spreadsheet" |
 | Supply order form | "Connecteam Order Form To Slack" |
 | Cleaning QC form submitted | "Connecteam to Slack - Cleaning QC Form" |
-| Review rated cleanliness below 5: clean needs attention (built 10-07: a cleaning issue ticket, tags Tammy, cleaner named for Edmonton only) | "Finding Clean when Review is Submitted", "Quality Control Reviews (Canmore and Calgary)" |
+| Review rated cleanliness below 5: clean needs attention (built 10-07: a cleaning issue ticket, no tag for now, cleaner named for Edmonton only) | "Finding Clean when Review is Submitted", "Quality Control Reviews (Canmore and Calgary)" |
 | MyKey housing request | "MyKey Housing Request" |
 | Sinistar rental offer | "Sinistar Rental Offer -> Slack Notification" |
 | Email from Ondilo / Booking.com contact | "Ondilo Email -> Slack Notification" |

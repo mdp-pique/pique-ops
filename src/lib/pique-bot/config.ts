@@ -87,7 +87,7 @@ export const BOT_RULES: Record<string, BotRule> = {
   claim_tracker: { label: "Claim to prepare", channel: CHANNELS.newClaims, leadDays: 0, tier: "today", askFrom: "created", tag: [LAURICE], gated: true },
   // A guest rated cleanliness below 5 (replaces the review QC Zaps; docs/zapier-migration.md lane Q).
   // Every other review is an FYI post in the same channel from the review feed (reviews.ts).
-  review_qc: { label: "Cleanliness below 5", channel: CHANNELS.qualityControl, leadDays: 0, tier: "today", askFrom: "created", tag: [TAMMY], gated: true },
+  review_qc: { label: "Cleanliness below 5", channel: CHANNELS.qualityControl, leadDays: 0, tier: "today", askFrom: "created", gated: true },
 };
 
 /** The BOT_RULES key for a ticket: its type, or "email:{rule}" for email alerts. */

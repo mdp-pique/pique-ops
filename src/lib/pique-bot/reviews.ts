@@ -36,7 +36,7 @@ type QcRow = {
  * one FYI post per guest review in #quality-control-reviews, with the cleaner of
  * the checkout clean (Edmonton) and the scores. A review with cleanliness below 5
  * is not posted here: it opened a cleaning_issue ticket (record_review_qc), which
- * Pique Bot posts in the same channel with Done / Not yet, tagging Tammy (rule
+ * Pique Bot posts in the same channel with Done / Not yet, tagging nobody (rule
  * review_qc). Nothing to answer here, so it posts around the clock. Each review
  * is claimed (review_qc.posted_at) before posting, so a re-run never posts it twice.
  */
