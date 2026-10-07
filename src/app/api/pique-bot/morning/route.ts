@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
       rows.map((r) => ({
         ticket_id: r.ticketId,
         event_type: "comment",
-        note: "Asked in the Pique Bot morning check-in",
+        note: "Asked in the Pique-a-choo morning check-in",
         payload: { source: "pique_bot", kind: "asked", post_id: post.id, channel, slack_ts: sent.ts },
       })),
     );

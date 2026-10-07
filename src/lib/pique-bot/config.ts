@@ -53,6 +53,8 @@ export interface BotRule {
   alertChannel?: string;
   /** Email alerts: also show the start of the email (the Gmail snippet). */
   snippet?: boolean;
+  /** Posted on its own at this hour (Edmonton) on check-in day by the alerts run, instead of in the 7 AM post. */
+  askAt?: number;
 }
 
 // The four people "Cancelled Reservation -> Slack Notification" tagged.
@@ -73,9 +75,12 @@ export const BOT_RULES: Record<string, BotRule> = {
   // old Zap); the 7 AM post in #pique-team-chat asks from 2 days before check-in until it's collected.
   pet_fee: { label: "Pet fee", channel: CHANNELS.teamChat, alertChannel: CHANNELS.petBookings, leadDays: 2, tier: "today" },
   direct_booking_id_check: { label: "Direct booking ID", channel: CHANNELS.teamChat, leadDays: 2, tier: "morning" },
-  // 213 FML (Lumos) only: the building has us on a waitlist, so the vehicle can only be registered on
-  // the day of check-in (MDP 10-07). Asked that morning in the channel the reminder Zap used.
-  vehicle_registration: { label: "Parking registration", channel: CHANNELS.parking213, leadDays: 0, tier: "morning" },
+  // 213 FML (Lumos) parking, one vehicle_registration ticket per booking (MDP 10-07). The building has us
+  // on a waitlist, so the vehicle can only be registered on the day of check-in. Two states, in the
+  // channel the reminder Zap used: no form from the guest yet → the 7 AM post (get the plate, or make sure
+  // they know there's no parking); form in (or plate ticked) → its own post at 11:00 to register it.
+  "parking:no_form": { label: "No parking form", channel: CHANNELS.parking213, leadDays: 0, tier: "morning" },
+  "parking:register": { label: "Register vehicle", channel: CHANNELS.parking213, leadDays: 0, tier: "morning", askAt: 11 },
   // Brought the morning of check-in, so only asked that morning.
   pack_n_play: { label: "Pack 'n play", channel: CHANNELS.canmoreCleaning, leadDays: 0, tier: "morning" },
   // Booking events (replace Zaps; docs/zapier-migration.md lane B).
@@ -113,8 +118,13 @@ export const BOT_RULES: Record<string, BotRule> = {
 };
 
 /** The BOT_RULES key for a ticket: its type, or "email:{rule}" for email alerts. */
-export function ruleKeyFor(type: string, metadata: unknown): string {
-  const m = metadata as { rule?: unknown; form?: unknown; source?: unknown } | null;
+export function ruleKeyFor(type: string, metadata: unknown, items: { label: string; is_done: boolean }[] = []): string {
+  const m = metadata as { rule?: unknown; form?: unknown; source?: unknown; plate?: unknown } | null;
+  // Parking: registered at 11 once we have the plate (from the form, or ticked by hand), else the 7 AM no-form ask.
+  if (type === "vehicle_registration") {
+    const plate = !!m?.plate || items.some((i) => i.label === "Plate received from guest" && i.is_done);
+    return plate ? "parking:register" : "parking:no_form";
+  }
   if (type === "email_alert") return typeof m?.rule === "string" ? `email:${m.rule}` : type;
   if (type === "damage_report") return `damage:${m?.form === "linens" ? "linens" : "damage"}`;
   // Only review-flagged cleaning issues are posted; ones made by hand have no rule.
@@ -127,6 +137,7 @@ export function ticketTypeFor(ruleKey: string): string {
   if (ruleKey.startsWith("email:")) return "email_alert";
   if (ruleKey.startsWith("damage:")) return "damage_report";
   if (ruleKey === "review_qc") return "cleaning_issue";
+  if (ruleKey.startsWith("parking:")) return "vehicle_registration";
   return ruleKey;
 }
 

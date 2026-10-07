@@ -54,7 +54,7 @@ export async function runChangelog(admin: Admin, opts: { dry: boolean }) {
     if (!sent.ok || !sent.ts) {
       await admin.from("changelog_entries").update({ posted_at: null }).eq("id", entry.id);
       if (sent.error && NOT_IN_CHANNEL.has(sent.error)) {
-        results.push({ entry: entry.id, waiting: "Pique Bot is not in #change-logs yet" });
+        results.push({ entry: entry.id, waiting: "Pique-a-choo is not in #change-logs yet" });
         break;
       }
       results.push({ entry: entry.id, error: sent.error ?? "post failed" });

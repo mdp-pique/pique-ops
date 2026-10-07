@@ -33,7 +33,7 @@ Several chats build on this repo and the same production systems (Supabase, n8n,
 3. Run the repo's checks: `./node_modules/.bin/tsc --noEmit -p .` and `./node_modules/.bin/eslint <changed files>`.
 4. Push your branch, then `git push origin HEAD:main`. If main moved while you were checking, go back to step 1.
 5. Update `CLAUDE.md` / `docs/PRD.md` for what you shipped, and update your `docs/in-flight.md` row (or delete it when the work is done).
-6. **Add a changelog entry** for what you just pushed. Pique Bot posts it to Slack `#change-logs` within 5 minutes, numbered. Run it through Supabase SQL:
+6. **Add a changelog entry** for what you just pushed. Pique-a-choo (the Pique Bot Slack app) posts it to Slack `#change-logs` within 5 minutes, numbered. Run it through Supabase SQL:
    ```sql
    insert into changelog_entries (title, body, areas, commit_sha, branch) values (
      'Short title of the change',

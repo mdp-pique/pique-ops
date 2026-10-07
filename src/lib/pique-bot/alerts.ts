@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { BOT_RULES, OPEN_STATUSES, QUIET_HOURS, REMIND_AFTER_MINUTES, ticketTypeFor } from "./config";
 import { appUrl, edmontonToday, loadRows } from "./data";
 import { POST_COLUMNS, type Post } from "./posts";
-import { isFinished, renderAlert, type BotRow } from "./render";
+import { isFinished, isSnoozed, renderAlert, type BotRow } from "./render";
 import { slackApi } from "./slack";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -67,15 +67,17 @@ export async function runAlerts(admin: Admin, opts: { dry: boolean; now?: Date; 
   const now = opts.now ?? new Date();
   const types = await alertTypes(admin);
   if (isQuietHours(now)) return { quiet: true, types, posted: [], reminded: [] };
-  if (types.length === 0) return { quiet: false, types, posted: [], reminded: [] };
+  const today = edmontonToday(now);
+  // Rules asked at a set hour on check-in day (e.g. 213 FML parking at 11:00), each ticket in its own post.
+  const scheduled = await postScheduled(admin, { now, today, dry: opts.dry });
+  if (types.length === 0) return { quiet: false, types, posted: scheduled, reminded: [] };
 
   // Everything since quiet hours began last night: what came in overnight and wasn't in this
   // morning's post (e.g. a pet booking, only asked in the morning near check-in) is posted now.
   // opts.since: a one-off catch-up of tickets created earlier (route ?since=), e.g. when a rule goes live.
   const overnight = (24 - QUIET_HOURS.from + QUIET_HOURS.until) * 3_600_000;
   const since = opts.since ?? new Date(quietHoursEnded(now).getTime() - overnight).toISOString();
-  const today = edmontonToday(now);
-  const posted = await postNew(admin, { types, since, today, dry: opts.dry });
+  const posted = [...scheduled, ...(await postNew(admin, { types, since, today, dry: opts.dry }))];
   // Reminders stay limited to today's posts.
   const reminded = await remind(admin, { types, since: quietHoursEnded(now).toISOString(), now, dry: opts.dry });
   return { quiet: false, types, posted, reminded };
@@ -111,6 +113,40 @@ async function postNew(admin: Admin, ctx: { types: string[]; since: string; toda
   return results;
 }
 
+/**
+ * Rules with askAt: once that hour has come on check-in day, each open ticket gets its own post
+ * (claimed per ticket like any alert, so it's posted once even if it was in the 7 AM post before).
+ * A ticket that only becomes due later that day (e.g. the parking form comes in at 2 PM) posts on the next run.
+ */
+async function postScheduled(admin: Admin, ctx: { now: Date; today: string; dry: boolean }) {
+  const live = await loadLiveTypes(admin);
+  const hour = edmontonClock(ctx.now).h;
+  const keys = Object.entries(BOT_RULES)
+    .filter(([key, rule]) => rule.askAt != null && hour >= rule.askAt && isLive(key, live))
+    .map(([key]) => key);
+  if (!keys.length) return [];
+  const { data: open } = await admin.from("tickets").select("id").in("type", [...new Set(keys.map(ticketTypeFor))]).in("status", OPEN_STATUSES);
+  const ids = (open ?? []).map((t) => t.id);
+  if (!ids.length) return [];
+  const { data: alerted } = await admin.from("pique_bot_posts").select("ticket_ids").eq("kind", "alert").overlaps("ticket_ids", ids);
+  const done = new Set((alerted ?? []).flatMap((p) => p.ticket_ids as string[]));
+  const rows = (await loadRows(admin, { ticketIds: ids.filter((id) => !done.has(id)) })).filter(
+    (r) => keys.includes(r.ruleKey) && r.checkIn === ctx.today && !isFinished(r) && !isSnoozed(r, ctx.today),
+  );
+
+  const results: Record<string, unknown>[] = [];
+  for (const row of rows) {
+    const rule = BOT_RULES[row.ruleKey];
+    const channel = rule.alertChannel ?? rule.channel;
+    if (ctx.dry) {
+      results.push({ ticket: row.ticketId, channel, message: renderAlert(row, "dry-run", ctx.today, appUrl()) });
+      continue;
+    }
+    results.push(await postOne(admin, row, channel, ctx.today));
+  }
+  return results;
+}
+
 async function postOne(admin: Admin, row: BotRow, channel: string, today: string) {
   const { data: post, error: claimError } = await admin
     .from("pique_bot_posts")
@@ -130,7 +166,7 @@ async function postOne(admin: Admin, row: BotRow, channel: string, today: string
   const { error } = await admin.from("ticket_events").insert({
     ticket_id: row.ticketId,
     event_type: "comment",
-    note: "Posted by Pique Bot",
+    note: "Posted by Pique-a-choo",
     payload: { source: "pique_bot", kind: "asked", alert: true, post_id: post.id, channel, slack_ts: sent.ts },
   });
   if (error) console.error(`Pique Bot: logging alert failed: ${error.message}`);

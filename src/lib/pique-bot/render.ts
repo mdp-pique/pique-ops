@@ -123,6 +123,7 @@ function checkInText(row: BotRow, postDate: string): string {
 function question(row: BotRow, item: BotItem): string {
   if (row.type === "damage_report") return "AirCover claim, Truvi claim, or wear and tear?";
   if (row.type === "pack_n_play") return `Was the pack 'n play brought to ${esc(row.property ?? "the unit")}?`;
+  if (row.ruleKey === "parking:no_form") return "Get the plate from the guest, or make sure they know there's no parking";
   return `${esc(item.label)}?`;
 }
 
@@ -196,7 +197,14 @@ export function renderOpenRow(row: BotRow, postId: string, postDate: string, app
           { type: "button", action_id: "pique_bot_damage_wear", text: { type: "plain_text", text: "Wear and tear" }, value },
           notYet,
         ]
-      : [{ type: "button", action_id: "pique_bot_done", style: "primary", text: { type: "plain_text", text: "Done" }, value }, notYet];
+      : row.ruleKey === "parking:no_form"
+        ? [
+            // Got the plate ticks "Plate received from guest", which moves it to the 11:00 register post.
+            { type: "button", action_id: "pique_bot_done", style: "primary", text: { type: "plain_text", text: "Got the plate" }, value },
+            { type: "button", action_id: "pique_bot_parking_none", text: { type: "plain_text", text: "No parking" }, value },
+            notYet,
+          ]
+        : [{ type: "button", action_id: "pique_bot_done", style: "primary", text: { type: "plain_text", text: "Done" }, value }, notYet];
   const elements: Block[] = later ? [] : answers;
   if (row.doneBy && !later) elements.push(noteButton(row, postId));
   if (appUrl) {
@@ -299,6 +307,8 @@ export function pickForMorning(rows: BotRow[], today: string, channel: string, c
   return rows.filter((r) => {
     const rule = BOT_RULES[r.ruleKey];
     if (!rule || rule.channel !== channel || isFinished(r) || isSnoozed(r, today)) return false;
+    // Posted on its own later in the day (alerts.ts), not in the 7 AM post.
+    if (rule.askAt != null) return false;
     if (rule.askFrom === "created") {
       const age = daysBetween(createdDate(r.createdAt), today);
       return age >= 0 && age <= OVERDUE_LIMIT_DAYS;

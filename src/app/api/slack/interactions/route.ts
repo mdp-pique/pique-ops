@@ -70,6 +70,18 @@ export async function POST(request: NextRequest) {
       return new NextResponse(null, { status: 200 });
     }
 
+    // Parking with no form from the guest: the team has told them there's no parking, so it's closed.
+    if (action.action_id === "pique_bot_parking_none") {
+      after(async () => {
+        const post = await loadPost(admin, postId, ticketId);
+        if (!post) return;
+        const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
+        await closeNoParking(admin, ticketId, actor);
+        await redrawForTicket(admin, ticketId);
+      });
+      return new NextResponse(null, { status: 200 });
+    }
+
     if (action.action_id === "pique_bot_done") {
       after(async () => {
         const post = await loadPost(admin, postId, ticketId);
@@ -174,6 +186,22 @@ async function loadPost(admin: Admin, postId: string, ticketId: string) {
     .maybeSingle();
   if (!post || !post.ticket_ids.includes(ticketId)) return null;
   return post;
+}
+
+/** "No parking": no form from the guest, so no vehicle is registered. Resolves the parking ticket. */
+async function closeNoParking(admin: Admin, ticketId: string, actor: { profileId: string | null; name: string }) {
+  const { data: ticket } = await admin.from("tickets").select("status, type").eq("id", ticketId).maybeSingle();
+  if (!ticket || ticket.type !== "vehicle_registration" || !["open", "in_progress", "blocked"].includes(ticket.status)) return;
+  await admin.from("tickets").update({ status: "resolved", closed_at: new Date().toISOString() }).eq("id", ticketId);
+  await admin.from("ticket_events").insert({
+    ticket_id: ticketId,
+    event_type: "status_change",
+    actor_id: actor.profileId,
+    from_value: ticket.status,
+    to_value: "resolved",
+    note: `No parking (no form from the guest) - marked in Slack by ${actor.name}`,
+    payload: { source: "pique_bot", kind: "done", by: actor.name, outcome: "no_parking" },
+  }).then(logError("no parking event"));
 }
 
 /** Ticks the item that was asked about; once nothing is left, resolves the ticket. */
@@ -309,7 +337,7 @@ async function escalate(
       external_ref: ref,
       assignee_id: ESCALATE_PROFILE_ID,
       metadata: {
-        title: info.why === "failed" ? "Pique Bot couldn't pick an ask-again date" : "Pique Bot needs a person to look at an answer",
+        title: info.why === "failed" ? "Pique-a-choo couldn't pick an ask-again date" : "Pique-a-choo needs a person to look at an answer",
         about_ticket_id: ticketId,
         why: info.why,
         detail: info.detail,

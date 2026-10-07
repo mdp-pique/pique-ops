@@ -94,7 +94,7 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
     return {
       ticketId: t.id,
       type: t.type,
-      ruleKey: ruleKeyFor(t.type, t.metadata),
+      ruleKey: ruleKeyFor(t.type, t.metadata, (items.data ?? []).filter((i) => i.ticket_id === t.id)),
       context: emailContext(t.type, t.metadata),
       details: t.type === "pet_fee" ? stayDetails(stay) : detailsFor(t.type, t.metadata, t.due_at),
       status: t.status,
@@ -172,6 +172,12 @@ function detailsFor(type: string, metadata: unknown, dueAt: string | null): BotR
     return { lines: [line], photos: [], decision: null };
   }
   const str = (k: string) => (typeof m[k] === "string" ? (m[k] as string) : "");
+  if (type === "vehicle_registration") {
+    const lines = str("plate")
+      ? [`Plate: ${str("plate")}${str("vehicle") ? ` · ${str("vehicle")}` : ""}`]
+      : [":warning: No parking form from the guest"];
+    return { lines, photos: [], decision: null, withCheckIn: true };
+  }
   if (type === "payment_failed" || type === "payment_dispute") {
     const failures = Number(m.failures ?? 1);
     const lines = [
