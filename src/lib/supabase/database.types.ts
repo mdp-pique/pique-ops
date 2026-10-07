@@ -3657,6 +3657,22 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      record_stripe_dispute: {
+        Args: { p: Json }
+        Returns: string
+      }
+      record_stripe_payment_failed: {
+        Args: { p: Json }
+        Returns: string
+      }
+      resolve_stripe_dispute: {
+        Args: { p_dispute: string; p_status: string }
+        Returns: undefined
+      }
+      resolve_stripe_payment_failed: {
+        Args: { p_code: string | null; p_payment_intent: string }
+        Returns: undefined
+      }
       get_checkout_evidence: {
         Args: { day: string }
         Returns: {

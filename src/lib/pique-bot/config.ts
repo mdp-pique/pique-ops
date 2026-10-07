@@ -28,7 +28,8 @@ export const CHANNELS = {
   damages: "C05SX0T7NKE", // #damages-complaints-refunds-notification, where "Connecteam to Slack - Damages" posted
   linens: "C08BWP97S3Z", // #damaged-linens-by-guests-notification, where the linens form Zap posted
   newClaims: "C09P72Z8RK8", // #new-claim-notification, where the Truvi / Aircover claim Zaps posted
-  stripePayments: "C085EB5UR8C", // #stripe-payment-notification, where the Stripe payment Zap posted (src/lib/stripe/payments.ts)
+  stripePayments: "C085EB5UR8C", // #stripe-payment-success-notification, where the Stripe payment Zap posted (src/lib/stripe/payments.ts)
+  stripeFailed: "C085K9X9Z38", // #stripe-payment-failed-notification, where the failed payment and dispute Zaps posted
   qualityControl: "C09T31NSAPR", // #quality-control-reviews, where the review QC Zaps posted (review feed, reviews.ts)
   petBookings: "C0A9RLU3F6H", // #new-reservation-with-pet, where the "New Reservations - Pet" Zap posted
   cleaningOps: "C07AP6KPV9V", // #pique-internal-cleaning-operations (separator doors)
@@ -101,6 +102,10 @@ export const BOT_RULES: Record<string, BotRule> = {
   review_qc: { label: "Cleanliness below 5", channel: CHANNELS.qualityControl, leadDays: 0, tier: "today", askFrom: "created", gated: true },
   // Joint-listing separator doors: lock on a checkout, unlock on a check-in. Tickets are made by the
   // 7 AM run itself (create_separator_door_tickets) and asked in that post (replaces an n8n @channel).
+  // Stripe (src/lib/stripe/payments.ts): a failed payment or a new charge dispute, where the Zaps posted
+  // them with "mark with a checkmark" (MDP 10-07). Successful payments are FYI posts, not tickets.
+  payment_failed: { label: "Failed payment", channel: CHANNELS.stripeFailed, leadDays: 0, tier: "today", askFrom: "created", gated: true },
+  payment_dispute: { label: "Charge dispute", channel: CHANNELS.stripeFailed, leadDays: 0, tier: "urgent", askFrom: "created", gated: true },
   separator_door: { label: "Separator door", channel: CHANNELS.cleaningOps, leadDays: 0, tier: "morning", askFrom: "created", gated: true },
 };
 

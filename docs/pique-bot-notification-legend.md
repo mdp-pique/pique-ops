@@ -26,12 +26,14 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 | Cancelled booking: reach out and try to save it | "Cancelled Reservation -> Slack Notification" |
 | Email from Airbnb Support | "Airbnb Support Email Notification to Slack" |
 | Reply from Robert (attaches to the open escalation ticket and ticks "Robert responded") | "Reply from Robert Notification to Slack" |
+| Stripe charge dispute: review it and respond in Stripe before the deadline (built 10-07, #stripe-payment-failed-notification, no @channel) | "Stripe Charge Dispute Slack Notification" |
 
 ## 🟡 Today — status: proposed
 
 | Item | Replaces |
 |---|---|
 | Invoice email to review | "Invoice To Slack - Email" |
+| Stripe payment failed: note the payment info in Hospitable, collect the payment (built 10-07, #stripe-payment-failed-notification; a later successful payment closes it) | Stripe failed-payment Zap |
 | Invoice tagged Reviewed: Cristine enters it in QBO / Plooto | "Gmail Tagged as 'Reviewed' --> Notify Cristine" |
 | Interac e-Transfer received | "e-Transfer To Slack - Email" |
 | New booking with a pet: request and collect the pet fee (moved from Morning 10-07; posted to #new-reservation-with-pet as it comes in to request the fee; #pique-team-chat's 7 AM post asks from 2 days before check-in until collected) | "New Reservations - Pet" (off) |
@@ -64,8 +66,8 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 |---|---|
 | New booking summary, posted as each booking comes in, around the clock (live 10-06; the GHL contact update is still to build) | "New Reservations" |
 | Every other guest review (5 for cleanliness: the cleaner might need a congrats), posted as it comes in (built 10-07; moved from Morning, same as the Zap did) | "Finding Clean when Review is Submitted", "Quality Control Reviews (Canmore and Calgary)" |
-| Stripe payment received | "Stripe Payment Success Notification to Slack" |
-| Payfunnel payment received (the Circle invite happens behind the scenes) | "Payment success -> Sheet" |
+| Stripe payment received (built 10-07, from our bookings instead of the sheet) | "Stripe Payment Success Notification to Slack" |
+| ~~Payfunnel payment received~~ retired, not replaced (MDP 10-07: not used) | "Payment success -> Sheet" |
 | Hubstaff timer started / stopped (pending: still wanted?) | "Started Timer", "Stopped Timer" |
 | New N2P (IG / FB) message | "Pique N2P - IG & FB" |
 

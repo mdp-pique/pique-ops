@@ -171,8 +171,21 @@ function detailsFor(type: string, metadata: unknown, dueAt: string | null): BotR
     const line = m.action === "lock" ? `Guest checks out ${day} - lock it before the next check-in` : `Guest checks in ${day} - unlock it before check-in`;
     return { lines: [line], photos: [], decision: null };
   }
-  if (type !== "damage_report" && type !== "claim_tracker") return null;
   const str = (k: string) => (typeof m[k] === "string" ? (m[k] as string) : "");
+  if (type === "payment_failed" || type === "payment_dispute") {
+    const failures = Number(m.failures ?? 1);
+    const lines = [
+      [str("amount"), str("reason")].filter(Boolean).join(" · "),
+      str("code") ? `Booking ${str("code")}` : "No booking code on the payment",
+    ];
+    if (type === "payment_failed" && failures > 1) lines.push(`Failed ${failures} times`);
+    if (str("email")) lines.push(str("email"));
+    if (type === "payment_dispute" && dueAt) {
+      lines.push(`Respond in Stripe by ${new Date(dueAt).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric", timeZone: "America/Edmonton" })}`);
+    }
+    return { lines: lines.filter(Boolean), photos: [], decision: null };
+  }
+  if (type !== "damage_report" && type !== "claim_tracker") return null;
   const photos = Array.isArray(m.photos) ? m.photos.filter((p): p is string => typeof p === "string") : [];
   const lines: string[] = [];
   if (type === "damage_report") {

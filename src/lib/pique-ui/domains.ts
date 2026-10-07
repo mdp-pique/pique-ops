@@ -35,7 +35,7 @@ export const DOMAINS: Domain[] = [
     key: "requests",
     label: "Requests",
     blurb: "Small SOP tasks tied to a date on the reservation.",
-    types: ["vehicle_registration", "pet_fee", "pack_n_play", "direct_booking_id_check", "guest_vetting", "extension_request", "save_booking", "guest_count_check", "email_alert"],
+    types: ["vehicle_registration", "pet_fee", "pack_n_play", "direct_booking_id_check", "guest_vetting", "extension_request", "save_booking", "guest_count_check", "email_alert", "payment_failed", "payment_dispute"],
   },
 ];
 
