@@ -25,6 +25,11 @@ export async function POST(request: NextRequest) {
   const today = dry && dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : edmontonToday();
 
   const admin = createAdminClient();
+  // Today's joint-listing separator doors become tickets first, so this post asks about them.
+  if (!dry) {
+    const { error: doorError } = await admin.rpc("create_separator_door_tickets", {});
+    if (doorError) console.error(`Pique Bot: separator door tickets failed: ${doorError.message}`);
+  }
   // Types taken over from a Zap stay silent until switched on.
   const live = await loadLiveTypes(admin);
   const all = (await loadRows(admin, {})).filter((r) => isLive(r.ruleKey, live));

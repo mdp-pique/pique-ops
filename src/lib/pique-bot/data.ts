@@ -166,6 +166,11 @@ function detailsFor(type: string, metadata: unknown, dueAt: string | null): BotR
   if (!metadata || typeof metadata !== "object") return null;
   const m = metadata as Record<string, unknown>;
   if (type === "cleaning_issue" && m.source === "review") return { lines: reviewLines(summaryFromMetadata(m)), photos: [], decision: null };
+  if (type === "separator_door") {
+    const day = typeof m.day === "string" ? new Date(`${m.day}T12:00:00Z`).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : "today";
+    const line = m.action === "lock" ? `Guest checks out ${day} - lock it before the next check-in` : `Guest checks in ${day} - unlock it before check-in`;
+    return { lines: [line], photos: [], decision: null };
+  }
   if (type !== "damage_report" && type !== "claim_tracker") return null;
   const str = (k: string) => (typeof m[k] === "string" ? (m[k] as string) : "");
   const photos = Array.isArray(m.photos) ? m.photos.filter((p): p is string => typeof p === "string") : [];

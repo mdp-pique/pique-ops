@@ -30,6 +30,8 @@ export const CHANNELS = {
   newClaims: "C09P72Z8RK8", // #new-claim-notification, where the Truvi / Aircover claim Zaps posted
   qualityControl: "C09T31NSAPR", // #quality-control-reviews, where the review QC Zaps posted (review feed, reviews.ts)
   petBookings: "C0A9RLU3F6H", // #new-reservation-with-pet, where the "New Reservations - Pet" Zap posted
+  // #pique-internal-cleaning-operations (private; id to fill in when Pique Bot is invited - the rule is gated until then).
+  cleaningOps: "C_PENDING_CLEANING_OPS",
 } as const;
 
 export type Tier = "urgent" | "today" | "morning";
@@ -97,6 +99,9 @@ export const BOT_RULES: Record<string, BotRule> = {
   // A guest rated cleanliness below 5 (replaces the review QC Zaps; docs/zapier-migration.md lane Q).
   // Every other review is an FYI post in the same channel from the review feed (reviews.ts).
   review_qc: { label: "Cleanliness below 5", channel: CHANNELS.qualityControl, leadDays: 0, tier: "today", askFrom: "created", gated: true },
+  // Joint-listing separator doors: lock on a checkout, unlock on a check-in. Tickets are made by the
+  // 7 AM run itself (create_separator_door_tickets) and asked in that post (replaces an n8n @channel).
+  separator_door: { label: "Separator door", channel: CHANNELS.cleaningOps, leadDays: 0, tier: "morning", askFrom: "created", gated: true },
 };
 
 /** The BOT_RULES key for a ticket: its type, or "email:{rule}" for email alerts. */
