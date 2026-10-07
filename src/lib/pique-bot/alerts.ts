@@ -58,21 +58,26 @@ async function alertTypes(admin: Admin): Promise<string[]> {
 
 /**
  * Posts urgent / today tickets the moment they come in, and reminds once on an
- * unanswered urgent post. Anything that arrives in quiet hours is left for the
- * 7 AM post (it only picks tickets created since quiet hours ended), so nothing
- * is posted twice. Each ticket gets at most one immediate post: the
+ * unanswered urgent post. Anything that arrives in quiet hours waits: the 7 AM
+ * post asks it if its rule is due, and otherwise the first run after 7 posts it.
+ * A ticket already in any post is skipped, so nothing is posted twice. Each ticket gets at most one immediate post: the
  * pique_bot_posts row is claimed first (unique per ticket for kind = 'alert').
  */
-export async function runAlerts(admin: Admin, opts: { dry: boolean; now?: Date }) {
+export async function runAlerts(admin: Admin, opts: { dry: boolean; now?: Date; since?: string }) {
   const now = opts.now ?? new Date();
   const types = await alertTypes(admin);
   if (isQuietHours(now)) return { quiet: true, types, posted: [], reminded: [] };
   if (types.length === 0) return { quiet: false, types, posted: [], reminded: [] };
 
-  const since = quietHoursEnded(now).toISOString();
+  // Everything since quiet hours began last night: what came in overnight and wasn't in this
+  // morning's post (e.g. a pet booking, only asked in the morning near check-in) is posted now.
+  // opts.since: a one-off catch-up of tickets created earlier (route ?since=), e.g. when a rule goes live.
+  const overnight = (24 - QUIET_HOURS.from + QUIET_HOURS.until) * 3_600_000;
+  const since = opts.since ?? new Date(quietHoursEnded(now).getTime() - overnight).toISOString();
   const today = edmontonToday(now);
   const posted = await postNew(admin, { types, since, today, dry: opts.dry });
-  const reminded = await remind(admin, { types, since, now, dry: opts.dry });
+  // Reminders stay limited to today's posts.
+  const reminded = await remind(admin, { types, since: quietHoursEnded(now).toISOString(), now, dry: opts.dry });
   return { quiet: false, types, posted, reminded };
 }
 
@@ -86,7 +91,8 @@ async function postNew(admin: Admin, ctx: { types: string[]; since: string; toda
   const ids = (fresh ?? []).map((t) => t.id);
   if (!ids.length) return [];
 
-  const { data: already } = await admin.from("pique_bot_posts").select("ticket_ids").eq("kind", "alert").overlaps("ticket_ids", ids);
+  // Any post already showing it (its alert, or the morning post) - never posted twice.
+  const { data: already } = await admin.from("pique_bot_posts").select("ticket_ids").overlaps("ticket_ids", ids);
   const done = new Set((already ?? []).flatMap((p) => p.ticket_ids as string[]));
   const pending = ids.filter((id) => !done.has(id));
   if (!pending.length) return [];

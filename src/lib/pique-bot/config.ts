@@ -29,6 +29,7 @@ export const CHANNELS = {
   linens: "C08BWP97S3Z", // #damaged-linens-by-guests-notification, where the linens form Zap posted
   newClaims: "C09P72Z8RK8", // #new-claim-notification, where the Truvi / Aircover claim Zaps posted
   qualityControl: "C09T31NSAPR", // #quality-control-reviews, where the review QC Zaps posted (review feed, reviews.ts)
+  petBookings: "C0A9RLU3F6H", // #new-reservation-with-pet, where the "New Reservations - Pet" Zap posted
 } as const;
 
 export type Tier = "urgent" | "today" | "morning";
@@ -44,6 +45,8 @@ export interface BotRule {
   tag?: string[];
   /** Silent until listed in automation_flags.pique_bot_alerts_live_types. */
   gated?: boolean;
+  /** Email alerts: also show the start of the email (the Gmail snippet). */
+  snippet?: boolean;
 }
 
 // The four people "Cancelled Reservation -> Slack Notification" tagged.
@@ -60,7 +63,9 @@ function emailRule(label: string, channel: string, tier: Tier, tag?: string[]): 
 
 export const BOT_RULES: Record<string, BotRule> = {
   // Due before check-in: start asking two mornings ahead, urgent on the day.
-  pet_fee: { label: "Pet fee", channel: CHANNELS.teamChat, leadDays: 2, tier: "morning" },
+  // Posted in the pet channel as soon as the booking comes in (MDP 10-07, like the old Zap), then asked
+  // again there each morning from 2 days before check-in until the fee is collected.
+  pet_fee: { label: "Pet fee", channel: CHANNELS.petBookings, leadDays: 2, tier: "today" },
   direct_booking_id_check: { label: "Direct booking ID", channel: CHANNELS.teamChat, leadDays: 2, tier: "morning" },
   vehicle_registration: { label: "Parking registration", channel: CHANNELS.teamChat, leadDays: 2, tier: "morning" },
   // Brought the morning of check-in, so only asked that morning.
@@ -79,6 +84,8 @@ export const BOT_RULES: Record<string, BotRule> = {
   "email:invoice": emailRule("Invoice to review", "C07VCQ4ECBV", "today"),
   "email:invoice_reviewed": emailRule("Enter invoice in QBO and Plooto", "C07VCQ4ECBV", "today", [CRISTINE]),
   "email:etransfer": emailRule("Interac e-Transfer", "C09RZ1ERTK8", "today"),
+  // Replaces the n8n "Chrangela & PEKA Email → Slack Alert" workflow (MDP 10-07), without its @channel.
+  "email:chrangela_peka": { ...emailRule("Email from Chrangela / PEKA", CHANNELS.teamChat, "today"), snippet: true },
   // Damage forms from Connecteam (replace four Zaps; docs/zapier-migration.md lane C). The post
   // asks AirCover claim / Truvi claim / Wear and tear instead of Done (see render.ts); a claim
   // opens a claim_tracker ticket, asked in #new-claim-notification tagging Laurice.

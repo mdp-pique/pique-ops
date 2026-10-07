@@ -34,6 +34,8 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 | Invoice email to review | "Invoice To Slack - Email" |
 | Invoice tagged Reviewed: Cristine enters it in QBO / Plooto | "Gmail Tagged as 'Reviewed' --> Notify Cristine" |
 | Interac e-Transfer received | "e-Transfer To Slack - Email" |
+| New booking with a pet: request and collect the pet fee (moved from Morning 10-07; posted to #new-reservation-with-pet as it comes in, asked again from 2 days before check-in) | "New Reservations - Pet" (off) |
+| Email from Chrangela / PEKA (built 10-07; replaces an n8n workflow that @channel'd #pique-team-chat) | n8n "Chrangela & PEKA Email → Slack Alert" |
 | Aircover reimbursement email | "Aircover Gmail -> Slack Notification" |
 | Truvi resolution email | "Truvi Resolution Email -> Slack Notification" |
 | Damage reported by a cleaner (photos attached; buttons: AirCover claim / Truvi claim / Wear and tear; built 10-06) | "Connecteam to Slack - Damages" |
@@ -52,7 +54,6 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 
 | Item | Replaces |
 |---|---|
-| Pet fee (already live) | "New Reservations - Pet" (off) |
 | Direct booking ID (already live) | - |
 | Parking registration, incl. 213 FML on check-in day (already live, extended to every 213 FML booking) | "213 FML Parking Registration Reminder -> Slack Notification" |
 | Pack 'n play (already live) | - |

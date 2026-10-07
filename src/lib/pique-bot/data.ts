@@ -35,7 +35,10 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
 
   const [items, reservations, properties, profiles, teams, answers] = await Promise.all([
     admin.from("ticket_items").select("id, ticket_id, label, is_done, sort_order").in("ticket_id", ids),
-    admin.from("reservations").select("id, check_in").in("id", uniq(tickets.map((t) => t.reservation_id))),
+    admin
+      .from("reservations")
+      .select("id, check_in, check_out, booking_source, guests:raw_hospitable_data->guests")
+      .in("id", uniq(tickets.map((t) => t.reservation_id))),
     admin.from("properties").select("id, property_name, public_name").in("id", uniq(tickets.map((t) => t.property_id))),
     admin.from("profiles").select("id, display_name, slack_user_id").in("id", uniq(tickets.map((t) => t.assignee_id))),
     admin.from("teams").select("id, name").in("id", uniq(tickets.map((t) => t.assignee_team_id))),
@@ -51,7 +54,7 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
       .order("created_at", { ascending: true }),
   ]);
 
-  const checkInById = new Map((reservations.data ?? []).map((r) => [r.id, r.check_in as string | null]));
+  const resById = new Map((reservations.data ?? []).map((r) => [r.id, r as unknown as Stay]));
   // The team's own names (e.g. "Boho 2 BDRM 2.0"), not the Airbnb listing title; the trailing "*" is a sync marker.
   const propById = new Map((properties.data ?? []).map((p) => [p.id, (p.property_name || p.public_name || "").replace(/\*+$/, "").trim() || null]));
   const profById = new Map((profiles.data ?? []).map((p) => [p.id, p]));
@@ -86,13 +89,14 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
 
   return tickets.map((t) => {
     const prof = t.assignee_id ? profById.get(t.assignee_id) : undefined;
-    const checkIn = (t.reservation_id && checkInById.get(t.reservation_id)) || (t.due_at ? edmontonToday(new Date(t.due_at)) : null);
+    const stay = t.reservation_id ? resById.get(t.reservation_id) : undefined;
+    const checkIn = stay?.check_in || (t.due_at ? edmontonToday(new Date(t.due_at)) : null);
     return {
       ticketId: t.id,
       type: t.type,
       ruleKey: ruleKeyFor(t.type, t.metadata),
       context: emailContext(t.type, t.metadata),
-      details: detailsFor(t.type, t.metadata, t.due_at),
+      details: t.type === "pet_fee" ? stayDetails(stay) : detailsFor(t.type, t.metadata, t.due_at),
       status: t.status,
       guestName: t.guest_name,
       property: (t.property_id && propById.get(t.property_id)) || null,
@@ -114,6 +118,28 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
   });
 }
 
+type Stay = {
+  check_in: string | null;
+  check_out: string | null;
+  booking_source: string | null;
+  guests: { total?: number; pet_count?: number } | null;
+};
+
+const SOURCE_LABEL: Record<string, string> = { airbnb: "Airbnb", booking: "Booking.com", direct: "Direct", vrbo: "Vrbo", homeaway: "Vrbo" };
+
+/** Pet fees: the stay, the source and how many guests and pets, shown under the check-in line. */
+function stayDetails(stay: Stay | undefined): BotRow["details"] {
+  if (!stay) return null;
+  const day = (d: string | null) => (d ? new Date(`${d}T12:00:00Z`).toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: "UTC" }) : "?");
+  const source = stay.booking_source ? (SOURCE_LABEL[stay.booking_source] ?? stay.booking_source) : null;
+  const guests = Number(stay.guests?.total ?? 0);
+  const pets = Number(stay.guests?.pet_count ?? 0);
+  const people = [guests ? `${guests} guest${guests === 1 ? "" : "s"}` : null, pets ? `${pets} pet${pets === 1 ? "" : "s"}` : null].filter(Boolean).join(" · ");
+  const lines = [[`Stay ${day(stay.check_in)} → ${day(stay.check_out)}`, source].filter(Boolean).join(" · ")];
+  if (people) lines.push(people);
+  return { lines, photos: [], decision: null, withCheckIn: true };
+}
+
 /** For email alerts: who sent it, the subject, and a link, shown in place of the check-in date. */
 function emailContext(type: string, metadata: unknown): BotRow["context"] {
   if (type !== "email_alert" || !metadata || typeof metadata !== "object") return null;
@@ -124,6 +150,7 @@ function emailContext(type: string, metadata: unknown): BotRow["context"] {
     subject: str("subject") || null,
     url: str("gmail_url") || null,
     receivedAt: str("received_at") || null,
+    snippet: str("snippet") || null,
   };
 }
 

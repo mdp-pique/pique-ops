@@ -15,9 +15,10 @@ export interface BotRow {
   /** The BOT_RULES key: the type, or "email:{rule}" for email alerts. */
   ruleKey: string;
   /** Email alerts: sender, subject and link, shown instead of the check-in date. */
-  context: { from: string | null; subject: string | null; url: string | null; receivedAt: string | null } | null;
-  /** Damage reports and claims: what was reported and its photos, shown instead of the check-in date. */
-  details: { lines: string[]; photos: string[]; decision: string | null } | null;
+  context: { from: string | null; subject: string | null; url: string | null; receivedAt: string | null; snippet: string | null } | null;
+  /** Damage reports and claims: what was reported and its photos, shown instead of the check-in date
+   * (pet fees: the stay, shown under the check-in line, withCheckIn). */
+  details: { lines: string[]; photos: string[]; decision: string | null; withCheckIn?: boolean } | null;
   status: string;
   guestName: string | null;
   property: string | null;
@@ -74,11 +75,17 @@ function receivedText(iso: string): string {
   return when.toLocaleString("en-CA", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Edmonton" });
 }
 
+/** Gmail snippets come HTML-escaped. */
+function unescapeHtml(text: string): string {
+  return text.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+}
+
 /** Sender, subject and link for an email alert (Slack link text can't contain | or >). */
-function emailLines(c: NonNullable<BotRow["context"]>): string {
+function emailLines(c: NonNullable<BotRow["context"]>, withSnippet: boolean): string {
   const lines: string[] = [];
   if (c.from) lines.push(`From: ${esc(c.from)}`);
   if (c.subject) lines.push(`Subject: ${esc(c.subject)}`);
+  if (withSnippet && c.snippet) lines.push(`> ${esc(unescapeHtml(c.snippet)).replace(/\s+/g, " ").trim()}...`);
   const received = c.receivedAt ? receivedText(c.receivedAt) : "";
   const link = c.url ? `<${c.url}|Open the email>` : "";
   if (received || link) lines.push([received && `Received ${received}`, link].filter(Boolean).join(" · "));
@@ -98,8 +105,13 @@ function detailLines(d: NonNullable<BotRow["details"]>): string {
 }
 
 function whenText(row: BotRow, postDate: string): string {
-  if (row.context) return emailLines(row.context);
-  if (row.details) return detailLines(row.details);
+  if (row.context) return emailLines(row.context, !!BOT_RULES[row.ruleKey]?.snippet);
+  if (row.details && !row.details.withCheckIn) return detailLines(row.details);
+  const checkIn = checkInText(row, postDate);
+  return row.details ? `${checkIn}\n${detailLines(row.details)}` : checkIn;
+}
+
+function checkInText(row: BotRow, postDate: string): string {
   if (!row.checkIn) return "No check-in date";
   const d = daysBetween(postDate, row.checkIn);
   if (d < 0) return `:warning: *Overdue* - checked in ${shortDate(row.checkIn)}`;
