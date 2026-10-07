@@ -3602,6 +3602,10 @@ export type Database = {
         Args: { p_ticket: string; p_choice: string; p_actor: string | null; p_actor_name: string }
         Returns: Json
       }
+      record_unlinked_review_qc: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       get_checkout_evidence: {
         Args: { day: string }
         Returns: {

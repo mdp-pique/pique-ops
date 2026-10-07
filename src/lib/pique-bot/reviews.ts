@@ -42,6 +42,12 @@ type QcRow = {
  */
 export async function runReviewFeed(admin: Admin, opts: { dry: boolean; now?: Date }) {
   const now = opts.now ?? new Date();
+  // The sync links a review to its stay at the end of its run, and the trigger records it then.
+  // Reviews that never get linked are recorded without a stay after 10 minutes.
+  if (!opts.dry) {
+    const { error } = await admin.rpc("record_unlinked_review_qc");
+    if (error) console.error(`Review feed: recording unlinked reviews failed: ${error.message}`);
+  }
   const since = new Date(now.getTime() - LOOKBACK_DAYS * 86_400_000).toISOString();
   const { data } = await admin
     .from("review_qc")
