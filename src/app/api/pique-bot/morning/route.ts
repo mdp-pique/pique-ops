@@ -35,8 +35,9 @@ export async function POST(request: NextRequest) {
   const all = (await loadRows(admin, {})).filter((r) => isLive(r.ruleKey, live));
   const results: Record<string, unknown>[] = [];
 
-  // Every channel a rule posts to, in config order.
-  const channels = [...new Set(Object.values(BOT_RULES).map((r) => r.channel))];
+  // Every channel a rule posts to, in config order (?channel= limits a run to one, e.g. to test a new rule).
+  const only = request.nextUrl.searchParams.get("channel");
+  const channels = [...new Set(Object.values(BOT_RULES).map((r) => r.channel))].filter((c) => !only || c === only);
   for (const channel of channels) {
     // Earlier posts first, so anything finished in the app shows crossed off there too.
     if (!dry) await redrawEarlier(admin, channel, today);
