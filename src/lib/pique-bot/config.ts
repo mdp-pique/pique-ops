@@ -30,8 +30,7 @@ export const CHANNELS = {
   newClaims: "C09P72Z8RK8", // #new-claim-notification, where the Truvi / Aircover claim Zaps posted
   qualityControl: "C09T31NSAPR", // #quality-control-reviews, where the review QC Zaps posted (review feed, reviews.ts)
   petBookings: "C0A9RLU3F6H", // #new-reservation-with-pet, where the "New Reservations - Pet" Zap posted
-  // #pique-internal-cleaning-operations (private; id to fill in when Pique Bot is invited - the rule is gated until then).
-  cleaningOps: "C_PENDING_CLEANING_OPS",
+  cleaningOps: "C07AP6KPV9V", // #pique-internal-cleaning-operations (separator doors)
 } as const;
 
 export type Tier = "urgent" | "today" | "morning";
