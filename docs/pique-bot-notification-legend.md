@@ -34,7 +34,7 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 | Invoice email to review | "Invoice To Slack - Email" |
 | Invoice tagged Reviewed: Cristine enters it in QBO / Plooto | "Gmail Tagged as 'Reviewed' --> Notify Cristine" |
 | Interac e-Transfer received | "e-Transfer To Slack - Email" |
-| New booking with a pet: request and collect the pet fee (moved from Morning 10-07; posted to #new-reservation-with-pet as it comes in, asked again from 2 days before check-in) | "New Reservations - Pet" (off) |
+| New booking with a pet: request and collect the pet fee (moved from Morning 10-07; posted to #new-reservation-with-pet as it comes in to request the fee; #pique-team-chat's 7 AM post asks from 2 days before check-in until collected) | "New Reservations - Pet" (off) |
 | Email from Chrangela / PEKA (built 10-07; replaces an n8n workflow that @channel'd #pique-team-chat) | n8n "Chrangela & PEKA Email → Slack Alert" |
 | Aircover reimbursement email | "Aircover Gmail -> Slack Notification" |
 | Truvi resolution email | "Truvi Resolution Email -> Slack Notification" |

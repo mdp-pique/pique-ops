@@ -100,7 +100,8 @@ async function postNew(admin: Admin, ctx: { types: string[]; since: string; toda
 
   const results: Record<string, unknown>[] = [];
   for (const row of rows) {
-    const channel = BOT_RULES[row.ruleKey].channel;
+    const rule = BOT_RULES[row.ruleKey];
+    const channel = rule.alertChannel ?? rule.channel;
     if (ctx.dry) {
       results.push({ ticket: row.ticketId, channel, message: renderAlert(row, "dry-run", ctx.today, appUrl()) });
       continue;

@@ -45,6 +45,8 @@ export interface BotRule {
   tag?: string[];
   /** Silent until listed in automation_flags.pique_bot_alerts_live_types. */
   gated?: boolean;
+  /** Where the immediate post goes, when it isn't the morning post's channel. */
+  alertChannel?: string;
   /** Email alerts: also show the start of the email (the Gmail snippet). */
   snippet?: boolean;
 }
@@ -63,9 +65,9 @@ function emailRule(label: string, channel: string, tier: Tier, tag?: string[]): 
 
 export const BOT_RULES: Record<string, BotRule> = {
   // Due before check-in: start asking two mornings ahead, urgent on the day.
-  // Posted in the pet channel as soon as the booking comes in (MDP 10-07, like the old Zap), then asked
-  // again there each morning from 2 days before check-in until the fee is collected.
-  pet_fee: { label: "Pet fee", channel: CHANNELS.petBookings, leadDays: 2, tier: "today" },
+  // Posted in the pet channel as soon as the booking comes in, to request the fee (MDP 10-07, like the
+  // old Zap); the 7 AM post in #pique-team-chat asks from 2 days before check-in until it's collected.
+  pet_fee: { label: "Pet fee", channel: CHANNELS.teamChat, alertChannel: CHANNELS.petBookings, leadDays: 2, tier: "today" },
   direct_booking_id_check: { label: "Direct booking ID", channel: CHANNELS.teamChat, leadDays: 2, tier: "morning" },
   vehicle_registration: { label: "Parking registration", channel: CHANNELS.teamChat, leadDays: 2, tier: "morning" },
   // Brought the morning of check-in, so only asked that morning.
