@@ -37,7 +37,7 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
     admin.from("ticket_items").select("id, ticket_id, label, is_done, sort_order").in("ticket_id", ids),
     admin
       .from("reservations")
-      .select("id, check_in, check_out, booking_source, guests:raw_hospitable_data->guests")
+      .select("id, check_in, check_out, booking_source, guests:raw_hospitable_data->guests, guest:guests(full_name)")
       .in("id", uniq(tickets.map((t) => t.reservation_id))),
     admin.from("properties").select("id, property_name, public_name").in("id", uniq(tickets.map((t) => t.property_id))),
     admin.from("profiles").select("id, display_name, slack_user_id").in("id", uniq(tickets.map((t) => t.assignee_id))),
@@ -98,7 +98,8 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
       context: emailContext(t.type, t.metadata),
       details: t.type === "pet_fee" ? stayDetails(stay) : detailsFor(t.type, t.metadata, t.due_at),
       status: t.status,
-      guestName: t.guest_name,
+      // Tickets made the moment a booking syncs can predate its guest record.
+      guestName: t.guest_name || stay?.guest?.full_name || null,
       property: (t.property_id && propById.get(t.property_id)) || null,
       checkIn,
       createdAt: t.created_at,
@@ -123,6 +124,7 @@ type Stay = {
   check_out: string | null;
   booking_source: string | null;
   guests: { total?: number; pet_count?: number } | null;
+  guest: { full_name: string | null } | null;
 };
 
 const SOURCE_LABEL: Record<string, string> = { airbnb: "Airbnb", booking: "Booking.com", direct: "Direct", vrbo: "Vrbo", homeaway: "Vrbo" };
