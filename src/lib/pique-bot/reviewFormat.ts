@@ -19,6 +19,8 @@ export interface ReviewSummary {
   location: number | null;
   value: number | null;
   cleanlinessComment: string | null;
+  /** The guest's private notes on the other categories (check-in, accuracy...). */
+  otherNotes?: { label: string; text: string }[];
   publicReview: string | null;
   privateFeedback: string | null;
 }
@@ -66,9 +68,26 @@ export function reviewLines(r: ReviewSummary): string[] {
   if (scores.length) lines.push(scores.join(" · "));
 
   if (r.cleanlinessComment) lines.push(`Cleanliness note: ${quote(r.cleanlinessComment)}`);
+  for (const n of r.otherNotes ?? []) lines.push(`${n.label} note: ${quote(n.text)}`);
   if (r.publicReview) lines.push(`Public: ${quote(r.publicReview)}`);
   if (r.privateFeedback) lines.push(`Private: ${quote(r.privateFeedback)}`);
   return lines;
+}
+
+const CATEGORY_LABEL: Record<string, string> = {
+  accuracy: "Accuracy",
+  checkin: "Check-in",
+  communication: "Communication",
+  location: "Location",
+  value: "Value",
+};
+
+/** Private per-category comments from Hospitable's raw review, other than cleanliness (shown on its own). */
+export function otherCategoryNotes(raw: unknown): { label: string; text: string }[] {
+  const ratings = (raw as { private?: { detailed_ratings?: { type?: string; comment?: string | null }[] } } | null)?.private?.detailed_ratings ?? [];
+  return ratings
+    .filter((d) => d.type && d.type !== "cleanliness" && d.comment?.trim())
+    .map((d) => ({ label: CATEGORY_LABEL[d.type!] ?? d.type!, text: d.comment!.trim() }));
 }
 
 /** The ticket's metadata (record_review_qc) as a summary. */

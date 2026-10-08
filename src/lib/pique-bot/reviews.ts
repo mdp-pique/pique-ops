@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CHANNELS } from "./config";
 import { appUrl } from "./data";
-import { reviewLines, type ReviewSummary } from "./reviewFormat";
+import { otherCategoryNotes, reviewLines, type ReviewSummary } from "./reviewFormat";
 import { slackApi } from "./slack";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -141,6 +141,7 @@ export function renderReview(row: QcRow): { text: string; blocks: unknown[] } {
     location: cat(r?.location_rating),
     value: cat(r?.value_rating),
     cleanlinessComment: raw.private?.detailed_ratings?.find((d) => d.type === "cleanliness")?.comment?.trim() || null,
+    otherNotes: otherCategoryNotes(raw),
     publicReview: r?.review_text?.trim() || null,
     privateFeedback: raw.private?.feedback?.trim() || null,
   };

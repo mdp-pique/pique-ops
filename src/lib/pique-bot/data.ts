@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BOT_RULES, OPEN_STATUSES, ruleKeyFor, ticketTypeFor } from "./config";
 import type { BotRow } from "./render";
-import { reviewLines, summaryFromMetadata } from "./reviewFormat";
+import { otherCategoryNotes, reviewLines, summaryFromMetadata } from "./reviewFormat";
 import { slackApi } from "./slack";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -54,6 +54,19 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
       .order("created_at", { ascending: true }),
   ]);
 
+  // Review-flagged cleaning issues: the guest's private notes on the other categories, read from the review.
+  const reviewIds = uniq(
+    tickets.map((t) => {
+      const m = (t.metadata ?? {}) as { source?: unknown; review_id?: unknown };
+      return t.type === "cleaning_issue" && m.source === "review" && typeof m.review_id === "string" ? m.review_id : null;
+    }),
+  );
+  const notesByReview = new Map<string, { label: string; text: string }[]>();
+  if (reviewIds.length) {
+    const { data: reviews } = await admin.from("reviews").select("id, raw_hospitable_data").in("id", reviewIds);
+    for (const r of reviews ?? []) notesByReview.set(r.id, otherCategoryNotes(r.raw_hospitable_data));
+  }
+
   const resById = new Map((reservations.data ?? []).map((r) => [r.id, r as unknown as Stay]));
   // The team's own names (e.g. "Boho 2 BDRM 2.0"), not the Airbnb listing title; the trailing "*" is a sync marker.
   const propById = new Map((properties.data ?? []).map((p) => [p.id, (p.property_name || p.public_name || "").replace(/\*+$/, "").trim() || null]));
@@ -96,7 +109,7 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
       type: t.type,
       ruleKey: ruleKeyFor(t.type, t.metadata, (items.data ?? []).filter((i) => i.ticket_id === t.id)),
       context: emailContext(t.type, t.metadata),
-      details: t.type === "pet_fee" ? stayDetails(stay) : detailsFor(t.type, t.metadata, t.due_at),
+      details: t.type === "pet_fee" ? stayDetails(stay) : detailsFor(t.type, t.metadata, t.due_at, notesByReview),
       status: t.status,
       // Tickets made the moment a booking syncs can predate its guest record.
       guestName: t.guest_name || stay?.guest?.full_name || null,
@@ -162,10 +175,13 @@ const DECISION_LABEL: Record<string, string> = { aircover: "AirCover claim", tru
  * Damage reports and the claims they open: what was reported, by whom, the photos, and the decision.
  * Cleaning issues from a review: the stay, the cleaner, the scores and what the guest wrote.
  */
-function detailsFor(type: string, metadata: unknown, dueAt: string | null): BotRow["details"] {
+function detailsFor(type: string, metadata: unknown, dueAt: string | null, notesByReview = new Map<string, { label: string; text: string }[]>()): BotRow["details"] {
   if (!metadata || typeof metadata !== "object") return null;
   const m = metadata as Record<string, unknown>;
-  if (type === "cleaning_issue" && m.source === "review") return { lines: reviewLines(summaryFromMetadata(m)), photos: [], decision: null };
+  if (type === "cleaning_issue" && m.source === "review") {
+    const summary = { ...summaryFromMetadata(m), otherNotes: notesByReview.get(String(m.review_id)) ?? [] };
+    return { lines: reviewLines(summary), photos: [], decision: null };
+  }
   if (type === "separator_door") {
     const day = typeof m.day === "string" ? new Date(`${m.day}T12:00:00Z`).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : "today";
     const line = m.action === "lock" ? `Guest checks out ${day} - lock it before the next check-in` : `Guest checks in ${day} - unlock it before check-in`;
