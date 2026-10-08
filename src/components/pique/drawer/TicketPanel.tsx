@@ -9,6 +9,7 @@ import { addTicketComment, rollOverTicket, markUnansweredMessageResolved, upload
 import { ReviewRemovalPanel } from "./ReviewRemovalPanel";
 import { RemovalCaseOutcome } from "./RemovalCaseOutcome";
 import { EscalationDraftPanel } from "./EscalationDraftPanel";
+import { PhotoGallery } from "./PhotoGallery";
 import { setTicketStatus, toggleTicketItem, addTicketItem, setTicketDueDate, assignTicketTo } from "./ticketActions";
 import { specFor } from "@/lib/pique-ui/domains";
 import { healthLabel, healthVariant, formatClockDate } from "@/lib/pique-ui/clock";
@@ -70,7 +71,9 @@ export function TicketPanel({
   ) : null;
   const spec = specFor(data.type);
   const fieldLabels = new Map(spec?.fields.map((f) => [f.key, f.label]) ?? []);
-  const details = Object.entries(data.metadata).filter(([k]) => !(spec && k === "title"));
+  // Photos (e.g. a Connecteam damage report) get their own gallery instead of a line of links.
+  const photos = Array.isArray(data.metadata.photos) ? data.metadata.photos.filter((p): p is string => typeof p === "string") : [];
+  const details = Object.entries(data.metadata).filter(([k]) => !(spec && k === "title") && k !== "photos");
   const undone = data.items.filter((i) => !i.isDone).length;
 
   const [confirmResolve, setConfirmResolve] = useState(false);
@@ -321,6 +324,8 @@ export function TicketPanel({
             )}
           </div>
         </div>
+
+        <PhotoGallery urls={photos} />
 
         {data.type === "review_removal_case" && typeof data.metadata.review_id === "string" && (
           <ReviewRemovalPanel ticketId={data.id} reviewId={data.metadata.review_id} onMutated={onMutated} />

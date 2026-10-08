@@ -92,15 +92,10 @@ function emailLines(c: NonNullable<BotRow["context"]>, withSnippet: boolean): st
   return lines.join("\n");
 }
 
-/** Slack shows at most this many photo links per item. */
-const PHOTO_LIMIT = 10;
-
 function detailLines(d: NonNullable<BotRow["details"]>): string {
   const lines = d.lines.map(esc);
-  if (d.photos.length) {
-    const links = d.photos.slice(0, PHOTO_LIMIT).map((url, i) => `<${url}|${i + 1}>`).join(" ");
-    lines.push(`:camera: Photos: ${links}${d.photos.length > PHOTO_LIMIT ? ` (+${d.photos.length - PHOTO_LIMIT} more in the app)` : ""}`);
-  }
+  // The photos open in the app's gallery (Open); links straight to the Connecteam CDN download instead of showing.
+  if (d.photos.length) lines.push(`:camera: ${d.photos.length} photo${d.photos.length === 1 ? "" : "s"} - tap *Open* to see them`);
   return lines.join("\n");
 }
 

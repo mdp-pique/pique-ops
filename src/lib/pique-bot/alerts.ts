@@ -3,7 +3,6 @@ import { BOT_RULES, mention, OPEN_STATUSES, QUIET_HOURS, REMIND_AFTER_MINUTES, t
 import { appUrl, edmontonToday, loadRows } from "./data";
 import { POST_COLUMNS, type Post } from "./posts";
 import { isFinished, isSnoozed, renderAlert, type BotRow } from "./render";
-import { postMissingPhotos, postPhotosInThread } from "./photos";
 import { slackApi } from "./slack";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -79,8 +78,6 @@ export async function runAlerts(admin: Admin, opts: { dry: boolean; now?: Date; 
   const overnight = (24 - QUIET_HOURS.from + QUIET_HOURS.until) * 3_600_000;
   const since = opts.since ?? new Date(quietHoursEnded(now).getTime() - overnight).toISOString();
   const posted = [...scheduled, ...(await postNew(admin, { types, since, today, dry: opts.dry }))];
-  // Photos in the thread of today's posts that don't have them yet (the 7 AM post, older posts).
-  if (!opts.dry) posted.push(...(await postMissingPhotos(admin, now)));
   // Reminders stay limited to today's posts.
   const reminded = await remind(admin, { types, since: quietHoursEnded(now).toISOString(), now, dry: opts.dry });
   return { quiet: false, types, posted, reminded };
@@ -173,7 +170,6 @@ async function postOne(admin: Admin, row: BotRow, channel: string, today: string
     payload: { source: "pique_bot", kind: "asked", alert: true, post_id: post.id, channel, slack_ts: sent.ts },
   });
   if (error) console.error(`Pique Bot: logging alert failed: ${error.message}`);
-  await postPhotosInThread(admin, row, { id: post.id, channel, ts: sent.ts });
   return { ticket: row.ticketId, channel, slack_ts: sent.ts };
 }
 
