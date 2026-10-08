@@ -93,6 +93,18 @@ export async function answerInSlack(admin: Admin, q: SlackQuestion) {
     },
   });
 
+  // Same log as the app's Ask Pique, so a wrong answer can be traced to its queries.
+  await admin.from("ask_log").insert({
+    user_id: profileId,
+    question: `[slack] ${question}`.slice(0, 2000),
+    queries: result.steps.map((s) => s.sql),
+    row_counts: result.steps.map((s) => s.rowCount ?? null),
+    tool_call_count: result.toolCallCount,
+    total_tokens: result.totalTokens,
+    duration_ms: result.durationMs,
+    error: result.error ?? null,
+  });
+
   const turns = [...history, { role: "user", content: question }, { role: "assistant", content: result.answer }].slice(-MAX_TURNS);
   const { data: saved } = await admin
     .from("slack_assistant_threads")

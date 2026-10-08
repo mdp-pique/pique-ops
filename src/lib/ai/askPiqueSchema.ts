@@ -45,10 +45,12 @@ Audit trail, one row per state change or note on a ticket.
 
 ### reservations
 - id uuid (PK), hospitable_reservation_id text, property_id uuid not null, guest_id uuid
-- status text, check_in date, check_out date, nights numeric, guest_count int
+- status text: 'accepted' (a real booking) | 'cancelled' | 'not accepted' | 'checkpoint' | 'request'. There is no 'confirmed' status.
+- check_in date, check_out date (local calendar dates, no time), nights numeric, guest_count int
 - nightly_rate / cleaning_fee / taxes / total_nightly / total_revenue / host_payout numeric
 - confirmation_code text, booking_source text, booked_at / cancelled_at timestamptz, cancellation_reason text, special_requests text
 - created_at / updated_at timestamptz
+- "Today's check-ins" = status = 'accepted' and check_in = today's date; checkouts the same with check_out. Join properties for the unit name and guests (guest_id) for the guest's name.
 
 ### properties
 - id uuid (PK), hospitable_property_id text, property_name text, public_name text
