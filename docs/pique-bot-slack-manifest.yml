@@ -3,9 +3,13 @@
 # this file, and replace YOUR-APP-DOMAIN with the Pique app's address.
 display_information:
   name: Pique-a-choo
-  description: Morning check-ins on open requests - tap Done right in Slack.
+  description: Morning check-ins on open requests, and answers from Pique Ops - DM it or @mention it.
   background_color: "#1f2937"
 features:
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
   bot_user:
     display_name: Pique-a-choo
     always_online: true
@@ -15,7 +19,19 @@ oauth_config:
       - chat:write
       - users:read
       - users:read.email
+      # The assistant (2026-10-08): @mentions, DMs, and follow-ups in threads it's answering.
+      - app_mentions:read
+      - im:history
+      - channels:history
+      - groups:history
 settings:
+  event_subscriptions:
+    request_url: https://YOUR-APP-DOMAIN/api/slack/events
+    bot_events:
+      - app_mention
+      - message.im
+      - message.channels
+      - message.groups
   interactivity:
     is_enabled: true
     request_url: https://YOUR-APP-DOMAIN/api/slack/interactions

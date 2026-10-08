@@ -28,6 +28,8 @@ tickets.type (free text, no DB constraint - values in use today):
   claim_tracker - AirCover/insurance claims, due_at is the filing deadline
   unanswered_message, missed_call, extension_request - guest communication
   system_health - the app's own job failures
+  tech_request - a feature request or bug for the tech team, logged from Slack (metadata: title, summary, asked_by_name, slack_url, question)
+  Many more automation types exist (email_alert, damage_report, payment_failed, payment_dispute, separator_door, vehicle_registration, save_booking, guest_count_check...); metadata.title is the human-readable title for any ticket.
 Note: cleaner_late_noshow, incomplete_cleaning_form, cleaning_overtime_approval, and other purely-internal cleaning-ops ticket types are intentionally hidden from the staff-facing queue UI, but they still exist in this table and are fair game to query directly.
 
 ### teams / team_members
@@ -116,6 +118,12 @@ General notes:
 - All timestamps are stored in UTC. The team's properties and operations are in America/Edmonton (Mountain time) - convert when a question is about "today" or a specific local date.
 - "Open" tickets almost always means status in ('open','in_progress','blocked'), not just 'open'.
 - When a question is ambiguous between a ticket type and a raw source table (e.g. "no-shows" could mean cleaning_shift_check.flag='no_show' or cleaner_late_noshow tickets), prefer the tickets table - it's the unified, deduplicated view - unless the question is specifically about the automation's raw detection.
+
+### Slack (a synced copy of the team's Slack channels - no private DMs; some sensitive channels are hidden from you)
+- slack_messages: id bigint, channel_id text, slack_ts text, thread_ts text (null or = slack_ts for a top-level post; a reply's thread_ts is its parent's slack_ts), user_id text (FK slack_users.user_id; null/bot for app posts), text text (Slack markup: <@U123> is a user mention, <#C123|name> a channel), sent_at timestamptz, subtype text
+- slack_channels: channel_id text, name text, is_private boolean, is_archived boolean, topic text, purpose text
+- slack_users: user_id text, real_name text, display_name text, is_bot boolean
+- To answer "has X been dealt with / did anyone reply about X": search slack_messages.text with ILIKE on a few keywords (guest name, unit, confirmation code), newest first, then read the thread (same thread_ts) for replies. Join slack_users for names and slack_channels for the channel name. Check the tickets table too - the ticket's status is usually the clearest answer.
 
 NOT queryable yet - these tables exist and are described above for context, but you have no read access to them (they're only readable by the backend automations that own them, not by staff through the app, and that hasn't been extended to you): cleaning_form_submission, cleaning_shift_check, cleaning_job_map, review_flags, unanswered_message_alerts. A query against any of these will come back empty even though rows exist - don't report that as "zero" or "none found". Instead, answer from the tickets table (cleaner_late_noshow, incomplete_cleaning_form, cleaning_overtime_approval, review_flag ticket types shadow-mirror this same data and ARE queryable), or tell the user this data isn't available to you yet if the tickets table doesn't cover what they asked.
 `.trim();

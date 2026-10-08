@@ -6,6 +6,7 @@ import { appUrl, edmontonToday, loadRows, resolveActor } from "@/lib/pique-bot/d
 import { isFinished, nextItem, shortDate, type BotRow } from "@/lib/pique-bot/render";
 import { POST_COLUMNS, redrawForTicket, type Post } from "@/lib/pique-bot/posts";
 import { slackApi, verifySlackSignature } from "@/lib/pique-bot/slack";
+import { logTechRequest } from "@/lib/pique-bot/assistant";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -37,6 +38,22 @@ export async function POST(request: NextRequest) {
   if (payload.type === "block_actions") {
     const action = payload.actions?.[0];
     if (!action || action.action_id === "pique_bot_open") return new NextResponse(null, { status: 200 });
+
+    // The assistant's "Log as tech request" button: value is the proposal id; logTechRequest
+    // requires a Pique Ops profile and opens the ticket at most once.
+    if (action.action_id === "pique_bot_tech_request") {
+      after(() =>
+        logTechRequest(admin, {
+          proposalId: String(action.value ?? ""),
+          slackUser: payload.user.id,
+          slackName: slackName(payload.user),
+          channel: payload.channel?.id ?? payload.container?.channel_id,
+          messageTs: payload.message?.ts ?? payload.container?.message_ts,
+          blocks: payload.message?.blocks ?? [],
+        }),
+      );
+      return new NextResponse(null, { status: 200 });
+    }
 
     const [postId, ticketId, itemId] = String(action.value ?? "").split("|");
 

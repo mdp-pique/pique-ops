@@ -2525,6 +2525,24 @@ export type Database = {
         }
         Relationships: []
       }
+      slack_assistant_events: {
+        Row: { created_at: string; event_id: string }
+        Insert: { created_at?: string; event_id: string }
+        Update: { created_at?: string; event_id?: string }
+        Relationships: []
+      }
+      slack_assistant_tech_proposals: {
+        Row: { asked_by: string | null; created_at: string; id: string; question: string | null; slack_url: string | null; summary: string; thread_id: string | null; ticket_id: string | null; title: string }
+        Insert: { asked_by?: string | null; created_at?: string; id?: string; question?: string | null; slack_url?: string | null; summary: string; thread_id?: string | null; ticket_id?: string | null; title: string }
+        Update: { asked_by?: string | null; created_at?: string; id?: string; question?: string | null; slack_url?: string | null; summary?: string; thread_id?: string | null; ticket_id?: string | null; title?: string }
+        Relationships: []
+      }
+      slack_assistant_threads: {
+        Row: { channel_id: string; created_at: string; id: string; profile_id: string | null; thread_ts: string; turns: Json; updated_at: string }
+        Insert: { channel_id: string; created_at?: string; id?: string; profile_id?: string | null; thread_ts: string; turns?: Json; updated_at?: string }
+        Update: { channel_id?: string; created_at?: string; id?: string; profile_id?: string | null; thread_ts?: string; turns?: Json; updated_at?: string }
+        Relationships: []
+      }
       slack_channels: {
         Row: {
           channel_id: string
@@ -3656,6 +3674,10 @@ export type Database = {
       record_unlinked_review_qc: {
         Args: Record<PropertyKey, never>
         Returns: number
+      }
+      ask_pique_run_sql_as: {
+        Args: { query: string; p_profile: string }
+        Returns: Json[]
       }
       record_stripe_dispute: {
         Args: { p: Json }

@@ -8,7 +8,7 @@ const MAX_TOOL_CALLS = 5;
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 const ESCALATED_MODEL = "claude-sonnet-5";
 
-const SYSTEM_PROMPT = `You are Ask Pique, a read-only database assistant embedded in the Pique Ops dashboard for Pique Properties, a short-term rental management company.
+const SYSTEM_PROMPT = `You are Pique-a-choo, the Pique Properties team's assistant (a short-term rental management company). You answer read-only questions from the production database, in the Pique Ops dashboard and in Slack.
 
 You answer questions by calling the run_sql tool, which executes a single read-only SQL statement (SELECT/WITH only - anything else is rejected before it ever runs) against the production Postgres database and returns up to 500 rows as JSON. You have no write access anywhere; the database role this runs as physically cannot INSERT, UPDATE, or DELETE, so don't hedge about "not being able to" make changes - you never could.
 
@@ -63,8 +63,24 @@ export interface AskPiqueResult {
   error?: string;
 }
 
+/** Runs one validated read-only query; the dashboard uses the signed-in user's ask_pique_run_sql. */
+export type SqlRunner = (sql: string) => Promise<{ data: unknown; error: { message: string } | null }>;
+
+/** Extra tools a caller adds (e.g. Slack's "propose a tech request"); the handler returns the tool result text. */
+export interface ExtraTools {
+  tools: Anthropic.Tool[];
+  handle: (name: string, input: unknown) => Promise<string>;
+}
+
+export interface AskPiqueOptions {
+  runSql?: SqlRunner;
+  /** Appended to the system prompt, e.g. how to write for Slack. */
+  extraSystem?: string;
+  extra?: ExtraTools;
+}
+
 async function runTool(
-  supabase: SupabaseClient<Database>,
+  runSql: SqlRunner,
   rawQuery: string,
 ): Promise<{ resultText: string; step: AskPiqueStep; isError: boolean }> {
   const validated = validateSql(rawQuery);
@@ -72,7 +88,7 @@ async function runTool(
     return { resultText: `Error: ${validated.error}`, step: { sql: rawQuery, error: validated.error }, isError: true };
   }
 
-  const { data, error } = await supabase.rpc("ask_pique_run_sql", { query: validated.sql! });
+  const { data, error } = await runSql(validated.sql!);
 
   if (error) {
     return { resultText: `Error: ${error.message}`, step: { sql: validated.sql!, error: error.message }, isError: true };
@@ -95,11 +111,16 @@ export async function askPique(
   supabase: SupabaseClient<Database>,
   question: string,
   history: AskPiqueTurn[] = [],
+  options: AskPiqueOptions = {},
 ): Promise<AskPiqueResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return { answer: "Ask Pique isn't configured yet (missing API key).", steps: [], toolCallCount: 0, totalTokens: 0, durationMs: 0, error: "missing_api_key" };
+    return { answer: "Pique-a-choo isn't configured yet (missing API key).", steps: [], toolCallCount: 0, totalTokens: 0, durationMs: 0, error: "missing_api_key" };
   }
+  const runSql: SqlRunner = options.runSql ?? (async (sql) => supabase.rpc("ask_pique_run_sql", { query: sql }));
+  const system: Anthropic.TextBlockParam[] = [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }];
+  if (options.extraSystem) system.push({ type: "text", text: options.extraSystem });
+  const tools = [RUN_SQL_TOOL, ...(options.extra?.tools ?? [])];
 
   const client = new Anthropic({ apiKey });
   const started = Date.now();
@@ -120,12 +141,12 @@ export async function askPique(
       response = await client.messages.create({
         model,
         max_tokens: 1500,
-        system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-        tools: [RUN_SQL_TOOL],
+        system,
+        tools,
         messages,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Ask Pique request failed.";
+      const message = err instanceof Error ? err.message : "Pique-a-choo request failed.";
       return { answer: `Something went wrong talking to the model: ${message}`, steps, toolCallCount: steps.length, totalTokens, durationMs: Date.now() - started, error: message };
     }
 
@@ -148,8 +169,13 @@ export async function askPique(
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const toolUse of toolUses) {
+      if (toolUse.name !== RUN_SQL_TOOL.name) {
+        const content = options.extra ? await options.extra.handle(toolUse.name, toolUse.input) : "Unknown tool.";
+        toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content });
+        continue;
+      }
       const query = (toolUse.input as { query?: string })?.query ?? "";
-      const { resultText, step, isError } = await runTool(supabase, query);
+      const { resultText, step, isError } = await runTool(runSql, query);
       steps.push(step);
       consecutiveFailures = isError ? consecutiveFailures + 1 : 0;
       toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: resultText, is_error: isError });
@@ -160,7 +186,7 @@ export async function askPique(
       const final = await client.messages.create({
         model: ESCALATED_MODEL,
         max_tokens: 800,
-        system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+        system,
         messages: [...messages, { role: "user", content: "That query failed twice in a row. Stop trying and tell me what went wrong in plain language, without calling run_sql again." }],
       });
       totalTokens += final.usage.input_tokens + final.usage.output_tokens;

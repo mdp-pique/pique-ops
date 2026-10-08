@@ -124,8 +124,8 @@ export function AskPique() {
           </svg>
         </div>
         <div className="ask-id">
-          <b>Ask Pique</b>
-          <span>Reads the database to answer. Never writes, always shows the query.</span>
+          <b>Pique-a-choo</b>
+          <span>Reads the database to answer. Never writes, always shows the query. Also in Slack: DM it or @mention it.</span>
         </div>
         {turns.length > 0 && (
           <button type="button" className="ask-clear" onClick={() => setTurns([])} disabled={busy}>
@@ -193,7 +193,7 @@ export function AskPique() {
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about reservations, tickets, cleaning, reviews…"
+          placeholder="Ask Pique-a-choo about reservations, tickets, cleaning, reviews, Slack…"
           disabled={busy}
         />
         <button className="send" type="submit" disabled={busy || !input.trim()} aria-label="Send">
