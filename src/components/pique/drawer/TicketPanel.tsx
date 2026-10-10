@@ -370,7 +370,7 @@ export function TicketPanel({
                     <img src={a.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : (
                     <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", fontSize: 11, color: "var(--ink-3)" }}>
-                      File
+                      {/\.(mp4|mov|m4v|webm|avi)(\?|$)/i.test(new URL(a.url).pathname) ? "Video" : "File"}
                     </div>
                   )}
                 </a>

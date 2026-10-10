@@ -1,10 +1,11 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { answerInSlack, isAssistantThread } from "@/lib/pique-bot/assistant";
+import { saveThreadFiles, type SlackFile } from "@/lib/pique-bot/threadFiles";
 import { verifySlackSignature } from "@/lib/pique-bot/slack";
 
-// Answering can take a few database lookups and model calls.
-export const maxDuration = 60;
+// Answering can take a few database lookups and model calls; saving videos from a thread takes longer.
+export const maxDuration = 300;
 
 type SlackEvent = {
   type: string;
@@ -16,6 +17,7 @@ type SlackEvent = {
   channel_type?: string;
   ts: string;
   thread_ts?: string;
+  files?: SlackFile[];
 };
 
 /**
@@ -41,25 +43,33 @@ export async function POST(request: NextRequest) {
 
   const ev = body.event;
   const botUserId = body.authorizations?.[0]?.user_id;
-  // Ignore bots (including itself), edits and deletions.
-  if (ev.bot_id || ev.subtype || !ev.user || ev.user === botUserId || !ev.text) return new NextResponse(null, { status: 200 });
+  // Ignore bots (including itself), edits and deletions; a message with files ("file_share") counts.
+  if (ev.bot_id || (ev.subtype && ev.subtype !== "file_share") || !ev.user || ev.user === botUserId) return new NextResponse(null, { status: 200 });
+  const text = ev.text ?? "";
+  const isDm = ev.type === "message" && ev.channel_type === "im";
+  // Photos or videos posted in a thread: saved to the ticket when the thread is under a Pique-a-choo ticket post.
+  const threadFiles = ev.type === "message" && !isDm && !!ev.files?.length && !!ev.thread_ts && ev.thread_ts !== ev.ts;
+  if (!text && !threadFiles) return new NextResponse(null, { status: 200 });
 
   const admin = createAdminClient();
-  const mentionsBot = !!botUserId && ev.text.includes(`<@${botUserId}>`);
-  const isDm = ev.type === "message" && ev.channel_type === "im";
+  const mentionsBot = !!botUserId && text.includes(`<@${botUserId}>`);
   // A channel message that @mentions the bot also arrives as app_mention; answer that one only.
   // A reply that tags someone else (e.g. "@Tammy like this ^") is for them, not Pique-a-choo.
-  const mentionsOthers = /<@[UW][A-Z0-9]+>/.test(ev.text);
-  const threadFollowUp = ev.type === "message" && !isDm && !!ev.thread_ts && !mentionsBot && !mentionsOthers;
-  if (ev.type !== "app_mention" && !isDm && !threadFollowUp) return new NextResponse(null, { status: 200 });
+  const mentionsOthers = /<@[UW][A-Z0-9]+>/.test(text);
+  const threadFollowUp = ev.type === "message" && !isDm && !!ev.thread_ts && !mentionsBot && !mentionsOthers && !threadFiles;
+  if (ev.type !== "app_mention" && !isDm && !threadFollowUp && !threadFiles) return new NextResponse(null, { status: 200 });
 
   const { error: claimError } = await admin.from("slack_assistant_events").insert({ event_id: body.event_id });
   if (claimError) return new NextResponse(null, { status: 200 });
 
   after(async () => {
     try {
+      if (threadFiles) {
+        await saveThreadFiles(admin, { channel: ev.channel, threadTs: ev.thread_ts!, ts: ev.ts, user: ev.user!, files: ev.files! });
+        return;
+      }
       if (threadFollowUp && !(await isAssistantThread(admin, ev.channel, ev.thread_ts!))) return;
-      await answerInSlack(admin, { channel: ev.channel, ts: ev.ts, threadTs: ev.thread_ts, user: ev.user!, text: ev.text!, botUserId });
+      await answerInSlack(admin, { channel: ev.channel, ts: ev.ts, threadTs: ev.thread_ts, user: ev.user!, text, botUserId });
     } catch (e) {
       console.error(`Pique-a-choo assistant failed: ${(e as Error).message}`);
     }

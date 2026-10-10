@@ -24,6 +24,8 @@ oauth_config:
       - im:history
       - channels:history
       - groups:history
+      # Photos and videos posted in a ticket post's thread are saved to the ticket (2026-10-10).
+      - files:read
 settings:
   event_subscriptions:
     request_url: https://YOUR-APP-DOMAIN/api/slack/events
