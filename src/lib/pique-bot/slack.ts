@@ -11,7 +11,7 @@ export function botToken(): string {
 }
 
 // Slack's read methods only take form-encoded arguments, not JSON.
-const FORM_METHODS = new Set(["users.info", "users.lookupByEmail", "chat.getPermalink", "conversations.replies"]);
+const FORM_METHODS = new Set(["users.info", "users.lookupByEmail", "chat.getPermalink", "conversations.replies", "conversations.history"]);
 
 export async function slackApi<T = Record<string, unknown>>(method: string, body: Record<string, unknown>): Promise<T & { ok: boolean; error?: string }> {
   const form = FORM_METHODS.has(method);

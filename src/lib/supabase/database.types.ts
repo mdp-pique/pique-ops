@@ -2531,10 +2531,16 @@ export type Database = {
         Update: { created_at?: string; event_id?: string }
         Relationships: []
       }
+      assistant_hidden_channels: {
+        Row: { channel_id: string; created_at: string; reason: string | null }
+        Insert: { channel_id: string; created_at?: string; reason?: string | null }
+        Update: { channel_id?: string; created_at?: string; reason?: string | null }
+        Relationships: []
+      }
       slack_assistant_tech_proposals: {
-        Row: { asked_by: string | null; created_at: string; id: string; question: string | null; slack_url: string | null; summary: string; thread_id: string | null; ticket_id: string | null; title: string }
-        Insert: { asked_by?: string | null; created_at?: string; id?: string; question?: string | null; slack_url?: string | null; summary: string; thread_id?: string | null; ticket_id?: string | null; title: string }
-        Update: { asked_by?: string | null; created_at?: string; id?: string; question?: string | null; slack_url?: string | null; summary?: string; thread_id?: string | null; ticket_id?: string | null; title?: string }
+        Row: { asked_by: string | null; created_at: string; id: string; question: string | null; slack_url: string | null; summary: string; thread_id: string | null; ticket_id: string | null; title: string; scope: string | null; context: string | null; tech_post_channel: string | null; tech_post_ts: string | null; finished_notified_at: string | null; finished_status: string | null }
+        Insert: { asked_by?: string | null; created_at?: string; id?: string; question?: string | null; slack_url?: string | null; summary: string; thread_id?: string | null; ticket_id?: string | null; title: string; scope?: string | null; context?: string | null; tech_post_channel?: string | null; tech_post_ts?: string | null; finished_notified_at?: string | null; finished_status?: string | null }
+        Update: { asked_by?: string | null; created_at?: string; id?: string; question?: string | null; slack_url?: string | null; summary?: string; thread_id?: string | null; ticket_id?: string | null; title?: string; scope?: string | null; context?: string | null; tech_post_channel?: string | null; tech_post_ts?: string | null; finished_notified_at?: string | null; finished_status?: string | null }
         Relationships: []
       }
       slack_assistant_threads: {

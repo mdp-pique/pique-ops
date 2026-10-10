@@ -6,7 +6,7 @@ import { appUrl, edmontonToday, loadRows, resolveActor } from "@/lib/pique-bot/d
 import { isFinished, nextItem, shortDate, type BotRow } from "@/lib/pique-bot/render";
 import { POST_COLUMNS, redrawForTicket, type Post } from "@/lib/pique-bot/posts";
 import { slackApi, verifySlackSignature } from "@/lib/pique-bot/slack";
-import { logTechRequest } from "@/lib/pique-bot/assistant";
+import { logTechRequest } from "@/lib/pique-bot/techRequests";
 
 type Admin = ReturnType<typeof createAdminClient>;
 

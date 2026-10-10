@@ -6,7 +6,7 @@ import { SCHEMA_DIGEST } from "./askPiqueSchema";
 
 const MAX_TOOL_CALLS = 5;
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-const ESCALATED_MODEL = "claude-sonnet-5";
+export const ESCALATED_MODEL = "claude-sonnet-5";
 
 const SYSTEM_PROMPT = `You are Pique-a-choo, the Pique Properties team's assistant (a short-term rental management company). You answer read-only questions from the production database, in the Pique Ops dashboard and in Slack.
 
@@ -78,6 +78,12 @@ export interface AskPiqueOptions {
   /** Appended to the system prompt, e.g. how to write for Slack. */
   extraSystem?: string;
   extra?: ExtraTools;
+  /** Model for this conversation (default: the fast one, escalating after a failed query). */
+  model?: string;
+  /** Model calls allowed per question (default MAX_TOOL_CALLS). */
+  maxSteps?: number;
+  /** Output cap per model call (default 1500). */
+  maxTokens?: number;
 }
 
 async function runTool(
@@ -143,14 +149,14 @@ export async function askPique(
   const steps: AskPiqueStep[] = [];
   let totalTokens = 0;
   let consecutiveFailures = 0;
-  let model: string = DEFAULT_MODEL;
+  let model: string = options.model ?? DEFAULT_MODEL;
 
-  for (let call = 0; call < MAX_TOOL_CALLS; call++) {
+  for (let call = 0; call < (options.maxSteps ?? MAX_TOOL_CALLS); call++) {
     let response: Anthropic.Message;
     try {
       response = await client.messages.create({
         model,
-        max_tokens: 1500,
+        max_tokens: options.maxTokens ?? 1500,
         system,
         tools,
         messages,
