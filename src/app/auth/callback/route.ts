@@ -1,4 +1,6 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { NEXT_COOKIE, safeNext } from "@/lib/auth/next";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -18,7 +20,11 @@ export async function GET(request: Request) {
         return NextResponse.redirect(`${origin}/login?error=domain_not_allowed`);
       }
 
-      return NextResponse.redirect(`${origin}/`);
+      // Back to the page they were sent to sign in from (set by src/proxy.ts), else the dashboard.
+      const cookieStore = await cookies();
+      const next = safeNext(cookieStore.get(NEXT_COOKIE)?.value);
+      cookieStore.delete(NEXT_COOKIE);
+      return NextResponse.redirect(`${origin}${next}`);
     }
   }
 

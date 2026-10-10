@@ -48,7 +48,9 @@ export async function POST(request: NextRequest) {
   const mentionsBot = !!botUserId && ev.text.includes(`<@${botUserId}>`);
   const isDm = ev.type === "message" && ev.channel_type === "im";
   // A channel message that @mentions the bot also arrives as app_mention; answer that one only.
-  const threadFollowUp = ev.type === "message" && !isDm && !!ev.thread_ts && !mentionsBot;
+  // A reply that tags someone else (e.g. "@Tammy like this ^") is for them, not Pique-a-choo.
+  const mentionsOthers = /<@[UW][A-Z0-9]+>/.test(ev.text);
+  const threadFollowUp = ev.type === "message" && !isDm && !!ev.thread_ts && !mentionsBot && !mentionsOthers;
   if (ev.type !== "app_mention" && !isDm && !threadFollowUp) return new NextResponse(null, { status: 200 });
 
   const { error: claimError } = await admin.from("slack_assistant_events").insert({ event_id: body.event_id });

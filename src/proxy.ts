@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/lib/supabase/database.types";
+import { NEXT_COOKIE } from "@/lib/auth/next";
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -42,7 +43,14 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
-    return NextResponse.redirect(url);
+    const redirect = NextResponse.redirect(url);
+    // Remember where they were going (e.g. a ticket opened from Slack), so sign-in lands there, not on the dashboard.
+    const next = request.nextUrl.pathname + request.nextUrl.search;
+    // Page loads only: not API calls or the router's background (RSC) fetches.
+    if (request.method === "GET" && next !== "/" && !request.nextUrl.pathname.startsWith("/api/") && !request.headers.has("rsc")) {
+      redirect.cookies.set(NEXT_COOKIE, next, { path: "/", maxAge: 900, httpOnly: true, sameSite: "lax", secure: request.nextUrl.protocol === "https:" });
+    }
+    return redirect;
   }
 
   return response;

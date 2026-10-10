@@ -202,17 +202,22 @@ export function renderOpenRow(row: BotRow, postId: string, postDate: string, app
         : [{ type: "button", action_id: "pique_bot_done", style: "primary", text: { type: "plain_text", text: "Done" }, value }, notYet];
   const elements: Block[] = later ? [] : answers;
   if (row.doneBy && !later) elements.push(noteButton(row, postId));
-  if (appUrl) {
-    const domain = domainForType(row.type) ?? "requests";
-    elements.push({ type: "button", action_id: "pique_bot_open", text: { type: "plain_text", text: "Open" }, url: `${appUrl}/tickets/${domain}?ticket=${row.ticketId}` });
-  }
+  if (appUrl) elements.push(openButton(row, appUrl));
 
   const section: Block = { type: "section", block_id: `t:${row.ticketId}`, text: { type: "mrkdwn", text: lines.join("\n") } };
   return elements.length ? [section, { type: "actions", block_id: `a:${row.ticketId}`, elements }] : [section];
 }
 
-/** A finished item, collapsed to one crossed-out line (plus any notes), with Add note on the right. */
-export function renderDoneRow(row: BotRow, postId: string): Block {
+function openButton(row: BotRow, appUrl: string): Block {
+  const domain = domainForType(row.type) ?? "requests";
+  return { type: "button", action_id: "pique_bot_open", text: { type: "plain_text", text: "Open" }, url: `${appUrl}/tickets/${domain}?ticket=${row.ticketId}` };
+}
+
+/**
+ * A finished item, collapsed to one crossed-out line (plus any notes). Add note and Open stay
+ * under it, so the ticket (e.g. a damage report's photos and claim) is still a tap away (MDP 10-10).
+ */
+export function renderDoneRow(row: BotRow, postId: string, appUrl: string | null): Block[] {
   const plainTitle = titleOf(row).replace(/\*/g, "");
   const how = row.notNeeded
     ? ` - not needed (${esc(row.notNeeded.by)})${row.notNeeded.note ? `: "${esc(row.notNeeded.note.slice(0, 200))}"` : ""}`
@@ -223,8 +228,10 @@ export function renderDoneRow(row: BotRow, postId: string): Block {
         : " - done";
   const lines = [`:white_check_mark: ~${plainTitle}~${how}`, ...noteLines(row)];
   const section: Block = { type: "section", block_id: `t:${row.ticketId}`, text: { type: "mrkdwn", text: lines.join("\n") } };
-  if (row.doneBy) section.accessory = noteButton(row, postId);
-  return section;
+  const elements: Block[] = [];
+  if (row.doneBy) elements.push(noteButton(row, postId));
+  if (appUrl) elements.push(openButton(row, appUrl));
+  return elements.length ? [section, { type: "actions", block_id: `a:${row.ticketId}`, elements }] : [section];
 }
 
 /** Slack's limit is 50 blocks per message. */
@@ -285,12 +292,13 @@ export function renderPost(rows: BotRow[], postId: string, postDate: string, app
     blocks.push({ type: "divider" }, { type: "section", text: { type: "mrkdwn", text: `:white_check_mark: *Done (${done.length})*` } });
     budget -= 2;
     for (const row of done) {
-      if (budget < 1) {
+      const rendered = renderDoneRow(row, postId, appUrl);
+      if (budget < rendered.length) {
         hidden++;
         continue;
       }
-      blocks.push(renderDoneRow(row, postId));
-      budget -= 1;
+      blocks.push(...rendered);
+      budget -= rendered.length;
     }
   }
 
@@ -311,8 +319,8 @@ export function pickForMorning(rows: BotRow[], today: string, channel: string, c
   return rows.filter((r) => {
     const rule = BOT_RULES[r.ruleKey];
     if (!rule || rule.channel !== channel || isFinished(r) || isSnoozed(r, today)) return false;
-    // Posted on its own later in the day (alerts.ts), not in the 7 AM post.
-    if (rule.askAt != null) return false;
+    // Posted on its own (alerts.ts), not in the 7 AM post.
+    if (rule.askAt != null || rule.ownPost) return false;
     if (rule.askFrom === "created") {
       const age = daysBetween(createdDate(r.createdAt), today);
       return age >= 0 && age <= OVERDUE_LIMIT_DAYS;
@@ -338,7 +346,7 @@ export function renderAlert(row: BotRow, postId: string, postDate: string, appUr
   const finished = isFinished(row);
   const tags = !finished && rule?.tag?.length && !row.assigneeSlackId ? ` ${rule.tag.map(mention).join(" ")}` : "";
   const heading: Block = { type: "context", elements: [{ type: "mrkdwn", text: finished ? ":white_check_mark: *Handled*" : `${ALERT_HEADING[tier]}${tags}` }] };
-  const body = finished ? [renderDoneRow(row, postId)] : renderOpenRow(row, postId, postDate, appUrl);
+  const body = finished ? renderDoneRow(row, postId, appUrl) : renderOpenRow(row, postId, postDate, appUrl);
   const title = titleOf(row).replace(/\*/g, "");
   // Mentions also go in the fallback text, which is what Slack notifies from.
   return { text: `${finished ? "Done: " : tier === "urgent" ? "Urgent: " : ""}${title}${tags}`, blocks: [heading, ...body] };

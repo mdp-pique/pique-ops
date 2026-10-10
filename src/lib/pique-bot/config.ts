@@ -58,6 +58,11 @@ export interface BotRule {
   snippet?: boolean;
   /** Posted on its own at this hour (Edmonton) on check-in day by the alerts run, instead of in the 7 AM post. */
   askAt?: number;
+  /**
+   * Every ticket gets its own post, so each has its own Slack thread (Tammy, 10-10): never grouped
+   * into the 7 AM post. One that comes in overnight is posted by the first alerts run after 7.
+   */
+  ownPost?: boolean;
 }
 
 // The four people "Cancelled Reservation -> Slack Notification" tagged.
@@ -113,12 +118,12 @@ export const BOT_RULES: Record<string, BotRule> = {
   // Damage forms from Connecteam (replace four Zaps; docs/zapier-migration.md lane C). The post
   // asks AirCover claim / Truvi claim / Wear and tear instead of Done (see render.ts); a claim
   // opens a claim_tracker ticket, asked in #new-claim-notification tagging Laurice.
-  "damage:damage": { label: "Damage reported", channel: CHANNELS.damages, leadDays: 0, tier: "today", askFrom: "created", gated: true },
-  "damage:linens": { label: "Linens damaged by guest", channel: CHANNELS.linens, leadDays: 0, tier: "today", askFrom: "created", gated: true },
+  "damage:damage": { label: "Damage reported", channel: CHANNELS.damages, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
+  "damage:linens": { label: "Linens damaged by guest", channel: CHANNELS.linens, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
   claim_tracker: { label: "Claim to prepare", channel: CHANNELS.newClaims, leadDays: 0, tier: "today", askFrom: "created", tag: [LAURICE], gated: true },
   // A guest rated cleanliness below 5 (replaces the review QC Zaps; docs/zapier-migration.md lane Q).
   // Every other review is an FYI post in the same channel from the review feed (reviews.ts).
-  review_qc: { label: "Cleanliness below 5", channel: CHANNELS.qualityControl, leadDays: 0, tier: "today", askFrom: "created", gated: true },
+  review_qc: { label: "Cleanliness below 5", channel: CHANNELS.qualityControl, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
   // Joint-listing separator doors: lock on a checkout, unlock on a check-in. Tickets are made by the
   // 7 AM run itself (create_separator_door_tickets) and asked in that post (replaces an n8n @channel).
   // Stripe (src/lib/stripe/payments.ts): a failed payment or a new charge dispute, where the Zaps posted
