@@ -446,6 +446,47 @@ export type Database = {
         }
         Relationships: []
       }
+      cleaning_clock_sessions: {
+        Row: {
+          ended_at: string | null
+          job_id: string | null
+          last_synced_at: string
+          property_id: string | null
+          scheduler_shift_id: string | null
+          started_at: string
+          user_id: number
+          work_date: string
+        }
+        Insert: {
+          ended_at?: string | null
+          job_id?: string | null
+          last_synced_at?: string
+          property_id?: string | null
+          scheduler_shift_id?: string | null
+          started_at: string
+          user_id: number
+          work_date: string
+        }
+        Update: {
+          ended_at?: string | null
+          job_id?: string | null
+          last_synced_at?: string
+          property_id?: string | null
+          scheduler_shift_id?: string | null
+          started_at?: string
+          user_id?: number
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cleaning_clock_sessions_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cleaning_form_option_map: {
         Row: {
           connecteam_job_id: string | null

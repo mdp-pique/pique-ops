@@ -34,6 +34,7 @@ export const CHANNELS = {
   qualityControl: "C09T31NSAPR", // #quality-control-reviews, where the review QC Zaps posted (review feed, reviews.ts)
   petBookings: "C0A9RLU3F6H", // #new-reservation-with-pet, where the "New Reservations - Pet" Zap posted
   cleaningOps: "C07AP6KPV9V", // #pique-internal-cleaning-operations (separator doors)
+  cleaningHealth: "C0BJM1A4MDY", // #cleaning-health-check (office staff only: noon / 3 PM chat check-ins, late cleans)
 } as const;
 
 export type Tier = "urgent" | "today" | "morning";
@@ -78,7 +79,7 @@ function emailRule(label: string, channel: string, tier: Tier, tag?: string[]): 
 }
 
 // Slack user group @customerservice (the group the 213 FML parking Zap and the GHL form post tag).
-const CUSTOMER_SERVICE = "S067WK5QW1Z";
+export const CUSTOMER_SERVICE = "S067WK5QW1Z";
 
 /** A Slack mention for a user id, or for a user group id (S...). */
 export function mention(id: string): string {
@@ -131,6 +132,9 @@ export const BOT_RULES: Record<string, BotRule> = {
   payment_failed: { label: "Failed payment", channel: CHANNELS.stripeFailed, leadDays: 0, tier: "today", askFrom: "created", gated: true },
   payment_dispute: { label: "Charge dispute", channel: CHANNELS.stripeFailed, leadDays: 0, tier: "urgent", askFrom: "created", gated: true },
   separator_door: { label: "Separator door", channel: CHANNELS.cleaningOps, leadDays: 0, tier: "morning", askFrom: "created", gated: true },
+  // A turnover clean that may not be ready for the 4 PM check-in (lateCleans.ts, MDP 10-13): posted from
+  // 2:30 PM tagging @customerservice; a 4 PM thread reply tags them again if the cleaner is still clocked in.
+  clean_running_late: { label: "Clean may not be ready by 4 PM", channel: CHANNELS.cleaningHealth, leadDays: 0, tier: "today", askFrom: "created", tag: [CUSTOMER_SERVICE], ownPost: true },
 };
 
 /** The BOT_RULES key for a ticket: its type, or "email:{rule}" for email alerts. */

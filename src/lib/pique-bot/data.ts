@@ -194,6 +194,19 @@ function detailsFor(type: string, metadata: unknown, dueAt: string | null, notes
       : [":warning: No parking form from the guest"];
     return { lines, photos: [], decision: null, withCheckIn: true };
   }
+  if (type === "clean_running_late") {
+    const at = (k: string) => (str(k) ? new Date(str(k)).toLocaleTimeString("en-US", { timeZone: "America/Edmonton", hour: "numeric", minute: "2-digit" }) : "?");
+    const cleaners = Array.isArray(m.cleaners) && m.cleaners.length ? (m.cleaners as string[]).join(" and ") : "The cleaner";
+    const typical = Number(m.typical_minutes ?? 0);
+    const usual = typical ? `${Math.floor(typical / 60)}h${typical % 60 ? ` ${typical % 60}m` : ""}` : "?";
+    const lines =
+      m.state === "finished"
+        ? [`:white_check_mark: ${cleaners} clocked out at ${at("finished_at")}`]
+        : m.state === "still_working"
+          ? [`:rotating_light: *Still clocked in at 4 PM* · ${cleaners} clocked in at ${at("clocked_in")}`, "Please give the arriving guest a heads-up"]
+          : [`${cleaners} clocked in at ${at("clocked_in")} · this unit usually takes ${usual}`, `Likely done around ${at("expected_finish")} - check-in is 4 PM`];
+    return { lines, photos: [], decision: null, withCheckIn: true };
+  }
   if (type === "payment_failed" || type === "payment_dispute") {
     const failures = Number(m.failures ?? 1);
     const lines = [
