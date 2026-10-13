@@ -267,3 +267,87 @@ function renderFinished(row: Finished, status: string, what: string | null): str
   const head = status === "resolved" ? `${who}:white_check_mark: *Done:* ${esc(row.title)}` : `${who}*Closed, not going ahead:* ${esc(row.title)}`;
   return [head, what ? esc(what) : null, link ? `<${link}|Open the ticket>` : null].filter(Boolean).join("\n");
 }
+
+/**
+ * A tech request opened by an automation when it needs a person to decide something it can't
+ * (e.g. which listing a new Connecteam job is for). One ticket per ref, ever: a second call
+ * changes nothing. Posted to the tech channel like any tech request; the post is kept in the
+ * ticket's metadata so closeAutomationTechRequest can reply under it.
+ */
+export async function openAutomationTechRequest(admin: Admin, t: { ref: string; title: string; summary: string; detail: string }) {
+  const { data: ticket, error } = await admin
+    .from("tickets")
+    .upsert(
+      {
+        type: "tech_request",
+        status: "open",
+        priority: "normal",
+        source: "automation",
+        external_ref: t.ref,
+        metadata: { title: t.title, summary: t.summary, asked_by_name: "Pique-a-choo" },
+      },
+      { onConflict: "external_ref", ignoreDuplicates: true },
+    )
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`tech request ${t.ref} failed: ${error.message}`);
+  if (!ticket) return null; // Already opened once.
+
+  await admin.from("ticket_items").insert([
+    { ticket_id: ticket.id, label: "Reviewed by the tech team", sort_order: 0 },
+    { ticket_id: ticket.id, label: BUILT_ITEM, sort_order: 1 },
+  ]);
+  await admin.from("ticket_comments").insert({ ticket_id: ticket.id, author_id: null, body: `${SCOPE_HEADING} (opened by Pique-a-choo)\n${t.detail}`.slice(0, 20_000) });
+  await admin.from("ticket_events").insert({
+    ticket_id: ticket.id,
+    event_type: "status_change",
+    to_value: "open",
+    note: "Opened by Pique-a-choo",
+    payload: { source: "pique_bot", kind: "tech_request", ref: t.ref },
+  });
+
+  const { data: flag } = await admin.from("automation_flags").select("value").eq("key", "tech_requests_channel").maybeSingle();
+  const channel = (flag?.value ?? "").trim();
+  if (channel) {
+    const link = ticketLink(ticket.id);
+    const sent = await slackApi<{ ts?: string }>("chat.postMessage", {
+      channel,
+      text: `New tech request: ${t.title}`,
+      blocks: [
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: `:hammer_and_wrench: *New tech request* · ${esc(t.title)}\n${esc(t.summary)}\nFrom Pique-a-choo${link ? ` · <${link}|Open>` : ""}` },
+        },
+      ],
+      unfurl_links: false,
+    });
+    if (sent.ok && sent.ts) {
+      await admin
+        .from("tickets")
+        .update({ metadata: { title: t.title, summary: t.summary, asked_by_name: "Pique-a-choo", tech_post_channel: channel, tech_post_ts: sent.ts } })
+        .eq("id", ticket.id);
+    }
+  }
+  return ticket.id;
+}
+
+/** Resolves an automation's tech request once the thing it asked about is settled, saying how. */
+export async function closeAutomationTechRequest(admin: Admin, ref: string, what: string) {
+  const { data: ticket } = await admin.from("tickets").select("id, status, metadata").eq("external_ref", ref).maybeSingle();
+  if (!ticket || !["open", "in_progress", "blocked"].includes(ticket.status)) return false;
+  await admin.from("ticket_items").update({ is_done: true }).eq("ticket_id", ticket.id);
+  await admin.from("tickets").update({ status: "resolved", closed_at: new Date().toISOString() }).eq("id", ticket.id);
+  await admin.from("ticket_comments").insert({ ticket_id: ticket.id, author_id: null, body: what });
+  await admin.from("ticket_events").insert({
+    ticket_id: ticket.id,
+    event_type: "status_change",
+    to_value: "resolved",
+    note: what,
+    payload: { source: "pique_bot", kind: "tech_request", ref },
+  });
+  const m = (ticket.metadata ?? {}) as { tech_post_channel?: string; tech_post_ts?: string };
+  if (m.tech_post_channel && m.tech_post_ts) {
+    await slackApi("chat.postMessage", { channel: m.tech_post_channel, thread_ts: m.tech_post_ts, text: `:white_check_mark: ${what}`, unfurl_links: false });
+  }
+  return true;
+}

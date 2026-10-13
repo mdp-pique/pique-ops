@@ -3,6 +3,7 @@ import { CUSTOMER_SERVICE, mention } from "./config";
 import { edmontonToday } from "./data";
 import { redrawForTicket } from "./posts";
 import { slackApi } from "./slack";
+import { closeAutomationTechRequest, openAutomationTechRequest } from "./techRequests";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -57,22 +58,72 @@ function median(values: number[]): number {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
+/** Booking codes compare without the "HOST-" prefix (shift titles and Hospitable differ). */
+function bareCode(code: string): string {
+  return code.trim().toUpperCase().replace(/^HOST-/, "");
+}
+
 /**
- * Saves the day's clock-ins (one row per cleaner per clock-in) with the property they were for:
- * the scheduled shift's property first, else the Connecteam job's. For the dates sent, clock-ins
- * no longer in Connecteam (edited or deleted there) are removed, so an edited clock-in can't stay
- * "open" forever.
+ * Which listing each clock-in is for, in order: the scheduled shift's property; the listing of the
+ * booking whose code is in the shift's title; the job's row in clock_job_properties ('not_ours'
+ * means no listing); the static cleaning_job_map. A job placed by a booking code is remembered in
+ * clock_job_properties (source 'booking_code'), so its clock-ins without a code are placed too.
+ */
+async function resolveProperties(admin: Admin, acts: ClockActivity[]) {
+  const shiftIds = [...new Set(acts.map((a) => a.schedulerShiftId).filter((s): s is string => !!s))];
+  const jobIds = [...new Set(acts.map((a) => a.jobId).filter((j): j is string => !!j))];
+  const [{ data: shifts }, { data: jobs }, { data: known }] = await Promise.all([
+    shiftIds.length ? admin.from("connecteam_shifts").select("shift_id, property_id, reservation_code").in("shift_id", shiftIds) : Promise.resolve({ data: [] }),
+    jobIds.length ? admin.from("cleaning_job_map").select("connecteam_job_id, property_id").in("connecteam_job_id", jobIds) : Promise.resolve({ data: [] }),
+    jobIds.length ? admin.from("clock_job_properties").select("job_id, status, property_id").in("job_id", jobIds) : Promise.resolve({ data: [] }),
+  ]);
+
+  const codes = [...new Set((shifts ?? []).filter((s) => !s.property_id && s.reservation_code).map((s) => bareCode(s.reservation_code as string)))];
+  const { data: booked } = codes.length
+    ? await admin.from("reservations").select("confirmation_code, property_id").in("confirmation_code", [...codes, ...codes.map((c) => `HOST-${c}`)])
+    : { data: [] };
+  const byCode = new Map((booked ?? []).filter((r) => r.confirmation_code && r.property_id).map((r) => [bareCode(r.confirmation_code as string), r.property_id as string]));
+  const byShift = new Map(
+    (shifts ?? [])
+      .map((s) => [s.shift_id, (s.property_id as string | null) ?? (s.reservation_code ? byCode.get(bareCode(s.reservation_code)) : undefined) ?? null] as const)
+      .filter((e): e is readonly [string, string] => !!e[1]),
+  );
+  const fromCode = new Set((shifts ?? []).filter((s) => !s.property_id && byShift.has(s.shift_id)).map((s) => s.shift_id));
+  const knownJob = new Map((known ?? []).map((k) => [k.job_id, k]));
+  const byJob = new Map((jobs ?? []).filter((j) => j.property_id).map((j) => [j.connecteam_job_id, j.property_id as string]));
+
+  // Learn job → listing from booking codes, for jobs not placed yet (a 'not_ours' job whose shift
+  // carries one of our booking codes has become ours, like The Evergreen Château on 10-13).
+  const learned = new Map<string, string>();
+  for (const a of acts) {
+    if (!a.jobId || !a.schedulerShiftId || !fromCode.has(a.schedulerShiftId)) continue;
+    const k = knownJob.get(a.jobId);
+    if (k?.status === "mapped") continue;
+    learned.set(a.jobId, byShift.get(a.schedulerShiftId) as string);
+  }
+  for (const [jobId, propertyId] of learned) {
+    await admin
+      .from("clock_job_properties")
+      .upsert({ job_id: jobId, status: "mapped", property_id: propertyId, source: "booking_code", note: "From a booking code in a shift title", updated_at: new Date().toISOString() });
+    knownJob.set(jobId, { job_id: jobId, status: "mapped", property_id: propertyId });
+  }
+
+  return (a: ClockActivity): string | null => {
+    if (a.schedulerShiftId && byShift.has(a.schedulerShiftId)) return byShift.get(a.schedulerShiftId) as string;
+    const k = a.jobId ? knownJob.get(a.jobId) : undefined;
+    if (k) return k.status === "mapped" ? k.property_id : null;
+    return (a.jobId && byJob.get(a.jobId)) || null;
+  };
+}
+
+/**
+ * Saves the day's clock-ins (one row per cleaner per clock-in) with the listing they were for
+ * (resolveProperties). For the dates sent, clock-ins no longer in Connecteam (edited or deleted
+ * there) are removed, so an edited clock-in can't stay "open" forever.
  */
 async function saveSessions(admin: Admin, acts: ClockActivity[], dates: string[], now: Date) {
   const valid = acts.filter((a) => Number.isFinite(a.start) && a.start > 0);
-  const shiftIds = [...new Set(valid.map((a) => a.schedulerShiftId).filter((s): s is string => !!s))];
-  const jobIds = [...new Set(valid.map((a) => a.jobId).filter((j): j is string => !!j))];
-  const [{ data: shifts }, { data: jobs }] = await Promise.all([
-    shiftIds.length ? admin.from("connecteam_shifts").select("shift_id, property_id").in("shift_id", shiftIds) : Promise.resolve({ data: [] }),
-    jobIds.length ? admin.from("cleaning_job_map").select("connecteam_job_id, property_id").in("connecteam_job_id", jobIds) : Promise.resolve({ data: [] }),
-  ]);
-  const byShift = new Map((shifts ?? []).filter((s) => s.property_id).map((s) => [s.shift_id, s.property_id as string]));
-  const byJob = new Map((jobs ?? []).filter((j) => j.property_id).map((j) => [j.connecteam_job_id, j.property_id as string]));
+  const propertyFor = await resolveProperties(admin, valid);
 
   const rows = valid.map((a) => {
     const started = new Date(a.start * 1000);
@@ -82,7 +133,7 @@ async function saveSessions(admin: Admin, acts: ClockActivity[], dates: string[]
       ended_at: a.end ? new Date(a.end * 1000).toISOString() : null,
       job_id: a.jobId ?? null,
       scheduler_shift_id: a.schedulerShiftId ?? null,
-      property_id: (a.schedulerShiftId && byShift.get(a.schedulerShiftId)) || (a.jobId && byJob.get(a.jobId)) || null,
+      property_id: propertyFor(a),
       work_date: localDate(started),
       last_synced_at: now.toISOString(),
     };
@@ -105,6 +156,69 @@ async function saveSessions(admin: Admin, acts: ClockActivity[], dates: string[]
   return rows.length;
 }
 
+const UNMAPPED_LOOKBACK_DAYS = 14;
+
+/**
+ * Connecteam jobs with recent clock-ins that no listing could be found for (MDP 10-13: map them
+ * when they show up, and when unsure make a tech ticket so they don't get lost). Each gets one
+ * tech_request ticket (clock_job:{job}); whoever answers it adds the job's clock_job_properties
+ * row ('mapped' with the listing, or 'not_ours'), and the next run fills in its past clock-ins and
+ * resolves the ticket.
+ */
+async function checkUnmappedJobs(admin: Admin, now: Date) {
+  const since = new Date(now.getTime() - UNMAPPED_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const out: Record<string, unknown>[] = [];
+
+  // Answered: fill in the job's clock-ins and close its ticket.
+  const { data: open } = await admin.from("tickets").select("external_ref").eq("type", "tech_request").like("external_ref", "clock_job:%").in("status", OPEN);
+  const openJobs = (open ?? []).map((t) => (t.external_ref as string).slice("clock_job:".length));
+  if (openJobs.length) {
+    const { data: answered } = await admin.from("clock_job_properties").select("job_id, status, property_id, job_title, properties(property_name)").in("job_id", openJobs);
+    for (const a of answered ?? []) {
+      if (a.status === "mapped" && a.property_id) {
+        await admin.from("cleaning_clock_sessions").update({ property_id: a.property_id }).eq("job_id", a.job_id).is("property_id", null);
+      }
+      const listing = (a.properties as { property_name: string | null } | null)?.property_name?.replace(/\*+$/, "").trim();
+      const what = a.status === "mapped" ? `Connecteam job "${a.job_title ?? a.job_id}" is now linked to ${listing ?? "its listing"}; the late-clean alerts watch its clock-ins.` : `Connecteam job "${a.job_title ?? a.job_id}" is marked as not one of our listings, so the late-clean alerts skip it.`;
+      if (await closeAutomationTechRequest(admin, `clock_job:${a.job_id}`, what)) out.push({ job: a.job_id, closed: a.status });
+    }
+  }
+
+  const { data: loose } = await admin.from("cleaning_clock_sessions").select("job_id").is("property_id", null).not("job_id", "is", null).gte("work_date", since);
+  const counts = new Map<string, number>();
+  for (const r of loose ?? []) counts.set(r.job_id as string, (counts.get(r.job_id as string) ?? 0) + 1);
+  if (!counts.size) return out;
+  const { data: known } = await admin.from("clock_job_properties").select("job_id").in("job_id", [...counts.keys()]);
+  const knownIds = new Set((known ?? []).map((k) => k.job_id));
+  const unknown = [...counts.keys()].filter((j) => !knownIds.has(j));
+  if (!unknown.length) return out;
+
+  const [{ data: names }, { data: shiftNames }] = await Promise.all([
+    admin.from("cleaning_job_map").select("connecteam_job_id, connecteam_title").in("connecteam_job_id", unknown),
+    admin.from("connecteam_shifts").select("job_id, title").in("job_id", unknown).order("shift_date", { ascending: false }).limit(200),
+  ]);
+  for (const jobId of unknown) {
+    const jobName = names?.find((n) => n.connecteam_job_id === jobId)?.connecteam_title ?? null;
+    const titles = [...new Set((shiftNames ?? []).filter((s) => s.job_id === jobId && s.title).map((s) => s.title as string))].slice(0, 3);
+    const label = jobName ?? titles[0] ?? jobId;
+    const n = counts.get(jobId) ?? 0;
+    const id = await openAutomationTechRequest(admin, {
+      ref: `clock_job:${jobId}`,
+      title: `Which listing is Connecteam job "${label}"?`,
+      summary: `Cleaners clocked in on this job ${n} time${n === 1 ? "" : "s"} in the last ${UNMAPPED_LOOKBACK_DAYS} days, but it isn't linked to one of our listings, so the late-clean alerts can't watch it. Which listing is it, or is it not one of ours?`,
+      detail: [
+        `Connecteam job: ${jobName ?? "(no name on file)"} (${jobId})`,
+        titles.length ? `Recent shift titles: ${titles.join(" | ")}` : "No scheduled shifts on file for this job.",
+        `Clock-ins in the last ${UNMAPPED_LOOKBACK_DAYS} days: ${n}`,
+        "",
+        "To finish: add a row to clock_job_properties for this job: status 'mapped' with the listing's property_id, or 'not_ours'. The next late-clean run (every 10 min) links its clock-ins and resolves this ticket.",
+      ].join("\n"),
+    });
+    if (id) out.push({ job: jobId, ticket: id, label });
+  }
+  return out;
+}
+
 type Session = { user_id: number; started_at: string; ended_at: string | null; property_id: string | null };
 type State = "on_track" | "at_risk" | "still_working" | "finished" | "no_clock_in";
 
@@ -125,6 +239,8 @@ export async function runLateCleans(admin: Admin, opts: { activities: ClockActiv
 
   // Saved even on a dry run: it is only a copy of the time clock, and lets a dry run show what it would flag.
   const saved = await saveSessions(admin, opts.activities, opts.dates, now);
+  // Opens tech tickets, so not on a dry run.
+  const unmapped = opts.dry ? [] : await checkUnmappedJobs(admin, now);
 
   // Yesterday's leftovers (e.g. a cleaner who never clocked out): closed the next day.
   const { data: stale } = await admin.from("tickets").select("id, metadata").eq("type", LATE_CLEAN_TYPE).in("status", OPEN);
@@ -141,12 +257,12 @@ export async function runLateCleans(admin: Admin, opts: { activities: ClockActiv
     await redrawForTicket(admin, t.id);
   }
 
-  if (minutes < WARN_FROM_MIN || minutes > STOP_AFTER_MIN) return { saved, today, evaluated: false, results };
+  if (minutes < WARN_FROM_MIN || minutes > STOP_AFTER_MIN) return { saved, unmapped, today, evaluated: false, results };
 
   // Turnovers today: an accepted checkout and an accepted check-in at the same property.
   const { data: departures } = await admin.from("reservations").select("property_id").eq("status", "accepted").eq("check_out", today);
   const departing = [...new Set((departures ?? []).map((r) => r.property_id).filter((p): p is string => !!p))];
-  if (!departing.length) return { saved, today, evaluated: true, turnovers: 0, results };
+  if (!departing.length) return { saved, unmapped, today, evaluated: true, turnovers: 0, results };
   const { data: arrivals } = await admin
     .from("reservations")
     .select("id, property_id, guest_id")
@@ -155,7 +271,7 @@ export async function runLateCleans(admin: Admin, opts: { activities: ClockActiv
     .in("property_id", departing);
   const arrivingBy = new Map((arrivals ?? []).map((r) => [r.property_id as string, r]));
   const turnovers = [...arrivingBy.keys()];
-  if (!turnovers.length) return { saved, today, evaluated: true, turnovers: 0, results };
+  if (!turnovers.length) return { saved, unmapped, today, evaluated: true, turnovers: 0, results };
 
   const guestIds = [...new Set((arrivals ?? []).map((r) => r.guest_id).filter((g): g is string => !!g))];
   const since = new Date(now.getTime() - HISTORY_DAYS * 86_400_000).toISOString().slice(0, 10);
@@ -300,7 +416,7 @@ export async function runLateCleans(admin: Admin, opts: { activities: ClockActiv
     }
     if (changed) await redrawForTicket(admin, existing.id);
   }
-  return { saved, today, evaluated: true, turnovers: turnovers.length, results };
+  return { saved, unmapped, today, evaluated: true, turnovers: turnovers.length, results };
 }
 
 async function alertPost(admin: Admin, ticketId: string): Promise<{ channel: string; ts: string } | null> {

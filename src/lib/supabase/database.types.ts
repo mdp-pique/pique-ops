@@ -731,6 +731,47 @@ export type Database = {
           },
         ]
       }
+      clock_job_properties: {
+        Row: {
+          created_at: string
+          job_id: string
+          job_title: string | null
+          note: string | null
+          property_id: string | null
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          job_id: string
+          job_title?: string | null
+          note?: string | null
+          property_id?: string | null
+          source?: string
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          job_id?: string
+          job_title?: string | null
+          note?: string | null
+          property_id?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clock_job_properties_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       connecteam_chat_events: {
         Row: {
           event_type: string | null

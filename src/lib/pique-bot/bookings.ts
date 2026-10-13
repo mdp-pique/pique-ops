@@ -39,7 +39,9 @@ export async function runBookingFeed(admin: Admin, opts: { dry: boolean; now?: D
     .eq("status", "accepted")
     .gte("created_at", since)
     .order("created_at", { ascending: true });
-  const bookings = (data ?? []) as unknown as Booking[];
+  // A listing newly added to Hospitable brings all its existing bookings in at once (The Evergreen
+  // Château, 10-13: 37 old bookings posted). Only bookings made in the lookback count as new.
+  const bookings = ((data ?? []) as unknown as Booking[]).filter((b) => !b.booked_at || new Date(b.booked_at).getTime() >= new Date(since).getTime());
   if (!bookings.length) return [];
 
   const { data: done } = await admin
