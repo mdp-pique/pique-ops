@@ -70,8 +70,8 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P1-102 | Quality Control Reviews (Canmore and Calgary) | Same, for listed Canmore/Calgary units with no cleaner match | Same flow (Canmore / Calgary posts leave the cleaner out, MDP 10-07) | Q | replacement live 10-07; turn off (373307892) |
 | P2-90 | Connecteam - Cleaning QC Form | QC form → Tammy + one other with the 3 checks | `qc_inspection` ticket per submission (n8n `Pique-Connecteam-Forms`), posted in #cleaning-quality-check tagging Anna Rybak + Tammy | Q | live 10-13; turn off after the first post |
 | P2-12 | Connecteam Order Form | Supply order form → channel, ✅ | `supply_order` ticket per submission (n8n `Pique-Connecteam-Forms`), posted in #purchaseorders with Done | Q | live 10-13; turn off after the first post |
-| P1-1 | Monthly Payout Emails | 25th, 6 AM → Gmail drafts of owner payout emails (amount left as `$****`) | n8n schedule → same drafts (later: fill the amount from owner statements) | N | todo |
-| P1-11 | Pique N2P - IG & FB | N2P webhook → channel with CRM link | n8n webhook → same post (new URL set in N2P) | N | todo |
+| P1-1 | Monthly Payout Emails | 25th, 6 AM → Gmail drafts of owner payout emails (amount left as `$****`) | n8n schedule → same drafts (later: fill the amount from owner statements) | N | retired 10-13 (MDP: no longer used; turned off, not replaced) |
+| P1-11 | Pique N2P - IG & FB | N2P webhook → channel with CRM link | n8n webhook → same post (new URL set in N2P) | N | built 10-13, not active: n8n `Pique-N2P-Social-Messages` (id `k4pLwr2A2YnfAK0W`, webhook path `pique-n2p?key=...`); publish, then swap the webhook URL in the N2P workflow and turn the Zap off |
 | P1-13 | Stripe Payment Success | Stripe `payment_intent.succeeded` → looks up the reservation in a sheet → channel | Built 10-07: Pique Stripe account webhook → app `/api/stripe/webhook` (`src/lib/stripe/payments.ts`), stay from `reservations` by the charge's `reservation_code`, Pique Bot posts to #stripe-payment-success-notification (`C085EB5UR8C`), claimed in `stripe_payment_posts`. Endpoint, `STRIPE_API_KEY` and bot invites done 10-07; `STRIPE_WEBHOOK_SECRET` was missing in Vercel until 10-13 (every delivery got 401 invalid signature), first real post 10-13 | N | live 10-13; turn off the Zap |
 | — | Stripe payment failed (not on the 10-02 list) | `payment_intent.payment_failed` → #stripe-payment-failed-notification | Built 10-07: same webhook, `payment_failed` ticket per booking, Pique Bot asks it in that channel (rule `payment_failed`); a later success resolves it | N | live, waiting on first real failure |
 | — | Stripe Charge Dispute Slack Notification (not on the 10-02 list) | `charge.dispute.created` → @channel in #stripe-payment-failed-notification | Built 10-07: same webhook, `payment_dispute` ticket due at Stripe's evidence deadline (rule `payment_dispute`, urgent); resolved on `charge.dispute.closed` | N | live, waiting on first real dispute |
@@ -82,7 +82,7 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P2-1 | Payment success → Sheet | Stripe (payfunnel) → sheet + Slack + Circle community invite | None: MDP 10-07, not used; turn off | N | turn off |
 | P2-6 | Stopped Timer | Hubstaff timer stop → #hubstaff-monitor | n8n straight port. In daily use (Laurice, Glenn, Cristine, Janina). | N | todo |
 | P2-8 | Started Timer | Hubstaff timer start → #hubstaff-monitor | n8n straight port. In daily use. | N | todo |
-| P2-10 | Zoom to Drive Recordings | New Zoom recording → Drive folder | n8n straight port | N | todo |
+| P2-10 | Zoom to Drive Recordings | New Zoom recording → Drive folder | n8n straight port | N | retired 10-13 (MDP: no longer used; turned off, not replaced) |
 | P2-71 | Onboarding | GHL pipeline stage → Drive folder + copy of the owner guide | n8n straight port | N | todo |
 
 ## Credentials n8n needs
