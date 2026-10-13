@@ -6,7 +6,7 @@ import { runLateCleans, type ClockActivity } from "@/lib/pique-bot/lateCleans";
  * Connecteam's time clock for today, sent every 10 minutes by n8n (Pique-Cleaning-Clock) with the
  * same shared secret as the other Pique Bot routes: saves the clock-ins and checks today's
  * turnovers for cleans that may not be ready at 4 PM (lateCleans.ts). Body: { activities, dates }.
- * ?dry=1 shows what it would do without saving or posting anything.
+ * ?dry=1 saves the clock-ins but opens no tickets and posts nothing, and shows what it would flag.
  */
 export async function POST(request: NextRequest) {
   const secret = process.env.PIQUE_BOT_CRON_SECRET;

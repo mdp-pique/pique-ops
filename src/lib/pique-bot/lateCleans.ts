@@ -123,7 +123,8 @@ export async function runLateCleans(admin: Admin, opts: { activities: ClockActiv
   const minutes = localMinutes(now);
   const results: Record<string, unknown>[] = [];
 
-  const saved = opts.dry ? 0 : await saveSessions(admin, opts.activities, opts.dates, now);
+  // Saved even on a dry run: it is only a copy of the time clock, and lets a dry run show what it would flag.
+  const saved = await saveSessions(admin, opts.activities, opts.dates, now);
 
   // Yesterday's leftovers (e.g. a cleaner who never clocked out): closed the next day.
   const { data: stale } = await admin.from("tickets").select("id, metadata").eq("type", LATE_CLEAN_TYPE).in("status", OPEN);
