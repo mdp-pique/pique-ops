@@ -3,7 +3,7 @@ import type { StageKey } from "./mappings";
 // Domain sections (PRD §7.1). Views over `tickets` grouped by type - the data
 // model doesn't know about them.
 
-export type DomainKey = "reviews" | "maintenance" | "claims" | "requests";
+export type DomainKey = "reviews" | "maintenance" | "claims" | "requests" | "tech";
 
 export interface Domain {
   key: DomainKey;
@@ -35,7 +35,13 @@ export const DOMAINS: Domain[] = [
     key: "requests",
     label: "Requests",
     blurb: "Small SOP tasks tied to a date on the reservation.",
-    types: ["vehicle_registration", "pet_fee", "pack_n_play", "direct_booking_id_check", "guest_vetting", "extension_request", "save_booking", "guest_count_check", "email_alert", "payment_failed", "payment_dispute", "tech_request"],
+    types: ["vehicle_registration", "pet_fee", "pack_n_play", "direct_booking_id_check", "guest_vetting", "extension_request", "save_booking", "guest_count_check", "email_alert", "payment_failed", "payment_dispute"],
+  },
+  {
+    key: "tech",
+    label: "Tech",
+    blurb: "Feature requests and bugs for the tech team, mostly logged through Pique-a-choo. Tick Built, fixed or answered when it's done: the person who asked is told in Slack.",
+    types: ["tech_request"],
   },
 ];
 
@@ -72,6 +78,8 @@ export interface TypeSpec {
   stage: StageKey | null;
   blurb: string;
   needsReservation: boolean;
+  /** Not about a booking or a property (e.g. a tech request): no picker, nothing required. */
+  standalone?: boolean;
   fields: FieldSpec[];
   items: string[];
   /** A textarea field whose lines each become a checklist item (one item per issue). */
@@ -244,6 +252,21 @@ export const CREATABLE_TYPES: TypeSpec[] = [
     needsReservation: true,
     fields: [{ key: "requested_until", label: "Wants to stay until", kind: "date" }],
     items: ["Availability checked", "Replied to guest"],
+    dueRule: "none",
+  },
+  // Tech
+  {
+    type: "tech_request",
+    domain: "tech",
+    stage: null,
+    blurb: "A feature, a change, or something broken in Pique Ops or an automation. Asking Pique-a-choo in Slack scopes it for you.",
+    needsReservation: false,
+    standalone: true,
+    fields: [
+      { key: "title", label: "What's needed", kind: "text", required: true },
+      { key: "summary", label: "Details: what happens now, what should happen", kind: "textarea" },
+    ],
+    items: ["Reviewed by the tech team", "Built, fixed or answered"],
     dueRule: "none",
   },
 ];

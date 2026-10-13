@@ -119,6 +119,8 @@ export async function createManualTicket(input: CreateTicketInput): Promise<{ id
     propertyId = data.property_id;
   } else if (spec.needsReservation) {
     return { error: "Pick the reservation this is about." };
+  } else if (spec.standalone && !input.propertyId) {
+    // Not about a booking or a property.
   } else if (input.propertyId) {
     const { data } = await supabase.from("properties").select("id").eq("id", input.propertyId).maybeSingle();
     if (!data) return { error: "Property not found." };

@@ -21,6 +21,7 @@ const EMPTY: Record<DomainKey, string> = {
   maintenance: "No maintenance open. Log an issue with New ticket.",
   claims: "No open claims. Start one from the reservation, or with New ticket.",
   requests: "No requests open.",
+  tech: "No tech requests open. Ask Pique-a-choo in Slack, or use New ticket.",
 };
 
 function localDate(iso: string): string {

@@ -127,6 +127,7 @@ export function NewTicketPanel({ prefill, onCreated }: { prefill: NewTicketPrefi
 
         {spec && (
           <>
+            {!spec.standalone && (
             <fieldset className="fset">
               <legend>{spec.needsReservation ? "Reservation" : "Reservation or property"}</legend>
               <ReservationPicker value={reservation} onChange={setReservation} />
@@ -144,6 +145,7 @@ export function NewTicketPanel({ prefill, onCreated }: { prefill: NewTicketPrefi
                 </label>
               )}
             </fieldset>
+            )}
 
             <fieldset className="fset">
               <legend>Details</legend>

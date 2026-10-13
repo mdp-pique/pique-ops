@@ -16,7 +16,7 @@ function esc(s: string): string {
 
 function ticketLink(ticketId: string): string | null {
   const url = appUrl();
-  return url ? `${url}/tickets/requests?ticket=${ticketId}` : null;
+  return url ? `${url}/tickets/tech?ticket=${ticketId}` : null;
 }
 
 /**
@@ -61,7 +61,7 @@ export async function logTechRequest(
       ticketId = ticket.id;
       await admin.from("ticket_items").insert([
         { ticket_id: ticket.id, label: "Reviewed by the tech team", sort_order: 0 },
-        { ticket_id: ticket.id, label: "Built, fixed or answered", sort_order: 1 },
+        { ticket_id: ticket.id, label: BUILT_ITEM, sort_order: 1 },
       ]);
       const body = [
         `${SCOPE_HEADING} (asked by ${askedByName})`,
@@ -138,6 +138,9 @@ type Finished = {
 
 const DONE_STATUSES = ["resolved", "closed"];
 
+/** The checklist item that means the work is done (ticked in the app or in Slack). */
+const BUILT_ITEM = "Built, fixed or answered";
+
 /**
  * When a tech request's ticket is resolved or closed (MDP 10-10): reply in the Slack thread it
  * was asked in, tagging the person who asked, reply under the #tech-support post, and (resolved
@@ -155,6 +158,39 @@ export async function announceFinishedTechRequests(admin: Admin, opts: { dry: bo
     .not("ticket_id", "is", null)
     .gte("created_at", since);
   const rows = (data ?? []) as unknown as Finished[];
+
+  // Ticking "Built, fixed or answered" in the app is how a tech request is finished: resolve it here.
+  const open = rows.filter((r) => !DONE_STATUSES.includes(r.tickets?.status ?? "") && !r.finished_notified_at);
+  if (open.length) {
+    const { data: built } = await admin
+      .from("ticket_items")
+      .select("ticket_id")
+      .in("ticket_id", open.map((r) => r.ticket_id))
+      .eq("label", BUILT_ITEM)
+      .eq("is_done", true);
+    for (const ticketId of new Set((built ?? []).map((b) => b.ticket_id))) {
+      const row = open.find((r) => r.ticket_id === ticketId)!;
+      if (opts.dry) {
+        row.tickets = { status: "resolved" };
+        continue;
+      }
+      const { data: resolved } = await admin
+        .from("tickets")
+        .update({ status: "resolved", closed_at: new Date().toISOString() })
+        .eq("id", ticketId)
+        .not("status", "in", `(${DONE_STATUSES.join(",")})`)
+        .select("id");
+      if (!resolved?.length) continue;
+      await admin.from("ticket_events").insert({
+        ticket_id: ticketId,
+        event_type: "status_change",
+        to_value: "resolved",
+        note: `Resolved: "${BUILT_ITEM}" was ticked`,
+        payload: { source: "pique_bot", kind: "tech_request" },
+      });
+      row.tickets = { status: "resolved" };
+    }
+  }
 
   const results: Record<string, unknown>[] = [];
   for (const row of rows) {
