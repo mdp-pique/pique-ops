@@ -34,6 +34,8 @@ export const CHANNELS = {
   qualityControl: "C09T31NSAPR", // #quality-control-reviews, where the review QC Zaps posted (review feed, reviews.ts)
   petBookings: "C0A9RLU3F6H", // #new-reservation-with-pet, where the "New Reservations - Pet" Zap posted
   cleaningOps: "C07AP6KPV9V", // #pique-internal-cleaning-operations (separator doors)
+  cleaningQuality: "C0A0CRGTSCE", // #cleaning-quality-check, where the Cleaning QC Form Zap posted
+  purchaseOrders: "C04JQUKAB2N", // #purchaseorders, where the Supply Order Form Zap posted
   cleaningHealth: "C0BJM1A4MDY", // #cleaning-health-check (office staff only: noon / 3 PM chat check-ins, late cleans)
 } as const;
 
@@ -72,6 +74,7 @@ const BOOKINGS_TEAM = ["U078P07JGGY", "U077KS6VC7R", "U06SZU27S5B", "U051SQ08E75
 const LAURICE = "U049F2880MR";
 const TAMMY = "U05QG0BUP0E";
 const CRISTINE = "U077KS6VC7R";
+const ANNA = "U09U282TLE6";
 
 /** Email rules (email_alert_rules.key), posted where each Zap posted and tagging who it tagged. */
 function emailRule(label: string, channel: string, tier: Tier, tag?: string[]): BotRule {
@@ -132,6 +135,10 @@ export const BOT_RULES: Record<string, BotRule> = {
   payment_failed: { label: "Failed payment", channel: CHANNELS.stripeFailed, leadDays: 0, tier: "today", askFrom: "created", gated: true },
   payment_dispute: { label: "Charge dispute", channel: CHANNELS.stripeFailed, leadDays: 0, tier: "urgent", askFrom: "created", gated: true },
   separator_door: { label: "Separator door", channel: CHANNELS.cleaningOps, leadDays: 0, tier: "morning", askFrom: "created", gated: true },
+  // Connecteam Cleaning Quality Check and Supply Order forms (replace two Zaps; docs/zapier-migration.md
+  // P2-90 / P2-12, MDP 10-13): one post per submission where the Zap posted, tagging who it tagged.
+  qc_inspection: { label: "Cleaning quality check", channel: CHANNELS.cleaningQuality, leadDays: 0, tier: "today", askFrom: "created", tag: [ANNA, TAMMY], gated: true, ownPost: true },
+  supply_order: { label: "Supply order", channel: CHANNELS.purchaseOrders, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
   // A turnover clean that may not be ready for the 4 PM check-in (lateCleans.ts, MDP 10-13): posted from
   // 2:30 PM tagging @customerservice; a 4 PM thread reply tags them again if the cleaner is still clocked in.
   clean_running_late: { label: "Clean may not be ready by 4 PM", channel: CHANNELS.cleaningHealth, leadDays: 0, tier: "today", askFrom: "created", tag: [CUSTOMER_SERVICE], ownPost: true },

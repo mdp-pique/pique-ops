@@ -194,6 +194,25 @@ function detailsFor(type: string, metadata: unknown, dueAt: string | null, notes
       : [":warning: No parking form from the guest"];
     return { lines, photos: [], decision: null, withCheckIn: true };
   }
+  if (type === "qc_inspection" && m.form === "qc") {
+    const day = typeof m.clean_date === "string" ? new Date(`${m.clean_date}T12:00:00Z`).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null;
+    const checks = Array.isArray(m.checks) ? (m.checks as { label?: string; yes?: boolean }[]) : [];
+    const lines = [
+      [str("location") ? `Where: ${str("location").replace(/\*+$/, "").trim()}` : null, day ? `Clean on ${day}` : null].filter(Boolean).join(" · "),
+      checks.map((c) => `${c.yes ? ":white_check_mark:" : ":x:"} ${c.label ?? "Check"}`).join("  "),
+    ];
+    if (str("notes")) lines.push(`"${str("notes").slice(0, 500)}"`);
+    if (str("submitted_by")) lines.push(`Submitted by ${str("submitted_by")}`);
+    return { lines: lines.filter(Boolean), photos: [], decision: null };
+  }
+  if (type === "supply_order") {
+    const lines = [
+      str("location") ? `Where: ${str("location").replace(/\*+$/, "").trim()}` : "",
+      str("needed") ? `"${str("needed").slice(0, 800)}"` : "",
+      str("submitted_by") ? `Requested by ${str("submitted_by")}` : "",
+    ];
+    return { lines: lines.filter(Boolean), photos: [], decision: null };
+  }
   if (type === "clean_running_late") {
     const at = (k: string) => (str(k) ? new Date(str(k)).toLocaleTimeString("en-US", { timeZone: "America/Edmonton", hour: "numeric", minute: "2-digit" }) : "?");
     const cleaners = Array.isArray(m.cleaners) && m.cleaners.length ? (m.cleaners as string[]).join(" and ") : "The cleaner";
