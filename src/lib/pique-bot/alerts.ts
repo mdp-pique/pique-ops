@@ -75,7 +75,9 @@ export async function runAlerts(admin: Admin, opts: { dry: boolean; now?: Date; 
   // Everything since quiet hours began last night: what came in overnight and wasn't in this
   // morning's post (e.g. a pet booking, only asked in the morning near check-in) is posted now.
   // opts.since: a one-off catch-up of tickets created earlier (route ?since=), e.g. when a rule goes live.
-  const overnight = (24 - QUIET_HOURS.from + QUIET_HOURS.until) * 3_600_000;
+  // Plus 30 min before quiet hours: a ticket made in the last minutes before 21:00 can miss the last
+  // evening run (a QC form at 20:55:04 did, 10-13). Tickets already in a post are skipped, so no repeats.
+  const overnight = (24 - QUIET_HOURS.from + QUIET_HOURS.until) * 3_600_000 + 30 * 60_000;
   const since = opts.since ?? new Date(quietHoursEnded(now).getTime() - overnight).toISOString();
   const posted = [...scheduled, ...(await postNew(admin, { types, since, today, dry: opts.dry }))];
   // Reminders stay limited to today's posts.
