@@ -4,6 +4,7 @@ import { lookupHowItWorks } from "@/lib/ai/howItWorks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/supabase/database.types";
 import { appUrl, resolveActor } from "./data";
+import { SEARCH_INVOICES_TOOL, searchInvoices } from "./invoiceSearch";
 import { slackApi } from "./slack";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -65,6 +66,7 @@ function slackSystem(name: string): string {
 - Times in America/Edmonton.${url ? `\n- Link a ticket as <${url}/?ticket=TICKET_ID|title> and a booking as <${url}/reservations?res=RESERVATION_ID|guest name> when it helps.` : ""}
 - You can't change anything (tick items, message guests, move shifts). If asked, say so and point them to the ticket or the app.
 - "Above", "this" or "what X said" usually means the earlier messages in this Slack thread or the posts just above, which are given to you when there are any.
+- Finding an invoice, receipt, bill or order: search invoices@ first with search_invoices (it's the source of truth for invoices), trying a couple of queries if needed. Answer with the matches as <link|subject> from sender, date. Only if nothing turns up, say so and suggest where else it might be (e.g. someone's own inbox, #receipts). You can't open attachments.
 
 Tech requests (a new feature, a change to how something works, or a bug). Scope it before it's logged, so the tech team can build it without coming back with questions:
 1. Work out what the software does today: call lookup_how_it_works, and run_sql when real data helps (e.g. find the post, ticket or booking they mean). Use the thread or posts above for context.
@@ -164,9 +166,10 @@ export async function answerInSlack(admin: Admin, q: SlackQuestion) {
     maxSteps: 8,
     maxTokens: 3000,
     extra: {
-      tools: [HOW_IT_WORKS_TOOL, PROPOSE_TOOL],
+      tools: [HOW_IT_WORKS_TOOL, PROPOSE_TOOL, SEARCH_INVOICES_TOOL],
       handle: async (name, input) => {
         if (name === HOW_IT_WORKS_TOOL.name) return lookupHowItWorks(String((input as { query?: string })?.query ?? ""));
+        if (name === SEARCH_INVOICES_TOOL.name) return searchInvoices(input);
         if (name !== PROPOSE_TOOL.name) return "Unknown tool.";
         const i = (input ?? {}) as { title?: string; summary?: string; scope?: string };
         if (!i.title || !i.summary || !i.scope) return "Need a title, a summary and the scope.";

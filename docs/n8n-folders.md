@@ -56,6 +56,7 @@ The existing "Laurice" folder is left as it is.
 - Truvi Claim Deadline Reminders
 
 ## Pique-a-choo & Alerts
+- Pique-Invoice-Search (webhook, read-only: Pique-a-choo's invoices@ search)
 - Pique-Bot-Alerts
 - Pique-Bot-Morning
 - Pique-Email-Alerts
