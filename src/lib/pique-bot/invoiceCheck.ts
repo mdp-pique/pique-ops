@@ -64,8 +64,8 @@ export async function checkInvoice(admin: Admin, email: InvoiceEmail, opts: { dr
   await admin.from("invoice_checks").upsert({ message_id: email.message_id, ticket_ids: ticketIds, status: "checking", error: null, created_at: new Date().toISOString() });
 
   try {
-    const { data: props } = await admin.from("properties").select("id, property_name, public_name, city").eq("is_active", true).order("property_name");
-    const listings = (props ?? []).map((p) => ({ id: p.id, name: (p.property_name || p.public_name || "").replace(/\*+$/, "").trim(), city: p.city }));
+    const { data: props } = await admin.from("properties").select("id, property_name, public_name, city, address").eq("is_active", true).order("property_name");
+    const listings = (props ?? []).map((p) => ({ id: p.id, name: (p.property_name || p.public_name || "").replace(/\*+$/, "").trim(), city: p.city, address: p.address }));
     const extracted = await extract(email, listings);
     if (!extracted || extracted.kind === "other" || !extracted.units.length) {
       await admin.from("invoice_checks").update({ status: "skipped", kind: extracted?.kind ?? null, vendor: extracted?.vendor ?? null, result: extracted as never, checked_at: new Date().toISOString() }).eq("message_id", email.message_id);
@@ -94,8 +94,8 @@ export async function checkInvoice(admin: Admin, email: InvoiceEmail, opts: { dr
 }
 
 async function dryRun(admin: Admin, email: InvoiceEmail): Promise<Record<string, unknown>> {
-  const { data: props } = await admin.from("properties").select("id, property_name, public_name, city").eq("is_active", true).order("property_name");
-  const listings = (props ?? []).map((p) => ({ id: p.id, name: (p.property_name || p.public_name || "").replace(/\*+$/, "").trim(), city: p.city }));
+  const { data: props } = await admin.from("properties").select("id, property_name, public_name, city, address").eq("is_active", true).order("property_name");
+  const listings = (props ?? []).map((p) => ({ id: p.id, name: (p.property_name || p.public_name || "").replace(/\*+$/, "").trim(), city: p.city, address: p.address }));
   const extracted = await extract(email, listings);
   if (!extracted || extracted.kind === "other" || !extracted.units.length) return { dry: true, skipped: "not a cleaning or maintenance invoice", extracted };
   const units = await compareAll(admin, extracted, listings);
@@ -124,7 +124,24 @@ async function compareAll(admin: Admin, x: Extracted, listings: { id: string; na
     g.maintenance.push(...u.maintenance);
     groups.set(key, g);
   });
-  return Promise.all([...groups.values()].map((g) => compareUnit(admin, g, x.invoice_date)));
+  const results = await Promise.all([...groups.values()].map((g) => compareUnit(admin, g, x.invoice_date)));
+  return results.filter((r) => !absorbUnplaced(r, results));
+}
+
+/**
+ * An unplaced unit (Claude couldn't tell the listing, e.g. a mistyped address) whose billed cleans are
+ * exactly the unbilled checkouts of one listing on the same invoice is that listing: merge it in.
+ */
+function absorbUnplaced(r: UnitResult, all: UnitResult[]): boolean {
+  if (r.listing || !r.cleans?.billed.length || r.maintenance.length) return false;
+  const hosts = all.filter((h) => h.listing && h.cleans && r.cleans!.billed.every((d) => h.cleans!.not_billed.includes(d)));
+  if (hosts.length !== 1) return false;
+  const h = hosts[0].cleans!;
+  h.billed = [...h.billed, ...r.cleans.billed].sort();
+  h.matched = [...h.matched, ...r.cleans.billed].sort();
+  h.not_billed = h.not_billed.filter((d) => !r.cleans!.billed.includes(d));
+  hosts[0].billed_as = `${hosts[0].billed_as} / ${r.billed_as}`;
+  return true;
 }
 
 async function compareUnit(
@@ -229,7 +246,7 @@ function describe(x: Extracted, units: UnitResult[]): { summary: string[]; detai
   return { summary, detail: lines.join("\n") };
 }
 
-async function extract(email: InvoiceEmail, listings: { id: string; name: string; city: string | null }[]): Promise<Extracted | null> {
+async function extract(email: InvoiceEmail, listings: { id: string; name: string; city: string | null; address: string | null }[]): Promise<Extracted | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured");
   let budget = TEXT_LIMIT;
@@ -239,7 +256,7 @@ async function extract(email: InvoiceEmail, listings: { id: string; name: string
     return part;
   };
   const files = (email.files ?? []).map((f) => `--- Attachment: ${f.name} ---\n${take(f.text ?? "")}`).join("\n\n");
-  const listingLines = listings.map((l, i) => `${i + 1}. ${l.name}${l.city ? ` (${l.city})` : ""}`).join("\n");
+  const listingLines = listings.map((l, i) => `${i + 1}. ${l.name}${l.address ? ` - ${l.address}` : ""}${l.city ? ` (${l.city})` : ""}`).join("\n");
 
   const prompt = `You read vendor invoices for Pique Properties, a short-term rental operator. Turn this invoice email into structured data.
 
@@ -251,7 +268,7 @@ ${take(email.text ?? "") || "(empty)"}
 ${files ? `\n${files}` : ""}
 ${email.other_files?.length ? `\nAttachments not readable here (only their names): ${email.other_files.join(", ")}` : ""}
 
-Our listings (number. name):
+Our listings (number. name - street address (city)):
 ${listingLines}
 
 Rules:

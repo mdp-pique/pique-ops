@@ -56,6 +56,7 @@ The existing "Laurice" folder is left as it is.
 - Truvi Claim Deadline Reminders
 
 ## Pique-a-choo & Alerts
+- Pique-Invoice-Check (every 10 min, read-only: invoice emails + PDF text to the invoice check)
 - Pique-Invoice-Search (webhook, read-only: Pique-a-choo's invoices@ search)
 - Pique-Bot-Alerts
 - Pique-Bot-Morning
@@ -91,6 +92,7 @@ The existing "Laurice" folder is left as it is.
 - Pique-Connecteam-Inspect-FormSubmissions
 - Pique-Connecteam-List-Forms
 - Pique-Connecteam-List-Jobs (helper, read-only: job ids and titles)
+- Pique-Invoice-Peek-Helper (helper, read-only: opens a few invoices@ emails and their PDF text)
 - Pique-DM-Once-Laurice-Coastal-Calm (one-off DM, sent 10-14)
 - Pique-Connecteam-List-Schedulers
 - Pique-Connecteam-List-TimeClocks
