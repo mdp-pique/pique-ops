@@ -213,6 +213,14 @@ function detailsFor(type: string, metadata: unknown, dueAt: string | null, notes
     ];
     return { lines: lines.filter(Boolean), photos: [], decision: null };
   }
+  if (type === "contact_us") {
+    const lines = [
+      "Someone reached out over the Lifestyle Contact Us page",
+      [str("name"), str("email"), str("phone")].filter(Boolean).join(" · "),
+      str("crm_url") ? `N2P: ${str("crm_url")}` : "",
+    ];
+    return { lines: lines.filter(Boolean), photos: [], decision: null };
+  }
   if (type === "linen_refresh") {
     const lines = [
       str("location") ? `Where: ${str("location").replace(/\*+$/, "").trim()}` : "",

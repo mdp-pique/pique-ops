@@ -37,6 +37,7 @@ export const CHANNELS = {
   cleaningQuality: "C0A0CRGTSCE", // #cleaning-quality-check, where the Cleaning QC Form Zap posted
   purchaseOrders: "C04JQUKAB2N", // #purchaseorders, where the Supply Order Form Zap posted
   cleaningHealth: "C0BJM1A4MDY", // #cleaning-health-check (office staff only: noon / 3 PM chat check-ins, late cleans)
+  lifestyleContact: "C04J2NK02U9", // #lifestyle-contact-us, where the Lifestyle Contact Us Zap posted
   linenRefresh: "C08C8P825GV", // #linen-and-bedding-refresh-notification, where the Linen and Bedding Refresh Zap posted
   socialMessages: "C04PPB8D5A8", // #pique-social-media-msg (N2P Instagram / Facebook messages, via n8n Pique-N2P-Social-Messages)
 } as const;
@@ -144,6 +145,7 @@ export const BOT_RULES: Record<string, BotRule> = {
   // P2-90 / P2-12, MDP 10-13): one post per submission where the Zap posted, tagging who it tagged.
   qc_inspection: { label: "Cleaning quality check", channel: CHANNELS.cleaningQuality, leadDays: 0, tier: "today", askFrom: "created", tag: [ANNA, TAMMY], gated: true, ownPost: true },
   supply_order: { label: "Supply order", channel: CHANNELS.purchaseOrders, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
+  contact_us: { label: "Lifestyle Contact Us", channel: CHANNELS.lifestyleContact, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
   linen_refresh: { label: "Linen refresh", channel: CHANNELS.linenRefresh, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
   winterization_check: { label: "Winterization checklist", channel: CHANNELS.damages, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
   // A turnover clean that may not be ready for the 4 PM check-in (lateCleans.ts, MDP 10-13): posted from
