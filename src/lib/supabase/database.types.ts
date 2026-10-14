@@ -3780,6 +3780,10 @@ export type Database = {
         Args: { p_day?: string }
         Returns: number
       }
+      create_parking_renewal_tickets: {
+        Args: { p_day?: string }
+        Returns: number
+      }
       record_unlinked_review_qc: {
         Args: Record<PropertyKey, never>
         Returns: number

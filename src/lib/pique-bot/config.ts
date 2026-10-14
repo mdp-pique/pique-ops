@@ -104,6 +104,9 @@ export const BOT_RULES: Record<string, BotRule> = {
   // they know there's no parking); form in (or plate ticked) → its own post at 11:00 to register it.
   "parking:no_form": { label: "No parking form", channel: CHANNELS.parking213, leadDays: 0, tier: "morning", tag: [CUSTOMER_SERVICE] },
   "parking:register": { label: "Register vehicle", channel: CHANNELS.parking213, leadDays: 0, tier: "morning", askAt: 11, tag: [CUSTOMER_SERVICE] },
+  // The promo code lasts 5 days (tech request 10-14): a longer stay gets a re-registration ticket 5 days after the
+  // last registration (create_parking_renewal_tickets, made by the alerts run), posted at 11:00 that day like the first.
+  "parking:renew": { label: "Re-register vehicle", channel: CHANNELS.parking213, leadDays: 0, tier: "morning", askAt: 11, tag: [CUSTOMER_SERVICE] },
   // Brought the morning of check-in, so only asked that morning.
   pack_n_play: { label: "Pack 'n play", channel: CHANNELS.canmoreCleaning, leadDays: 0, tier: "morning" },
   // Booking events (replace Zaps; docs/zapier-migration.md lane B).
@@ -155,9 +158,10 @@ export const BOT_RULES: Record<string, BotRule> = {
 
 /** The BOT_RULES key for a ticket: its type, or "email:{rule}" for email alerts. */
 export function ruleKeyFor(type: string, metadata: unknown, items: { label: string; is_done: boolean }[] = []): string {
-  const m = metadata as { rule?: unknown; form?: unknown; source?: unknown; plate?: unknown } | null;
+  const m = metadata as { rule?: unknown; form?: unknown; source?: unknown; plate?: unknown; renewal?: unknown } | null;
   // Parking: registered at 11 once we have the plate (from the form, or ticked by hand), else the 7 AM no-form ask.
   if (type === "vehicle_registration") {
+    if (m?.renewal === true) return "parking:renew";
     const plate = !!m?.plate || items.some((i) => i.label === "Plate received from guest" && i.is_done);
     return plate ? "parking:register" : "parking:no_form";
   }

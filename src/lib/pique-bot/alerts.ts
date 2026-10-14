@@ -69,6 +69,11 @@ export async function runAlerts(admin: Admin, opts: { dry: boolean; now?: Date; 
   if (isQuietHours(now)) return { quiet: true, types, posted: [], reminded: [] };
   const today = edmontonToday(now);
   // Rules asked at a set hour on check-in day (e.g. 213 FML parking at 11:00), each ticket in its own post.
+  // 213 FML stays past the 5-day parking pass: today's re-registration tickets first (idempotent), so the 11:00 post asks them.
+  if (!opts.dry) {
+    const { error: renewError } = await admin.rpc("create_parking_renewal_tickets", { p_day: today });
+    if (renewError) console.error(`Pique Bot: parking renewal tickets failed: ${renewError.message}`);
+  }
   const scheduled = await postScheduled(admin, { now, today, dry: opts.dry });
   if (types.length === 0) return { quiet: false, types, posted: scheduled, reminded: [] };
 

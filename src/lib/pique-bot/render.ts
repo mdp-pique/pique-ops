@@ -110,6 +110,11 @@ function whenText(row: BotRow, postDate: string): string {
 function checkInText(row: BotRow, postDate: string): string {
   if (!row.checkIn) return "No check-in date";
   const d = daysBetween(postDate, row.checkIn);
+  // For a parking re-registration, checkIn is the day the pass runs out (data.ts).
+  if (row.ruleKey === "parking:renew") {
+    if (d < 0) return `:warning: *Overdue* - pass ran out ${shortDate(row.checkIn)}`;
+    return d === 0 ? ":rotating_light: *Re-register today*" : `Re-register ${shortDate(row.checkIn)}`;
+  }
   if (d < 0) return `:warning: *Overdue* - checked in ${shortDate(row.checkIn)}`;
   if (d === 0) return ":rotating_light: *Checks in today*";
   if (d === 1) return "Checks in tomorrow";

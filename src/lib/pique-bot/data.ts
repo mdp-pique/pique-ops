@@ -110,7 +110,9 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
   return tickets.map((t) => {
     const prof = t.assignee_id ? profById.get(t.assignee_id) : undefined;
     const stay = t.reservation_id ? resById.get(t.reservation_id) : undefined;
-    const checkIn = stay?.check_in || (t.due_at ? edmontonToday(new Date(t.due_at)) : null);
+    // A parking re-registration is asked on the day its pass runs out, not the stay's check-in.
+    const renewOn = t.type === "vehicle_registration" ? (t.metadata as { renew_on?: unknown } | null)?.renew_on : null;
+    const checkIn = (typeof renewOn === "string" && renewOn) || stay?.check_in || (t.due_at ? edmontonToday(new Date(t.due_at)) : null);
     return {
       ticketId: t.id,
       type: t.type,
@@ -199,6 +201,10 @@ function detailsFor(type: string, metadata: unknown, dueAt: string | null, notes
     const lines = str("plate")
       ? [`Plate: ${str("plate")}${str("vehicle") ? ` · ${str("vehicle")}` : ""}`]
       : [":warning: No parking form from the guest"];
+    if (m.renewal === true) {
+      const day = (k: string) => (str(k) ? new Date(`${str(k)}T12:00:00Z`).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : null);
+      lines.push(`5-day pass from ${day("registered_on") ?? "the last registration"} runs out${day("stays_until") ? ` · staying until ${day("stays_until")}` : ""}`);
+    }
     return { lines, photos: [], decision: null, withCheckIn: true };
   }
   if (type === "qc_inspection" && m.form === "qc") {
