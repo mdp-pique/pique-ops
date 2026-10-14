@@ -89,6 +89,8 @@ The existing "Laurice" folder is left as it is.
 - Pique-Connecteam-Form-Dropdown-Options
 - Pique-Connecteam-Inspect-FormSubmissions
 - Pique-Connecteam-List-Forms
+- Pique-Connecteam-List-Jobs (helper, read-only: job ids and titles)
+- Pique-DM-Once-Laurice-Coastal-Calm (one-off DM, sent 10-14)
 - Pique-Connecteam-List-Schedulers
 - Pique-Connecteam-List-TimeClocks
 - Pique-Connecteam-Users-Sync

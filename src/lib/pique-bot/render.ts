@@ -2,6 +2,7 @@
 // its own. The same function draws the 7 AM post and every update after a tap.
 import { domainForType } from "@/lib/pique-ui/domains";
 import { BOT_RULES, mention, OVERDUE_LIMIT_DAYS, type Tier } from "./config";
+import { canUndo } from "./undo";
 
 export interface BotItem {
   id: string;
@@ -230,8 +231,25 @@ export function renderDoneRow(row: BotRow, postId: string, appUrl: string | null
   const section: Block = { type: "section", block_id: `t:${row.ticketId}`, text: { type: "mrkdwn", text: lines.join("\n") } };
   const elements: Block[] = [];
   if (row.doneBy) elements.push(noteButton(row, postId));
+  if ((row.doneBy || row.notNeeded) && canUndo(row.type) && ["resolved", "closed"].includes(row.status)) elements.push(undoButton(row, postId));
   if (appUrl) elements.push(openButton(row, appUrl));
   return elements.length ? [section, { type: "actions", block_id: `a:${row.ticketId}`, elements }] : [section];
+}
+
+/** Reopens a ticket someone finished by mistake (MDP 10-14); anyone can tap it, and it's logged like Done. */
+function undoButton(row: BotRow, postId: string): Block {
+  return {
+    type: "button",
+    action_id: "pique_bot_undo",
+    text: { type: "plain_text", text: "Undo" },
+    value: `${postId}|${row.ticketId}`,
+    confirm: {
+      title: { type: "plain_text", text: "Reopen this?" },
+      text: { type: "plain_text", text: "It goes back on the list and the last tick is undone." },
+      confirm: { type: "plain_text", text: "Reopen" },
+      deny: { type: "plain_text", text: "Cancel" },
+    },
+  };
 }
 
 /** Slack's limit is 50 blocks per message. */

@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { after } from "next/server";
+import { notifyPendingAccess } from "@/lib/pique-bot/pendingAccess";
 import { createClient } from "@/lib/supabase/server";
 import { SignOutButton } from "../sign-out-button";
 
@@ -15,6 +17,10 @@ export default async function PendingPage() {
     .maybeSingle();
 
   if (profile) redirect("/");
+
+  // Tell an admin someone is waiting (once per person), so nobody sits here unnoticed.
+  const name = typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null;
+  after(() => notifyPendingAccess({ id: user.id, email: user.email, name }));
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center">

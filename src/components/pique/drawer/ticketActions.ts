@@ -1,6 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { redrawForTicket } from "@/lib/pique-bot/posts";
+import { undoDone } from "@/lib/pique-bot/undo";
 import { requireUser } from "./actions";
 import { specFor, defaultDueDate } from "@/lib/pique-ui/domains";
 import { todayLocal, edmontonDateTimeToISO } from "@/lib/pique-ui/dates";
@@ -234,6 +238,21 @@ export async function setTicketStatus(
     note,
   });
 
+  revalidatePath("/", "layout");
+  return {};
+}
+
+/**
+ * Reopens a finished Pique-a-choo request (e.g. a Done tapped by mistake). Anyone with a profile can;
+ * the last tick is undone and the Slack posts listing it are redrawn. Other types without a spec keep
+ * their status from their automation.
+ */
+export async function reopenTicket(ticketId: string): Promise<{ error?: string }> {
+  const { supabase, user } = await requireUser();
+  const { data: profile } = await supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle();
+  const result = await undoDone(supabase, ticketId, { profileId: user.id, name: profile?.display_name ?? user.email ?? "someone" }, "app");
+  if (!result.reopened) return { error: "This ticket can't be reopened here." };
+  after(() => redrawForTicket(createAdminClient(), ticketId));
   revalidatePath("/", "layout");
   return {};
 }

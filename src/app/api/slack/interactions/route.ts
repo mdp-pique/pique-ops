@@ -7,6 +7,7 @@ import { isFinished, nextItem, shortDate, type BotRow } from "@/lib/pique-bot/re
 import { POST_COLUMNS, redrawForTicket, type Post } from "@/lib/pique-bot/posts";
 import { slackApi, verifySlackSignature } from "@/lib/pique-bot/slack";
 import { logTechRequest } from "@/lib/pique-bot/techRequests";
+import { undoDone } from "@/lib/pique-bot/undo";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -94,6 +95,18 @@ export async function POST(request: NextRequest) {
         if (!post) return;
         const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
         await closeNoParking(admin, ticketId, actor);
+        await redrawForTicket(admin, ticketId);
+      });
+      return new NextResponse(null, { status: 200 });
+    }
+
+    // Undo on a finished line: reopens the ticket and un-ticks the last item (anyone can, logged like Done).
+    if (action.action_id === "pique_bot_undo") {
+      after(async () => {
+        const post = await loadPost(admin, postId, ticketId);
+        if (!post) return;
+        const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
+        await undoDone(admin, ticketId, actor, "slack");
         await redrawForTicket(admin, ticketId);
       });
       return new NextResponse(null, { status: 200 });

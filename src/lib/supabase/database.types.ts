@@ -1493,6 +1493,27 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_access_notices: {
+        Row: {
+          created_at: string
+          email: string | null
+          notified_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          notified_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          notified_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       pique_bot_booking_posts: {
         Row: {
           channel_id: string

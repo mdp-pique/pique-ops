@@ -10,8 +10,9 @@ import { ReviewRemovalPanel } from "./ReviewRemovalPanel";
 import { RemovalCaseOutcome } from "./RemovalCaseOutcome";
 import { EscalationDraftPanel } from "./EscalationDraftPanel";
 import { PhotoGallery } from "./PhotoGallery";
-import { setTicketStatus, toggleTicketItem, addTicketItem, setTicketDueDate, assignTicketTo } from "./ticketActions";
+import { setTicketStatus, toggleTicketItem, addTicketItem, setTicketDueDate, assignTicketTo, reopenTicket } from "./ticketActions";
 import { specFor } from "@/lib/pique-ui/domains";
+import { canUndo } from "@/lib/pique-bot/undo";
 import { healthLabel, healthVariant, formatClockDate } from "@/lib/pique-ui/clock";
 
 const STATUS_OPTIONS = [
@@ -168,6 +169,23 @@ export function TicketPanel({
                   {o.label}
                 </button>
               ))}
+            </div>
+          )}
+          {!spec && !isOpenTicket && canUndo(data.type) && (
+            <div className="actions">
+              <Btn
+                disabled={isPending}
+                onClick={() => {
+                  setStatusError(null);
+                  startTransition(async () => {
+                    const result = await reopenTicket(data.id);
+                    if (result.error) setStatusError(result.error);
+                    onMutated?.();
+                  });
+                }}
+              >
+                Reopen
+              </Btn>
             </div>
           )}
           {confirmResolve && openItems.length > 0 && (

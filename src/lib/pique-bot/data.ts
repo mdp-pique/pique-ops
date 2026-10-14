@@ -87,6 +87,13 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
       waiting.set(e.ticket_id, { kind: payload.kind, by, note, until: payload.ask_after ?? null, reason: payload.reason ?? null });
     }
     if (payload.kind === "not_needed") notNeeded.set(e.ticket_id, { by, note });
+    // Undo (Slack or the app's Reopen) puts the ticket back to unanswered.
+    if (payload.kind === "undo") {
+      waiting.delete(e.ticket_id);
+      notNeeded.delete(e.ticket_id);
+      doneBy.delete(e.ticket_id);
+      lastAnswer.delete(e.ticket_id);
+    }
 
     // The rest only counts for the post being drawn.
     if (!opts.since || Date.parse(e.created_at) < Date.parse(opts.since)) continue;
