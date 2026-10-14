@@ -120,6 +120,9 @@ export const BOT_RULES: Record<string, BotRule> = {
   "email:etransfer": emailRule("Interac e-Transfer", "C09RZ1ERTK8", "today"),
   // Replaces the n8n "Chrangela & PEKA Email → Slack Alert" workflow (MDP 10-07), without its @channel.
   "email:chrangela_peka": { ...emailRule("Email from Chrangela / PEKA", CHANNELS.teamChat, "today"), snippet: true },
+  // #2-operations and #overdue-vrbo-payments: the Zaps found 10-14 (MDP), with the start of the email.
+  "email:ecobee": { ...emailRule("Ecobee reminder", "C06F1FC3YMN", "today"), snippet: true },
+  "email:vrbo_overdue": { ...emailRule("Overdue VRBO payment", "C0A8XNXPM0E", "today"), snippet: true },
   // Damage forms from Connecteam (replace four Zaps; docs/zapier-migration.md lane C). The post
   // asks AirCover claim / Truvi claim / Wear and tear instead of Done (see render.ts); a claim
   // opens a claim_tracker ticket, asked in #new-claim-notification tagging Laurice.
