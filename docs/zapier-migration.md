@@ -83,7 +83,7 @@ Status: `todo` · `building` · `shadow` · `ready to turn off` · `off`
 | P2-6 | Stopped Timer | Hubstaff timer stop → #hubstaff-monitor | n8n straight port. In daily use (Laurice, Glenn, Cristine, Janina). | N | todo |
 | P2-8 | Started Timer | Hubstaff timer start → #hubstaff-monitor | n8n straight port. In daily use. | N | todo |
 | P2-10 | Zoom to Drive Recordings | New Zoom recording → Drive folder | n8n straight port | N | retired 10-13 (MDP: no longer used; turned off, not replaced) |
-| P2-71 | Onboarding | GHL pipeline stage → Drive folder + copy of the owner guide | n8n straight port | N | todo |
+| P2-71 | Onboarding | GHL pipeline stage → Drive folder + copy of the owner guide | n8n straight port | N | built 10-14: n8n `Pique-Onboarding-Folder` (id `X0JL7YeyG4wdwJHK`, POST `/webhook/pique-onboarding?key=...`, credential "Info Drive" = info@'s Drive) makes the owner folder in "Pique Clients" (`1GFS_CtF...`) and copies "Owner Statement Quick Reference Guide" into it; skips an owner who already has a folder. MDP points an N2P "Pipeline Stage Changed" workflow (same pipeline/stage as the Zap) at it, tests, then turns the Zap off |
 
 ## Credentials n8n needs
 
