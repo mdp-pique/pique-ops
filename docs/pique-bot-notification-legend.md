@@ -32,7 +32,7 @@ Unless a line says otherwise, each item posts to the same channel and tags the s
 
 | Item | Replaces |
 |---|---|
-| Invoice email to review | "Invoice To Slack - Email" |
+| Invoice email to review (tags Laurice, her ask 10-14) | "Invoice To Slack - Email" |
 | Stripe payment failed: note the payment info in Hospitable, collect the payment (built 10-07, #stripe-payment-failed-notification; a later successful payment closes it) | Stripe failed-payment Zap |
 | Invoice tagged Reviewed: Cristine enters it in QBO / Plooto | "Gmail Tagged as 'Reviewed' --> Notify Cristine" |
 | Interac e-Transfer received | "e-Transfer To Slack - Email" |

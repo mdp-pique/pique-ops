@@ -114,7 +114,7 @@ export const BOT_RULES: Record<string, BotRule> = {
   "email:ondilo": emailRule("Ondilo / Booking.com email", "C0ATUL9R3C1", "today", [LAURICE]),
   "email:mykey": emailRule("MyKey housing request", "C04B37U1SSJ", "today"),
   "email:sinistar": emailRule("Sinistar rental offer", "C04B37U1SSJ", "today"),
-  "email:invoice": emailRule("Invoice to review", "C07VCQ4ECBV", "today"),
+  "email:invoice": emailRule("Invoice to review", "C07VCQ4ECBV", "today", [LAURICE]),
   "email:invoice_reviewed": emailRule("Enter invoice in QBO and Plooto", "C07VCQ4ECBV", "today", [CRISTINE]),
   "email:etransfer": emailRule("Interac e-Transfer", "C09RZ1ERTK8", "today"),
   // Replaces the n8n "Chrangela & PEKA Email → Slack Alert" workflow (MDP 10-07), without its @channel.
