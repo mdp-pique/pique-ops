@@ -1493,6 +1493,45 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_checks: {
+        Row: {
+          checked_at: string | null
+          created_at: string
+          error: string | null
+          kind: string | null
+          message_id: string
+          result: Json | null
+          status: string
+          summary: string[] | null
+          ticket_ids: string[]
+          vendor: string | null
+        }
+        Insert: {
+          checked_at?: string | null
+          created_at?: string
+          error?: string | null
+          kind?: string | null
+          message_id: string
+          result?: Json | null
+          status?: string
+          summary?: string[] | null
+          ticket_ids?: string[]
+          vendor?: string | null
+        }
+        Update: {
+          checked_at?: string | null
+          created_at?: string
+          error?: string | null
+          kind?: string | null
+          message_id?: string
+          result?: Json | null
+          status?: string
+          summary?: string[] | null
+          ticket_ids?: string[]
+          vendor?: string | null
+        }
+        Relationships: []
+      }
       pending_access_notices: {
         Row: {
           created_at: string
@@ -3779,6 +3818,10 @@ export type Database = {
       create_separator_door_tickets: {
         Args: { p_day?: string }
         Returns: number
+      }
+      invoice_checks_pending: {
+        Args: { p_limit?: number }
+        Returns: { message_id: string; ticket_ids: string[]; subject: string; mailbox_email: string }[]
       }
       create_parking_renewal_tickets: {
         Args: { p_day?: string }

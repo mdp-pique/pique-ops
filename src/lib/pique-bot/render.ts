@@ -16,7 +16,7 @@ export interface BotRow {
   /** The BOT_RULES key: the type, or "email:{rule}" for email alerts. */
   ruleKey: string;
   /** Email alerts: sender, subject and link, shown instead of the check-in date. */
-  context: { from: string | null; subject: string | null; url: string | null; receivedAt: string | null; snippet: string | null } | null;
+  context: { from: string | null; subject: string | null; url: string | null; receivedAt: string | null; snippet: string | null; check?: string[] } | null;
   /** Damage reports and claims: what was reported and its photos, shown instead of the check-in date
    * (pet fees: the stay, shown under the check-in line, withCheckIn). */
   details: { lines: string[]; photos: string[]; decision: string | null; withCheckIn?: boolean } | null;
@@ -90,6 +90,8 @@ function emailLines(c: NonNullable<BotRow["context"]>, withSnippet: boolean): st
   const received = c.receivedAt ? receivedText(c.receivedAt) : "";
   const link = c.url ? `<${c.url}|Open the email>` : "";
   if (received || link) lines.push([received && `Received ${received}`, link].filter(Boolean).join(" · "));
+  // Already plain Slack text with emoji codes, written by invoiceCheck.ts from our own data and the invoice.
+  for (const l of c.check ?? []) lines.push(esc(l));
   return lines.join("\n");
 }
 

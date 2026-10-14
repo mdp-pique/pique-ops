@@ -175,6 +175,8 @@ function emailContext(type: string, metadata: unknown): BotRow["context"] {
     url: str("gmail_url") || null,
     receivedAt: str("received_at") || null,
     snippet: str("snippet") || null,
+    // The invoice check's summary lines (invoiceCheck.ts), once it has run.
+    check: Array.isArray(m.invoice_check) ? m.invoice_check.filter((l): l is string => typeof l === "string") : [],
   };
 }
 
