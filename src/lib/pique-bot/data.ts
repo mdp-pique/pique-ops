@@ -213,6 +213,27 @@ function detailsFor(type: string, metadata: unknown, dueAt: string | null, notes
     ];
     return { lines: lines.filter(Boolean), photos: [], decision: null };
   }
+  if (type === "linen_refresh") {
+    const lines = [
+      str("location") ? `Where: ${str("location").replace(/\*+$/, "").trim()}` : "",
+      str("request") ? `"${str("request").slice(0, 800)}"` : "",
+      str("submitted_by") ? `Requested by ${str("submitted_by")}` : "",
+    ];
+    return { lines: lines.filter(Boolean), photos: Array.isArray(m.photos) ? m.photos.filter((p): p is string => typeof p === "string") : [], decision: null };
+  }
+  if (type === "winterization_check") {
+    const checks = Array.isArray(m.checks) ? (m.checks as { label?: string; yes?: boolean }[]) : [];
+    const tasks = Array.isArray(m.tasks) ? (m.tasks as { label?: string; photos?: number }[]) : [];
+    const done = tasks.filter((t) => (t.photos ?? 0) > 0).length;
+    const lines = [
+      str("location") ? `Where: ${str("location")}` : "",
+      checks.map((c) => `${c.yes ? ":white_check_mark:" : ":x:"} ${c.label ?? "Check"}`).join("  "),
+      tasks.length ? `Photo tasks done: ${done} of ${tasks.length}` : "",
+      str("notes") ? `"${str("notes").slice(0, 500)}"` : "",
+      str("submitted_by") ? `Submitted by ${str("submitted_by")}` : "",
+    ];
+    return { lines: lines.filter(Boolean), photos: Array.isArray(m.photos) ? m.photos.filter((p): p is string => typeof p === "string") : [], decision: null };
+  }
   if (type === "clean_running_late") {
     const at = (k: string) => (str(k) ? new Date(str(k)).toLocaleTimeString("en-US", { timeZone: "America/Edmonton", hour: "numeric", minute: "2-digit" }) : "?");
     const cleaners = Array.isArray(m.cleaners) && m.cleaners.length ? (m.cleaners as string[]).join(" and ") : "The cleaner";
