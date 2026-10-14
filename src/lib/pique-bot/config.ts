@@ -37,6 +37,7 @@ export const CHANNELS = {
   cleaningQuality: "C0A0CRGTSCE", // #cleaning-quality-check, where the Cleaning QC Form Zap posted
   purchaseOrders: "C04JQUKAB2N", // #purchaseorders, where the Supply Order Form Zap posted
   cleaningHealth: "C0BJM1A4MDY", // #cleaning-health-check (office staff only: noon / 3 PM chat check-ins, late cleans)
+  socialMessages: "C04PPB8D5A8", // #pique-social-media-msg (N2P Instagram / Facebook messages, via n8n Pique-N2P-Social-Messages)
 } as const;
 
 export type Tier = "urgent" | "today" | "morning";
