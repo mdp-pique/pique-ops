@@ -11,7 +11,7 @@ const SEARCH_URL = "https://api.piquepropertiesinc.com/webhook/pique-invoice-sea
 export const SEARCH_INVOICES_TOOL: Anthropic.Tool = {
   name: "search_invoices",
   description:
-    "Search the invoices@piquepropertiesinc.com mailbox (where ~99% of invoices and receipts arrive) live, like the Gmail search box. Use it FIRST whenever someone asks to find an invoice, receipt, bill or order confirmation. Returns sender, subject, date, a short snippet and a Gmail link for each match. Promotions are left out unless you include 'category:promotions'. Try a couple of queries if the first finds nothing (vendor name, order number, amount, 'invoice OR receipt', a date range with after:/before:).",
+    "Search the invoices@piquepropertiesinc.com mailbox (where ~99% of invoices and receipts arrive) live, like the Gmail search box. Use it FIRST whenever someone asks to find an invoice, receipt, bill or order confirmation. Returns sender, subject, date, a short snippet and a Gmail link for each match. Promotions are left out unless you include 'category:promotions'. Try a couple of queries if the first finds nothing (vendor name, order number, amount, 'invoice OR receipt', a date range with after:/before:). Many invoices are forwarded in by staff (e.g. Katrina forwards orders from her own account), so don't rely on from: alone: also search the vendor's name anywhere in the email. If 'this month' finds nothing, check the month before too and say what you found there (people often mean a recent order, not strictly this calendar month).",
   input_schema: {
     type: "object",
     properties: {
