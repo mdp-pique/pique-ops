@@ -72,7 +72,7 @@ export async function checkInvoice(admin: Admin, email: InvoiceEmail, opts: { dr
       return { message_id: email.message_id, skipped: "not a cleaning or maintenance invoice", vendor: extracted?.vendor };
     }
 
-    const units = await Promise.all(extracted.units.map((u) => compareUnit(admin, u, u.listing != null ? listings[u.listing - 1] : undefined, extracted.invoice_date)));
+    const units = await compareAll(admin, extracted, listings);
     const { summary, detail } = describe(extracted, units);
     const now = new Date().toISOString();
     await admin.from("invoice_checks").update({ status: "done", kind: extracted.kind, vendor: extracted.vendor, summary, result: { extracted, units } as never, checked_at: now }).eq("message_id", email.message_id);
@@ -98,25 +98,49 @@ async function dryRun(admin: Admin, email: InvoiceEmail): Promise<Record<string,
   const listings = (props ?? []).map((p) => ({ id: p.id, name: (p.property_name || p.public_name || "").replace(/\*+$/, "").trim(), city: p.city }));
   const extracted = await extract(email, listings);
   if (!extracted || extracted.kind === "other" || !extracted.units.length) return { dry: true, skipped: "not a cleaning or maintenance invoice", extracted };
-  const units = await Promise.all(extracted.units.map((u) => compareUnit(admin, u, u.listing != null ? listings[u.listing - 1] : undefined, extracted.invoice_date)));
+  const units = await compareAll(admin, extracted, listings);
   return { dry: true, ...describe(extracted, units), units };
 }
 
+type Job = { date: string | null; description: string; amount: number | null };
 type UnitResult = {
   billed_as: string;
   listing: { id: string; name: string } | null;
   cleans: { billed: string[]; matched: string[]; no_checkout: string[]; not_billed: string[] } | null;
-  maintenance: { date: string | null; description: string; amount: number | null; tickets: { id: string; title: string; created: string }[] }[];
+  maintenance: Job[];
+  /** Maintenance / damage tickets at this listing around the jobs' dates, for the reviewer to judge. */
+  tickets: { id: string; title: string; created: string }[];
 };
+
+/** Lines billed to the same listing (e.g. "118 Elbow Drive" and "11820 Elbow Dr.") are checked together. */
+async function compareAll(admin: Admin, x: Extracted, listings: { id: string; name: string }[]): Promise<UnitResult[]> {
+  const groups = new Map<string, { names: string[]; listing?: { id: string; name: string }; cleans: string[]; maintenance: Job[] }>();
+  x.units.forEach((u, i) => {
+    const listing = u.listing != null ? listings[u.listing - 1] : undefined;
+    const key = listing ? listing.id : `unplaced:${i}`;
+    const g = groups.get(key) ?? { names: [], listing, cleans: [], maintenance: [] };
+    g.names.push(u.billed_as);
+    g.cleans.push(...u.cleans);
+    g.maintenance.push(...u.maintenance);
+    groups.set(key, g);
+  });
+  return Promise.all([...groups.values()].map((g) => compareUnit(admin, g, x.invoice_date)));
+}
 
 async function compareUnit(
   admin: Admin,
-  u: Extracted["units"][number],
-  listing: { id: string; name: string } | undefined,
+  g: { names: string[]; listing?: { id: string; name: string }; cleans: string[]; maintenance: Job[] },
   invoiceDate: string | null,
 ): Promise<UnitResult> {
-  const result: UnitResult = { billed_as: u.billed_as, listing: listing ? { id: listing.id, name: listing.name } : null, cleans: null, maintenance: [] };
-  const billed = [...new Set(u.cleans.filter(isDate))].sort();
+  const listing = g.listing;
+  const result: UnitResult = {
+    billed_as: [...new Set(g.names)].join(" / "),
+    listing: listing ? { id: listing.id, name: listing.name } : null,
+    cleans: null,
+    maintenance: g.maintenance.map((j) => ({ date: isDate(j.date) ? j.date : null, description: j.description, amount: j.amount })),
+    tickets: [],
+  };
+  const billed = [...new Set(g.cleans.filter(isDate))].sort();
 
   if (listing && billed.length) {
     // The whole month(s) billed, so a checkout that wasn't billed shows up too.
@@ -135,22 +159,18 @@ async function compareUnit(
     result.cleans = { billed, matched: [], no_checkout: [], not_billed: [] };
   }
 
-  for (const job of u.maintenance) {
-    const around = isDate(job.date) ? job.date : isDate(invoiceDate) ? invoiceDate : null;
-    let tickets: { id: string; title: string; created: string }[] = [];
-    if (listing && around) {
-      const { data } = await admin
-        .from("tickets")
-        .select("id, type, metadata, created_at")
-        .eq("property_id", listing.id)
-        .in("type", MAINT_TYPES)
-        .gte("created_at", `${addDays(around, -45)}T00:00:00Z`)
-        .lte("created_at", `${addDays(around, 7)}T23:59:59Z`)
-        .order("created_at", { ascending: false })
-        .limit(5);
-      tickets = (data ?? []).map((t) => ({ id: t.id, title: String((t.metadata as { title?: unknown })?.title ?? t.type), created: String(t.created_at).slice(0, 10) }));
-    }
-    result.maintenance.push({ date: isDate(job.date) ? job.date : null, description: job.description, amount: job.amount, tickets });
+  const dates = [...result.maintenance.map((j) => j.date), invoiceDate].filter(isDate).sort();
+  if (listing && result.maintenance.length && dates.length) {
+    const { data } = await admin
+      .from("tickets")
+      .select("id, type, metadata, created_at")
+      .eq("property_id", listing.id)
+      .in("type", MAINT_TYPES)
+      .gte("created_at", `${addDays(dates[0], -45)}T00:00:00Z`)
+      .lte("created_at", `${addDays(dates[dates.length - 1], 7)}T23:59:59Z`)
+      .order("created_at", { ascending: false })
+      .limit(8);
+    result.tickets = (data ?? []).map((t) => ({ id: t.id, title: String((t.metadata as { title?: unknown })?.title ?? t.type), created: String(t.created_at).slice(0, 10) }));
   }
   return result;
 }
@@ -172,10 +192,16 @@ function describe(x: Extracted, units: UnitResult[]): { summary: string[]; detai
     }
     if (off.length > 4) summary.push(`...and ${off.length - 4} more units - see the ticket`);
   }
-  const jobs = units.flatMap((u) => u.maintenance.map((m) => ({ ...m, unit: u })));
-  if (jobs.length) {
-    const linked = jobs.filter((j) => j.tickets.length);
-    summary.push(`:wrench: Maintenance: ${jobs.length} job${jobs.length === 1 ? "" : "s"}, ${linked.length ? `${linked.length} with a matching ticket` : "no matching tickets"}`);
+  const maintUnits = units.filter((u) => u.maintenance.length);
+  if (maintUnits.length) {
+    const jobs = maintUnits.reduce((n, u) => n + u.maintenance.length, 0);
+    const withTickets = maintUnits.filter((u) => u.tickets.length);
+    const where = maintUnits.length === 1 ? (maintUnits[0].listing?.name ?? maintUnits[0].billed_as) : `${maintUnits.length} units`;
+    summary.push(
+      `:wrench: Maintenance: ${jobs} job${jobs === 1 ? "" : "s"} at ${where} - ${
+        withTickets.length ? `${withTickets.length === maintUnits.length ? "each has" : `${withTickets.length} ha${withTickets.length === 1 ? "s" : "ve"}`} a maintenance ticket around then (see the ticket to compare)` : "no maintenance tickets for these in Pique Ops"
+      }`,
+    );
   }
   if (unplaced.length) summary.push(`:grey_question: Couldn't tell which listing: ${unplaced.map((u) => u.billed_as).slice(0, 3).join(", ")}`);
 
@@ -190,10 +216,13 @@ function describe(x: Extracted, units: UnitResult[]): { summary: string[]; detai
         if (u.cleans.not_billed.length) lines.push(`  Checkouts not billed: ${u.cleans.not_billed.map(day).join(", ")}`);
       }
     }
-    for (const m of u.maintenance) {
-      const what = `${m.date ? `${day(m.date)}: ` : ""}${m.description}${m.amount != null ? ` ($${m.amount.toFixed(2)})` : ""}`;
-      const match = m.tickets.length ? `matching ticket${m.tickets.length === 1 ? "" : "s"}: ${m.tickets.map((t) => (url ? `${t.title} (${url}/?ticket=${t.id})` : t.title)).join("; ")}` : "no maintenance ticket found";
-      lines.push(`  Maintenance - ${what} - ${match}`);
+    for (const m of u.maintenance) lines.push(`  Maintenance: ${m.date ? `${day(m.date)} - ` : ""}${m.description}${m.amount != null ? ` ($${m.amount.toFixed(2)})` : ""}`);
+    if (u.maintenance.length && u.listing) {
+      lines.push(
+        u.tickets.length
+          ? `  Maintenance tickets at this listing around then: ${u.tickets.map((t) => `${t.title} (${day(t.created)}${url ? `, ${url}/?ticket=${t.id}` : ""})`).join("; ")}`
+          : "  No maintenance tickets at this listing around then.",
+      );
     }
   }
   lines.push("", "Checked against accepted bookings in Pique Ops. Cancelled or owner stays aren't counted.");
