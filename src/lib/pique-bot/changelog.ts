@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CHANNELS } from "./config";
 import { slackApi } from "./slack";
-import { announceFinishedTechRequests } from "./techRequests";
+import { announceFinishedTechRequests, nudgeUnloggedTechRequests } from "./techRequests";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -29,6 +29,8 @@ const NOT_IN_CHANNEL = new Set(["not_in_channel", "channel_not_found", "is_archi
 export async function runChangelog(admin: Admin, opts: { dry: boolean }) {
   // Finished tech requests: the reply in their Slack thread, and a changelog entry posted below.
   const techRequests = await announceFinishedTechRequests(admin, opts);
+  // Tech requests offered in Slack but never logged: one reminder in their thread.
+  const techNudges = await nudgeUnloggedTechRequests(admin, opts);
   const { data } = await admin
     .from("changelog_entries")
     .select("id, title, body, areas, commit_sha, created_at")
@@ -66,7 +68,8 @@ export async function runChangelog(admin: Admin, opts: { dry: boolean }) {
     await admin.from("changelog_entries").update({ slack_ts: sent.ts }).eq("id", entry.id);
     results.push({ entry: entry.id, slack_ts: sent.ts });
   }
-  return techRequests.length ? [...techRequests, ...results] : results;
+  const extra = [...techRequests, ...techNudges];
+  return extra.length ? [...extra, ...results] : results;
 }
 
 export function renderEntry(e: Entry): { text: string; blocks: unknown[] } {

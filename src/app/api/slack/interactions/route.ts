@@ -6,7 +6,7 @@ import { appUrl, edmontonToday, loadRows, resolveActor } from "@/lib/pique-bot/d
 import { isFinished, nextItem, shortDate, type BotRow } from "@/lib/pique-bot/render";
 import { POST_COLUMNS, redrawForTicket, type Post } from "@/lib/pique-bot/posts";
 import { slackApi, verifySlackSignature } from "@/lib/pique-bot/slack";
-import { logTechRequest } from "@/lib/pique-bot/techRequests";
+import { dismissTechRequest, logTechRequest } from "@/lib/pique-bot/techRequests";
 import { undoDone } from "@/lib/pique-bot/undo";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -45,6 +45,21 @@ export async function POST(request: NextRequest) {
     if (action.action_id === "pique_bot_tech_request") {
       after(() =>
         logTechRequest(admin, {
+          proposalId: String(action.value ?? ""),
+          slackUser: payload.user.id,
+          slackName: slackName(payload.user),
+          channel: payload.channel?.id ?? payload.container?.channel_id,
+          messageTs: payload.message?.ts ?? payload.container?.message_ts,
+          blocks: payload.message?.blocks ?? [],
+        }),
+      );
+      return new NextResponse(null, { status: 200 });
+    }
+
+    // "No thanks" on the reminder for an untapped tech request.
+    if (action.action_id === "pique_bot_tech_dismiss") {
+      after(() =>
+        dismissTechRequest(admin, {
           proposalId: String(action.value ?? ""),
           slackUser: payload.user.id,
           slackName: slackName(payload.user),

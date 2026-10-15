@@ -351,3 +351,112 @@ export async function closeAutomationTechRequest(admin: Admin, ref: string, what
   }
   return true;
 }
+
+/** A proposal nobody tapped gets one reminder this long after it was offered. */
+const NUDGE_AFTER_MS = 5 * 60_000;
+/** Older proposals are left alone, so a deploy never pings about last week's threads. */
+const NUDGE_WITHIN_MS = 24 * 3_600_000;
+
+type Unlogged = {
+  id: string;
+  title: string;
+  thread_id: string | null;
+  created_at: string;
+  slack_assistant_threads: { channel_id: string; thread_ts: string } | null;
+  profiles: { slack_user_id: string | null } | null;
+};
+
+/**
+ * One reminder in the thread for a "Log as tech request" button nobody tapped (MDP 10-14: requests
+ * were getting lost). Runs with the changelog (every 5 min). Tags the person who asked and shows the
+ * button again plus "No thanks". Skipped when a later proposal in the same thread replaced it.
+ * nudged_at is claimed before posting, so it's sent at most once.
+ */
+export async function nudgeUnloggedTechRequests(admin: Admin, opts: { dry: boolean }) {
+  const now = Date.now();
+  const { data } = await admin
+    .from("slack_assistant_tech_proposals")
+    .select("id, title, thread_id, created_at, slack_assistant_threads(channel_id, thread_ts), profiles!slack_assistant_tech_proposals_asked_by_fkey(slack_user_id)")
+    .is("ticket_id", null)
+    .is("nudged_at", null)
+    .is("dismissed_at", null)
+    .gte("created_at", new Date(now - NUDGE_WITHIN_MS).toISOString())
+    .lte("created_at", new Date(now - NUDGE_AFTER_MS).toISOString());
+  const rows = (data ?? []) as unknown as Unlogged[];
+  if (!rows.length) return [];
+
+  // A newer proposal in the same thread (a reworked scope) replaces the older one.
+  const { data: siblings } = await admin
+    .from("slack_assistant_tech_proposals")
+    .select("thread_id, created_at")
+    .in("thread_id", [...new Set(rows.map((r) => r.thread_id).filter((t): t is string => !!t))]);
+  const latest = new Map<string, string>();
+  for (const s of siblings ?? []) if (s.thread_id && s.created_at > (latest.get(s.thread_id) ?? "")) latest.set(s.thread_id, s.created_at);
+
+  const results: Record<string, unknown>[] = [];
+  for (const r of rows) {
+    const thread = r.slack_assistant_threads;
+    if (!thread) continue;
+    // Same answer can offer up to 3 at once; only a proposal from a later answer counts as replacing.
+    const newest = r.thread_id ? latest.get(r.thread_id) : undefined;
+    if (newest && Date.parse(newest) - Date.parse(r.created_at) > 60_000) {
+      if (!opts.dry) await admin.from("slack_assistant_tech_proposals").update({ nudged_at: new Date().toISOString() }).eq("id", r.id).is("nudged_at", null);
+      results.push({ proposal: r.id, skipped: "replaced by a later proposal" });
+      continue;
+    }
+    const who = r.profiles?.slack_user_id ? `<@${r.profiles.slack_user_id}> ` : "";
+    const text = `${who}Still want to log *${esc(r.title)}* as a tech request? Nothing reaches the tech team until someone taps the button.`;
+    if (opts.dry) {
+      results.push({ proposal: r.id, text });
+      continue;
+    }
+    const { data: claimed } = await admin
+      .from("slack_assistant_tech_proposals")
+      .update({ nudged_at: new Date().toISOString() })
+      .eq("id", r.id)
+      .is("nudged_at", null)
+      .select("id");
+    if (!claimed?.length) continue;
+    const sent = await slackApi("chat.postMessage", {
+      channel: thread.channel_id,
+      thread_ts: thread.thread_ts,
+      text: text.replace(/\*/g, ""),
+      blocks: [
+        { type: "section", text: { type: "mrkdwn", text } },
+        {
+          type: "actions",
+          block_id: `tech:${r.id}`,
+          elements: [
+            { type: "button", action_id: "pique_bot_tech_request", style: "primary", text: { type: "plain_text", text: "Log as tech request" }, value: r.id },
+            { type: "button", action_id: "pique_bot_tech_dismiss", text: { type: "plain_text", text: "No thanks" }, value: r.id },
+          ],
+        },
+      ],
+      unfurl_links: false,
+    });
+    // A thread that's gone can't be nudged; anything else is retried on the next run.
+    if (!sent.ok && !(sent.error && GONE.has(sent.error))) {
+      await admin.from("slack_assistant_tech_proposals").update({ nudged_at: null }).eq("id", r.id);
+    }
+    results.push({ proposal: r.id, sent: sent.ok, error: sent.ok ? undefined : sent.error });
+  }
+  return results;
+}
+
+/** "No thanks" on the reminder: no ticket, no further reminders, and the buttons become a note. */
+export async function dismissTechRequest(
+  admin: Admin,
+  opts: { proposalId: string; slackUser: string; slackName: string; channel: string; messageTs: string; blocks: unknown[] },
+) {
+  const actor = await resolveActor(admin, opts.slackUser, opts.slackName);
+  if (!actor.profileId) return;
+  const { data: p } = await admin.from("slack_assistant_tech_proposals").select("id, title, ticket_id").eq("id", opts.proposalId).maybeSingle();
+  if (!p || p.ticket_id) return;
+  await admin.from("slack_assistant_tech_proposals").update({ dismissed_at: new Date().toISOString() }).eq("id", p.id).is("dismissed_at", null);
+  const tapped = `tech:${p.id}`;
+  const note = `Not logging it (${actor.name}). Ask me again any time if it comes back.`;
+  const blocks = opts.blocks.map((b) =>
+    (b as { block_id?: string }).block_id === tapped ? { type: "context", block_id: tapped, elements: [{ type: "mrkdwn", text: note }] } : b,
+  );
+  await slackApi("chat.update", { channel: opts.channel, ts: opts.messageTs, blocks, text: `Not logged: ${p.title}` });
+}
