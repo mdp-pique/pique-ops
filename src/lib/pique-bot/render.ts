@@ -1,7 +1,7 @@
 // Pure layout for Pique Bot's Slack messages - no I/O, so it can be checked on
 // its own. The same function draws the 7 AM post and every update after a tap.
 import { domainForType } from "@/lib/pique-ui/domains";
-import { BOT_RULES, mention, OVERDUE_LIMIT_DAYS, type Tier } from "./config";
+import { BOT_RULES, mention, OVERDUE_LIMIT_DAYS, tagsFor, type Tier } from "./config";
 import { canUndo } from "./undo";
 
 export interface BotItem {
@@ -274,14 +274,11 @@ export function renderPost(rows: BotRow[], postId: string, postDate: string, app
   const later = sorted.filter((r) => !isFinished(r) && isSnoozed(r, postDate));
   const done = sorted.filter((r) => isFinished(r));
 
-  // Morning-tier rules are only ever asked here, so their tags (e.g. @customerservice for parking) go on this post,
-  // as do the tags of rules marked tagInMorning (invoices).
+  // Everyone an open item is for (tagsFor: the rule's people, else @customerservice), so a task still
+  // waiting is never just reposted silently (MDP 10-15).
   const tags = [
     ...new Set(
-      open.flatMap((r) => {
-        const rule = BOT_RULES[r.ruleKey];
-        return (rule?.tier === "morning" || rule?.tagInMorning) && !r.assigneeSlackId ? (rule.tag ?? []) : [];
-      }),
+      open.flatMap((r) => (r.assigneeSlackId ? [] : tagsFor(BOT_RULES[r.ruleKey]))),
     ),
   ].map(mention);
   const blocks: Block[] = [
@@ -377,7 +374,8 @@ export function renderAlert(row: BotRow, postId: string, postDate: string, appUr
   const rule = BOT_RULES[row.ruleKey];
   const tier = rule?.tier === "urgent" ? "urgent" : "today";
   const finished = isFinished(row);
-  const tags = !finished && rule?.tag?.length && !row.assigneeSlackId ? ` ${rule.tag.map(mention).join(" ")}` : "";
+  const people = finished || row.assigneeSlackId ? [] : tagsFor(rule);
+  const tags = people.length ? ` ${people.map(mention).join(" ")}` : "";
   const heading: Block = { type: "context", elements: [{ type: "mrkdwn", text: finished ? ":white_check_mark: *Handled*" : `${ALERT_HEADING[tier]}${tags}` }] };
   const body = finished ? renderDoneRow(row, postId, appUrl) : renderOpenRow(row, postId, postDate, appUrl);
   const title = titleOf(row).replace(/\*/g, "");

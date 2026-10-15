@@ -52,8 +52,9 @@ export interface BotRule {
   /** "created": asked from the first morning after the ticket appears, not counted from check-in. */
   askFrom?: "checkin" | "created";
   /**
-   * Slack user ids (U...) or user group ids (S...) tagged on the immediate post and its reminder (the
-   * people the Zap tagged). For a morning-tier rule, the 7 AM post tags them when it has one of its items.
+   * Slack user ids (U...) or user group ids (S...) the task is for (the people the Zap tagged). Left out,
+   * it's @customerservice (tagsFor). Tagged on the immediate post, its reminder, and every 7 AM post that
+   * still lists one of its items.
    */
   tag?: string[];
   /** Silent until listed in automation_flags.pique_bot_alerts_live_types. */
@@ -69,12 +70,6 @@ export interface BotRule {
    * into the 7 AM post. One that comes in overnight is posted by the first alerts run after 7.
    */
   ownPost?: boolean;
-  /**
-   * Also tag `tag` on the 7 AM post while one of its items is still open (today-tier rules are
-   * otherwise only tagged on their first post). Invoices (Michael Stead 10-15): Laurice and Cristine
-   * get pinged every morning their step is still waiting.
-   */
-  tagInMorning?: boolean;
 }
 
 // The four people "Cancelled Reservation -> Slack Notification" tagged.
@@ -92,6 +87,17 @@ function emailRule(label: string, channel: string, tier: Tier, tag?: string[], e
 
 // Slack user group @customerservice (the group the 213 FML parking Zap and the GHL form post tag).
 export const CUSTOMER_SERVICE = "S067WK5QW1Z";
+
+/**
+ * Who a post about this rule tags (MDP 10-15): every post that asks for a task tags the person it's for, or
+ * @customerservice when the rule names nobody. `tag: []` means no one (FYI-style or not settled yet).
+ * The first post and every 7 AM post that still lists the item both tag them; an assignee with Slack
+ * linked is tagged instead.
+ */
+export function tagsFor(rule: BotRule | undefined): string[] {
+  if (!rule) return [];
+  return rule.tag ?? [CUSTOMER_SERVICE];
+}
 
 /** A Slack mention for a user id, or for a user group id (S...). */
 export function mention(id: string): string {
@@ -126,10 +132,10 @@ export const BOT_RULES: Record<string, BotRule> = {
   "email:ondilo": emailRule("Ondilo / Booking.com email", "C0ATUL9R3C1", "today", [LAURICE]),
   "email:mykey": emailRule("MyKey housing request", "C04B37U1SSJ", "today"),
   "email:sinistar": emailRule("Sinistar rental offer", "C04B37U1SSJ", "today"),
-  "email:invoice": emailRule("Invoice to review", "C07VCQ4ECBV", "today", [LAURICE], { tagInMorning: true }),
-  "email:invoice_reviewed": emailRule("Enter invoice in QBO and Plooto", "C07VCQ4ECBV", "today", [CRISTINE], { tagInMorning: true }),
+  "email:invoice": emailRule("Invoice to review", "C07VCQ4ECBV", "today", [LAURICE]),
+  "email:invoice_reviewed": emailRule("Enter invoice in QBO and Plooto", "C07VCQ4ECBV", "today", [CRISTINE]),
   // @customerservice says what it's for (Say what it's for), which files the email and tells Cristine (Michael Stead 10-15).
-  "email:etransfer": emailRule("Interac e-Transfer", "C09RZ1ERTK8", "today", [CUSTOMER_SERVICE], { tagInMorning: true }),
+  "email:etransfer": emailRule("Interac e-Transfer", "C09RZ1ERTK8", "today", [CUSTOMER_SERVICE]),
   // Replaces the n8n "Chrangela & PEKA Email → Slack Alert" workflow (MDP 10-07), without its @channel.
   "email:chrangela_peka": { ...emailRule("Email from Chrangela / PEKA", CHANNELS.teamChat, "today"), snippet: true },
   // #2-operations and #overdue-vrbo-payments: the Zaps found 10-14 (MDP), with the start of the email.
