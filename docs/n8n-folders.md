@@ -94,7 +94,7 @@ The existing "Laurice" folder is left as it is.
 - Pique-Connecteam-List-Forms
 - Pique-Connecteam-List-Jobs (helper, read-only: job ids and titles)
 - Pique-Invoice-Peek-Helper (helper, read-only: opens a few invoices@ emails and their PDF text)
-- Pique-DM-Once-Laurice-Coastal-Calm (one-off DM, sent 10-14)
+- Pique-DM-Once-Helper (manual one-off DM as Pique-a-choo: Laurice 10-14, Janina 10-15)
 - Pique-Connecteam-List-Schedulers
 - Pique-Connecteam-List-TimeClocks
 - Pique-Connecteam-Users-Sync
