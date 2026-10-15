@@ -268,12 +268,13 @@ export function renderPost(rows: BotRow[], postId: string, postDate: string, app
   const later = sorted.filter((r) => !isFinished(r) && isSnoozed(r, postDate));
   const done = sorted.filter((r) => isFinished(r));
 
-  // Morning-tier rules are only ever asked here, so their tags (e.g. @customerservice for parking) go on this post.
+  // Morning-tier rules are only ever asked here, so their tags (e.g. @customerservice for parking) go on this post,
+  // as do the tags of rules marked tagInMorning (invoices).
   const tags = [
     ...new Set(
       open.flatMap((r) => {
         const rule = BOT_RULES[r.ruleKey];
-        return rule?.tier === "morning" && !r.assigneeSlackId ? (rule.tag ?? []) : [];
+        return (rule?.tier === "morning" || rule?.tagInMorning) && !r.assigneeSlackId ? (rule.tag ?? []) : [];
       }),
     ),
   ].map(mention);
@@ -331,7 +332,8 @@ export function renderPost(rows: BotRow[], postId: string, postDate: string, app
     blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: `+${hidden} more - see Requests in the Pique app.` }] });
   }
 
-  return { text: `Morning check-ins - ${open.length + later.length} still open, ${done.length} done`, blocks };
+  // Mentions also go in the fallback text, which is what Slack notifies from.
+  return { text: `Morning check-ins - ${open.length + later.length} still open, ${done.length} done${tags.length ? ` ${tags.join(" ")}` : ""}`, blocks };
 }
 
 /**

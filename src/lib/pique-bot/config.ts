@@ -69,6 +69,12 @@ export interface BotRule {
    * into the 7 AM post. One that comes in overnight is posted by the first alerts run after 7.
    */
   ownPost?: boolean;
+  /**
+   * Also tag `tag` on the 7 AM post while one of its items is still open (today-tier rules are
+   * otherwise only tagged on their first post). Invoices (Michael Stead 10-15): Laurice and Cristine
+   * get pinged every morning their step is still waiting.
+   */
+  tagInMorning?: boolean;
 }
 
 // The four people "Cancelled Reservation -> Slack Notification" tagged.
@@ -80,8 +86,8 @@ const CRISTINE = "U077KS6VC7R";
 const ANNA = "U09U282TLE6";
 
 /** Email rules (email_alert_rules.key), posted where each Zap posted and tagging who it tagged. */
-function emailRule(label: string, channel: string, tier: Tier, tag?: string[]): BotRule {
-  return { label, channel, leadDays: 0, tier, askFrom: "created", tag, gated: true };
+function emailRule(label: string, channel: string, tier: Tier, tag?: string[], extra?: Partial<BotRule>): BotRule {
+  return { label, channel, leadDays: 0, tier, askFrom: "created", tag, gated: true, ...extra };
 }
 
 // Slack user group @customerservice (the group the 213 FML parking Zap and the GHL form post tag).
@@ -120,8 +126,8 @@ export const BOT_RULES: Record<string, BotRule> = {
   "email:ondilo": emailRule("Ondilo / Booking.com email", "C0ATUL9R3C1", "today", [LAURICE]),
   "email:mykey": emailRule("MyKey housing request", "C04B37U1SSJ", "today"),
   "email:sinistar": emailRule("Sinistar rental offer", "C04B37U1SSJ", "today"),
-  "email:invoice": emailRule("Invoice to review", "C07VCQ4ECBV", "today", [LAURICE]),
-  "email:invoice_reviewed": emailRule("Enter invoice in QBO and Plooto", "C07VCQ4ECBV", "today", [CRISTINE]),
+  "email:invoice": emailRule("Invoice to review", "C07VCQ4ECBV", "today", [LAURICE], { tagInMorning: true }),
+  "email:invoice_reviewed": emailRule("Enter invoice in QBO and Plooto", "C07VCQ4ECBV", "today", [CRISTINE], { tagInMorning: true }),
   "email:etransfer": emailRule("Interac e-Transfer", "C09RZ1ERTK8", "today"),
   // Replaces the n8n "Chrangela & PEKA Email → Slack Alert" workflow (MDP 10-07), without its @channel.
   "email:chrangela_peka": { ...emailRule("Email from Chrangela / PEKA", CHANNELS.teamChat, "today"), snippet: true },
