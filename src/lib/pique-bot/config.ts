@@ -82,7 +82,7 @@ const BOOKINGS_TEAM = ["U078P07JGGY", "U077KS6VC7R", "U06SZU27S5B", "U051SQ08E75
 // Tagged by the Robert / Aircover / Truvi / Ondilo Zaps.
 const LAURICE = "U049F2880MR";
 const TAMMY = "U05QG0BUP0E";
-const CRISTINE = "U077KS6VC7R";
+export const CRISTINE = "U077KS6VC7R";
 const ANNA = "U09U282TLE6";
 
 /** Email rules (email_alert_rules.key), posted where each Zap posted and tagging who it tagged. */
@@ -128,7 +128,8 @@ export const BOT_RULES: Record<string, BotRule> = {
   "email:sinistar": emailRule("Sinistar rental offer", "C04B37U1SSJ", "today"),
   "email:invoice": emailRule("Invoice to review", "C07VCQ4ECBV", "today", [LAURICE], { tagInMorning: true }),
   "email:invoice_reviewed": emailRule("Enter invoice in QBO and Plooto", "C07VCQ4ECBV", "today", [CRISTINE], { tagInMorning: true }),
-  "email:etransfer": emailRule("Interac e-Transfer", "C09RZ1ERTK8", "today"),
+  // @customerservice says what it's for (Say what it's for), which files the email and tells Cristine (Michael Stead 10-15).
+  "email:etransfer": emailRule("Interac e-Transfer", "C09RZ1ERTK8", "today", [CUSTOMER_SERVICE], { tagInMorning: true }),
   // Replaces the n8n "Chrangela & PEKA Email → Slack Alert" workflow (MDP 10-07), without its @channel.
   "email:chrangela_peka": { ...emailRule("Email from Chrangela / PEKA", CHANNELS.teamChat, "today"), snippet: true },
   // #2-operations and #overdue-vrbo-payments: the Zaps found 10-14 (MDP), with the start of the email.

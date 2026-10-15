@@ -8,6 +8,7 @@ import { POST_COLUMNS, redrawForTicket, type Post } from "@/lib/pique-bot/posts"
 import { slackApi, verifySlackSignature } from "@/lib/pique-bot/slack";
 import { dismissTechRequest, logTechRequest } from "@/lib/pique-bot/techRequests";
 import { undoDone } from "@/lib/pique-bot/undo";
+import { etransferModal, readEtransferForm, recordEtransfer } from "@/lib/pique-bot/etransfer";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -75,6 +76,10 @@ export async function POST(request: NextRequest) {
 
     // Forms have to open within the 3 seconds (trigger_id expires); the
     // submission re-checks the post and ticket before saving anything.
+    if (action.action_id === "pique_bot_etransfer") {
+      await slackApi("views.open", { trigger_id: payload.trigger_id, view: etransferModal(postId, ticketId, itemId) });
+      return new NextResponse(null, { status: 200 });
+    }
     if (action.action_id === "pique_bot_note") {
       await slackApi("views.open", { trigger_id: payload.trigger_id, view: noteModal(postId, ticketId) });
       return new NextResponse(null, { status: 200 });
@@ -158,6 +163,24 @@ export async function POST(request: NextRequest) {
       await redrawForTicket(admin, ticketId);
     });
     // An empty body closes the form.
+    return new NextResponse(null, { status: 200 });
+  }
+
+  // Interac e-transfer: what it's for. Ticks the item (resolving the ticket), files the email, tells Cristine.
+  if (payload.type === "view_submission" && callback === "pique_bot_etransfer") {
+    const [postId, ticketId, itemId] = String(payload.view.private_metadata ?? "").split("|");
+    const answer = readEtransferForm(payload.view.state?.values ?? {});
+    if (!answer) {
+      return NextResponse.json({ response_action: "errors", errors: { note: "Pick what it's for and add a note" } });
+    }
+    after(async () => {
+      const post = await loadPost(admin, postId, ticketId);
+      if (!post) return;
+      const actor = await resolveActor(admin, payload.user.id, slackName(payload.user));
+      await recordEtransfer(admin, { ticketId, postId, channel: post.channel_id, threadTs: post.slack_ts, ...answer, actor });
+      await markDone(admin, ticketId, itemId, actor);
+      await redrawForTicket(admin, ticketId);
+    });
     return new NextResponse(null, { status: 200 });
   }
 

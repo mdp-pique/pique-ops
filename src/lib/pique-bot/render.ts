@@ -207,7 +207,13 @@ export function renderOpenRow(row: BotRow, postId: string, postDate: string, app
             { type: "button", action_id: "pique_bot_parking_none", text: { type: "plain_text", text: "No parking" }, value },
             notYet,
           ]
-        : [{ type: "button", action_id: "pique_bot_done", style: "primary", text: { type: "plain_text", text: "Done" }, value }, notYet];
+        : row.ruleKey === "email:etransfer"
+          ? [
+              // Opens the form: what it's for (the invoices@ folder) and a note; saving files the email.
+              { type: "button", action_id: "pique_bot_etransfer", style: "primary", text: { type: "plain_text", text: "Say what it's for" }, value },
+              notYet,
+            ]
+          : [{ type: "button", action_id: "pique_bot_done", style: "primary", text: { type: "plain_text", text: "Done" }, value }, notYet];
   const elements: Block[] = later ? [] : answers;
   if (row.doneBy && !later) elements.push(noteButton(row, postId));
   if (appUrl) elements.push(openButton(row, appUrl));
