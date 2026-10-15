@@ -79,6 +79,9 @@ const LAURICE = "U049F2880MR";
 const TAMMY = "U05QG0BUP0E";
 export const CRISTINE = "U077KS6VC7R";
 const ANNA = "U09U282TLE6";
+const JANINA = "U06SZU27S5B";
+// Cleaning tasks tag the cleaning office, not @customerservice (MDP 10-15).
+const CLEANING_TEAM = [TAMMY, JANINA];
 
 /** Email rules (email_alert_rules.key), posted where each Zap posted and tagging who it tagged. */
 function emailRule(label: string, channel: string, tier: Tier, tag?: string[], extra?: Partial<BotRule>): BotRule {
@@ -120,7 +123,7 @@ export const BOT_RULES: Record<string, BotRule> = {
   // last registration (create_parking_renewal_tickets, made by the alerts run), posted at 11:00 that day like the first.
   "parking:renew": { label: "Re-register vehicle", channel: CHANNELS.parking213, leadDays: 0, tier: "morning", askAt: 11, tag: [CUSTOMER_SERVICE] },
   // Brought the morning of check-in, so only asked that morning.
-  pack_n_play: { label: "Pack 'n play", channel: CHANNELS.canmoreCleaning, leadDays: 0, tier: "morning" },
+  pack_n_play: { label: "Pack 'n play", channel: CHANNELS.canmoreCleaning, leadDays: 0, tier: "morning", tag: CLEANING_TEAM },
   // Booking events (replace Zaps; docs/zapier-migration.md lane B).
   save_booking: { label: "Cancelled booking - try to save it", channel: CHANNELS.cancellations, leadDays: 0, tier: "urgent", askFrom: "created", tag: BOOKINGS_TEAM, gated: true },
   guest_count_check: { label: "Only 1 guest - confirm the count", channel: CHANNELS.guestCount, leadDays: 0, tier: "today", askFrom: "created", gated: true },
@@ -149,21 +152,21 @@ export const BOT_RULES: Record<string, BotRule> = {
   claim_tracker: { label: "Claim to prepare", channel: CHANNELS.newClaims, leadDays: 0, tier: "today", askFrom: "created", tag: [LAURICE], gated: true },
   // A guest rated cleanliness below 5 (replaces the review QC Zaps; docs/zapier-migration.md lane Q).
   // Every other review is an FYI post in the same channel from the review feed (reviews.ts).
-  review_qc: { label: "Cleanliness below 5", channel: CHANNELS.qualityControl, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
+  review_qc: { label: "Cleanliness below 5", channel: CHANNELS.qualityControl, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true, tag: CLEANING_TEAM },
   // Joint-listing separator doors: lock on a checkout, unlock on a check-in. Tickets are made by the
   // 7 AM run itself (create_separator_door_tickets) and asked in that post (replaces an n8n @channel).
   // Stripe (src/lib/stripe/payments.ts): a failed payment or a new charge dispute, where the Zaps posted
   // them with "mark with a checkmark" (MDP 10-07). Successful payments are FYI posts, not tickets.
   payment_failed: { label: "Failed payment", channel: CHANNELS.stripeFailed, leadDays: 0, tier: "today", askFrom: "created", gated: true },
   payment_dispute: { label: "Charge dispute", channel: CHANNELS.stripeFailed, leadDays: 0, tier: "urgent", askFrom: "created", gated: true },
-  separator_door: { label: "Separator door", channel: CHANNELS.cleaningOps, leadDays: 0, tier: "morning", askFrom: "created", gated: true },
+  separator_door: { label: "Separator door", channel: CHANNELS.cleaningOps, leadDays: 0, tier: "morning", askFrom: "created", gated: true, tag: CLEANING_TEAM },
   // Connecteam Cleaning Quality Check and Supply Order forms (replace two Zaps; docs/zapier-migration.md
   // P2-90 / P2-12, MDP 10-13): one post per submission where the Zap posted, tagging who it tagged.
   qc_inspection: { label: "Cleaning quality check", channel: CHANNELS.cleaningQuality, leadDays: 0, tier: "today", askFrom: "created", tag: [ANNA, TAMMY], gated: true, ownPost: true },
-  supply_order: { label: "Supply order", channel: CHANNELS.purchaseOrders, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
+  supply_order: { label: "Supply order", channel: CHANNELS.purchaseOrders, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true, tag: CLEANING_TEAM },
   contact_us: { label: "Lifestyle Contact Us", channel: CHANNELS.lifestyleContact, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
-  linen_refresh: { label: "Linen refresh", channel: CHANNELS.linenRefresh, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
-  winterization_check: { label: "Winterization checklist", channel: CHANNELS.damages, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
+  linen_refresh: { label: "Linen refresh", channel: CHANNELS.linenRefresh, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true, tag: CLEANING_TEAM },
+  winterization_check: { label: "Winterization checklist", channel: CHANNELS.damages, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true, tag: CLEANING_TEAM },
   // A turnover clean that may not be ready for the 4 PM check-in (lateCleans.ts, MDP 10-13): posted from
   // 2:30 PM tagging @customerservice; a 4 PM thread reply tags them again if the cleaner is still clocked in.
   clean_running_late: { label: "Clean may not be ready by 4 PM", channel: CHANNELS.cleaningHealth, leadDays: 0, tier: "today", askFrom: "created", tag: [CUSTOMER_SERVICE], ownPost: true },
