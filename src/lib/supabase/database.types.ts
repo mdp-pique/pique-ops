@@ -1618,6 +1618,48 @@ export type Database = {
         }
         Relationships: []
       }
+      pique_bot_questions: {
+        Row: {
+          acked_at: string | null
+          channel: string
+          closed_at: string | null
+          created_at: string
+          forward_to: string
+          id: string
+          last_forwarded_at: string | null
+          reply_ts: string | null
+          slack_user_id: string
+          topic: string
+          ts: string
+        }
+        Insert: {
+          acked_at?: string | null
+          channel: string
+          closed_at?: string | null
+          created_at?: string
+          forward_to: string
+          id?: string
+          last_forwarded_at?: string | null
+          reply_ts?: string | null
+          slack_user_id: string
+          topic: string
+          ts: string
+        }
+        Update: {
+          acked_at?: string | null
+          channel?: string
+          closed_at?: string | null
+          created_at?: string
+          forward_to?: string
+          id?: string
+          last_forwarded_at?: string | null
+          reply_ts?: string | null
+          slack_user_id?: string
+          topic?: string
+          ts?: string
+        }
+        Relationships: []
+      }
       pipeline_health: {
         Row: {
           active_properties: number | null

@@ -1,6 +1,7 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { answerInSlack, isAssistantThread } from "@/lib/pique-bot/assistant";
+import { forwardQuestionReply } from "@/lib/pique-bot/questionReplies";
 import { saveThreadFiles, type SlackFile } from "@/lib/pique-bot/threadFiles";
 import { verifySlackSignature } from "@/lib/pique-bot/slack";
 
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
   const isDm = ev.type === "message" && ev.channel_type === "im";
   // Photos or videos posted in a thread: saved to the ticket when the thread is under a Pique-a-choo ticket post.
   const threadFiles = ev.type === "message" && !isDm && !!ev.files?.length && !!ev.thread_ts && ev.thread_ts !== ev.ts;
-  if (!text && !threadFiles) return new NextResponse(null, { status: 200 });
+  if (!text && !threadFiles && !(isDm && ev.files?.length)) return new NextResponse(null, { status: 200 });
 
   const admin = createAdminClient();
   const mentionsBot = !!botUserId && text.includes(`<@${botUserId}>`);
@@ -68,6 +69,9 @@ export async function POST(request: NextRequest) {
         await saveThreadFiles(admin, { channel: ev.channel, threadTs: ev.thread_ts!, ts: ev.ts, user: ev.user!, files: ev.files! });
         return;
       }
+      // A reply to a question Pique-a-choo asked for the tech team goes to MDP, not to the assistant.
+      if (isDm && (await forwardQuestionReply(admin, { channel: ev.channel, ts: ev.ts, threadTs: ev.thread_ts, user: ev.user!, text, fileCount: ev.files?.length ?? 0 }))) return;
+      if (!text) return;
       if (threadFollowUp && !(await isAssistantThread(admin, ev.channel, ev.thread_ts!))) return;
       await answerInSlack(admin, { channel: ev.channel, ts: ev.ts, threadTs: ev.thread_ts, user: ev.user!, text, botUserId });
     } catch (e) {
