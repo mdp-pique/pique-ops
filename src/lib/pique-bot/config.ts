@@ -39,6 +39,7 @@ export const CHANNELS = {
   cleaningHealth: "C0BJM1A4MDY", // #cleaning-health-check (office staff only: noon / 3 PM chat check-ins, late cleans)
   lifestyleContact: "C04J2NK02U9", // #lifestyle-contact-us, where the Lifestyle Contact Us Zap posted
   linenRefresh: "C08C8P825GV", // #linen-and-bedding-refresh-notification, where the Linen and Bedding Refresh Zap posted
+  teamChatMissed: "C0C2N0SU1L2", // #pique-team-chat-missed (unanswered guest messages, requests to book)
   socialMessages: "C04PPB8D5A8", // #pique-social-media-msg (N2P Instagram / Facebook messages, via n8n Pique-N2P-Social-Messages)
 } as const;
 
@@ -70,6 +71,12 @@ export interface BotRule {
    * into the 7 AM post. One that comes in overnight is posted by the first alerts run after 7.
    */
   ownPost?: boolean;
+  /** Posted (and reminded) around the clock, ignoring quiet hours (requests to book, MDP 10-16). */
+  aroundTheClock?: boolean;
+  /** An urgent post with no answer gets its one thread reminder after this many minutes (default REMIND_AFTER_MINUTES). */
+  remindAfterMinutes?: number;
+  /** Skip that reminder once anyone has messaged the guest on the booking since the post (requests to book). */
+  remindUnlessGuestMessaged?: boolean;
 }
 
 // The four people "Cancelled Reservation -> Slack Notification" tagged.
@@ -167,6 +174,10 @@ export const BOT_RULES: Record<string, BotRule> = {
   contact_us: { label: "Lifestyle Contact Us", channel: CHANNELS.lifestyleContact, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true },
   linen_refresh: { label: "Linen refresh", channel: CHANNELS.linenRefresh, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true, tag: CLEANING_TEAM },
   winterization_check: { label: "Winterization checklist", channel: CHANNELS.damages, leadDays: 0, tier: "today", askFrom: "created", gated: true, ownPost: true, tag: CLEANING_TEAM },
+  // An Airbnb / direct request to book (MDP 10-16): posted the moment it comes in, around the clock, tagging
+  // @customerservice; one thread reminder 10 minutes later if nobody has accepted, declined or messaged the guest.
+  // The ticket resolves itself when the request is answered (mirror_reservation_to_booking_request_ticket).
+  booking_request: { label: "Request to book - accept or decline", channel: CHANNELS.teamChatMissed, leadDays: 0, tier: "urgent", askFrom: "created", ownPost: true, aroundTheClock: true, remindAfterMinutes: 10, remindUnlessGuestMessaged: true },
   // A turnover clean that may not be ready for the 4 PM check-in (lateCleans.ts, MDP 10-13): posted from
   // 2:30 PM tagging @customerservice; a 4 PM thread reply tags them again if the cleaner is still clocked in.
   clean_running_late: { label: "Clean may not be ready by 4 PM", channel: CHANNELS.cleaningHealth, leadDays: 0, tier: "today", askFrom: "created", tag: [CUSTOMER_SERVICE], ownPost: true },

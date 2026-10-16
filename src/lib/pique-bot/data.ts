@@ -118,7 +118,7 @@ export async function loadRows(admin: Admin, opts: { ticketIds?: string[]; since
       type: t.type,
       ruleKey: ruleKeyFor(t.type, t.metadata, (items.data ?? []).filter((i) => i.ticket_id === t.id)),
       context: emailContext(t.type, t.metadata),
-      details: t.type === "pet_fee" ? stayDetails(stay) : detailsFor(t.type, t.metadata, t.due_at, notesByReview),
+      details: t.type === "pet_fee" || t.type === "booking_request" ? stayDetails(stay) : detailsFor(t.type, t.metadata, t.due_at, notesByReview),
       status: t.status,
       // Tickets made the moment a booking syncs can predate its guest record.
       guestName: t.guest_name || stay?.guest?.full_name || null,

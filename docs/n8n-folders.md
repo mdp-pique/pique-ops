@@ -58,6 +58,7 @@ The existing "Laurice" folder is left as it is.
 ## Pique-a-choo & Alerts
 - Pique-Invoice-Check (every 10 min, read-only: invoice emails + PDF text to the invoice check)
 - Pique-Invoice-Search (webhook, read-only: Pique-a-choo's invoices@ search)
+- Pique-Bot-Alerts-Overnight (every 5 min 9 PM-7 AM: only around-the-clock rules post, e.g. requests to book)
 - Pique-Etransfer-Label (webhook: files an Interac e-transfer email in invoices@ under the folder picked in Slack)
 - Pique-Bot-Alerts
 - Pique-Bot-Morning

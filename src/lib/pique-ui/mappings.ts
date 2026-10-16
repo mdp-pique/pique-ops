@@ -32,6 +32,7 @@ const TAG_CLASS_BY_TYPE: Record<string, string> = {
   extension_request: "vet",
   save_booking: "vet",
   guest_count_check: "vet",
+  booking_request: "vet",
   email_alert: "msg",
   payment_failed: "vet",
   contact_us: "vet",
@@ -98,6 +99,7 @@ const TYPE_LABELS: Record<string, string> = {
   extension_request: "Extension request",
   save_booking: "Save a cancelled booking",
   guest_count_check: "Guest count check",
+  booking_request: "Request to book",
   email_alert: "Email",
   system_health: "System health",
 };

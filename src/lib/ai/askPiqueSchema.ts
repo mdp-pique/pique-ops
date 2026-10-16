@@ -29,7 +29,7 @@ tickets.type (free text, no DB constraint - values in use today):
   unanswered_message, missed_call, extension_request - guest communication
   system_health - the app's own job failures
   tech_request - a feature request or bug for the tech team, logged from Slack (metadata: title, summary, asked_by_name, slack_url, question)
-  Many more automation types exist (email_alert, damage_report, payment_failed, payment_dispute, separator_door, vehicle_registration, save_booking, guest_count_check...); metadata.title is the human-readable title for any ticket.
+  Many more automation types exist (email_alert, damage_report, payment_failed, payment_dispute, separator_door, vehicle_registration, save_booking, guest_count_check, booking_request...); metadata.title is the human-readable title for any ticket.
 Note: cleaner_late_noshow, incomplete_cleaning_form, cleaning_overtime_approval, and other purely-internal cleaning-ops ticket types are intentionally hidden from the staff-facing queue UI, but they still exist in this table and are fair game to query directly.
 
 ### teams / team_members

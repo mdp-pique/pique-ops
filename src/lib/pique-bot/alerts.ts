@@ -66,7 +66,16 @@ async function alertTypes(admin: Admin): Promise<string[]> {
 export async function runAlerts(admin: Admin, opts: { dry: boolean; now?: Date; since?: string }) {
   const now = opts.now ?? new Date();
   const types = await alertTypes(admin);
-  if (isQuietHours(now)) return { quiet: true, types, posted: [], reminded: [] };
+  if (isQuietHours(now)) {
+    // Rules posted around the clock (requests to book) still post and remind overnight.
+    const nightTypes = types.filter((t) => BOT_RULES[t]?.aroundTheClock);
+    if (!nightTypes.length) return { quiet: true, types, posted: [], reminded: [] };
+    const nightToday = edmontonToday(now);
+    const since = opts.since ?? new Date(now.getTime() - AROUND_THE_CLOCK_LOOKBACK_MS).toISOString();
+    const posted = await postNew(admin, { types: nightTypes, since, today: nightToday, dry: opts.dry });
+    const reminded = await remind(admin, { types: nightTypes, since: now.toISOString(), now, dry: opts.dry });
+    return { quiet: true, types: nightTypes, posted, reminded };
+  }
   const today = edmontonToday(now);
   // Rules asked at a set hour on check-in day (e.g. 213 FML parking at 11:00), each ticket in its own post.
   // 213 FML stays past the 5-day parking pass: today's re-registration tickets first (idempotent), so the 11:00 post asks them.
@@ -88,6 +97,23 @@ export async function runAlerts(admin: Admin, opts: { dry: boolean; now?: Date; 
   // Reminders stay limited to today's posts.
   const reminded = await remind(admin, { types, since: quietHoursEnded(now).toISOString(), now, dry: opts.dry });
   return { quiet: false, types, posted, reminded };
+}
+
+/** How far back around-the-clock rules look for new tickets and due reminders. */
+const AROUND_THE_CLOCK_LOOKBACK_MS = 24 * 3_600_000;
+
+/** Whether a host (not an automated message) has written to the guest on the ticket's booking since `since`. */
+async function guestMessagedSince(admin: Admin, ticketId: string, since: string): Promise<boolean> {
+  const { data: t } = await admin.from("tickets").select("reservation_id").eq("id", ticketId).maybeSingle();
+  if (!t?.reservation_id) return false;
+  const { count } = await admin
+    .from("messages")
+    .select("id", { count: "exact", head: true })
+    .eq("reservation_id", t.reservation_id)
+    .eq("direction", "outbound")
+    .gt("sent_at", since)
+    .or("raw_hospitable_data->>source.is.null,raw_hospitable_data->>source.neq.automated");
+  return (count ?? 0) > 0;
 }
 
 async function postNew(admin: Admin, ctx: { types: string[]; since: string; today: string; dry: boolean }) {
@@ -180,29 +206,42 @@ async function postOne(admin: Admin, row: BotRow, channel: string, today: string
   return { ticket: row.ticketId, channel, slack_ts: sent.ts };
 }
 
-/** One reminder in the thread when nobody has touched an urgent post for an hour. */
+/**
+ * One reminder in the thread when nobody has touched an urgent post: after an hour, or the rule's
+ * remindAfterMinutes (10 for requests to book). ctx.since limits it to today's posts, except rules
+ * posted around the clock, which are reminded whenever they're due (last 24 h).
+ */
 async function remind(admin: Admin, ctx: { types: string[]; since: string; now: Date; dry: boolean }) {
-  const cutoff = new Date(ctx.now.getTime() - REMIND_AFTER_MINUTES * 60_000).toISOString();
+  const minutes = Math.min(REMIND_AFTER_MINUTES, ...ctx.types.map((t) => BOT_RULES[t]?.remindAfterMinutes ?? REMIND_AFTER_MINUTES));
+  const cutoff = new Date(ctx.now.getTime() - minutes * 60_000).toISOString();
   const { data: posts } = await admin
     .from("pique_bot_posts")
     .select(POST_COLUMNS)
     .eq("kind", "alert")
     .is("reminded_at", null)
     .not("slack_ts", "is", null)
-    .gte("created_at", ctx.since)
+    .gte("created_at", new Date(ctx.now.getTime() - AROUND_THE_CLOCK_LOOKBACK_MS).toISOString())
     .lte("created_at", cutoff);
 
   const results: Record<string, unknown>[] = [];
   for (const post of (posts ?? []) as Post[]) {
     const [row] = await loadRows(admin, { ticketIds: post.ticket_ids, since: post.created_at });
     const rule = row && BOT_RULES[row.ruleKey];
-    const untouched = row && rule?.tier === "urgent" && ctx.types.includes(row.ruleKey) && !isFinished(row) && !row.waiting && !row.doneBy && row.status === "open";
+    // Not due yet: its rule waits longer, or it's from before today and isn't an around-the-clock rule.
+    if (rule && post.created_at > new Date(ctx.now.getTime() - (rule.remindAfterMinutes ?? REMIND_AFTER_MINUTES) * 60_000).toISOString()) continue;
+    if (rule && !rule.aroundTheClock && post.created_at < ctx.since) continue;
+    let untouched = row && rule?.tier === "urgent" && ctx.types.includes(row.ruleKey) && !isFinished(row) && !row.waiting && !row.doneBy && row.status === "open";
+    if (untouched && rule?.remindUnlessGuestMessaged && (await guestMessagedSince(admin, row.ticketId, post.created_at))) untouched = false;
     if (!untouched) {
       if (!ctx.dry) await admin.from("pique_bot_posts").update({ reminded_at: ctx.now.toISOString() }).eq("id", post.id);
       continue;
     }
     const who = row.assigneeSlackId ? `<@${row.assigneeSlackId}>` : tagsFor(rule).map(mention).join(" ");
-    const text = `${who} this is still open - can someone take it? Tap *Done* or *Not yet* above.`.trim();
+    const text = (
+      row.ruleKey === "booking_request"
+        ? `${who} this request to book still has no answer after ${rule.remindAfterMinutes ?? REMIND_AFTER_MINUTES} minutes - please accept or decline it (or message the guest).`
+        : `${who} this is still open - can someone take it? Tap *Done* or *Not yet* above.`
+    ).trim();
     if (ctx.dry) {
       results.push({ ticket: row.ticketId, text });
       continue;
