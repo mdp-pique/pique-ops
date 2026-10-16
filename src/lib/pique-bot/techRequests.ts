@@ -14,15 +14,22 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function ticketLink(ticketId: string): string | null {
+function ticketLink(ticketId: string, kind = "tech"): string | null {
   const url = appUrl();
-  return url ? `${url}/tickets/tech?ticket=${ticketId}` : null;
+  return url ? `${url}/tickets/${kind === "task" ? "requests" : "tech"}?ticket=${ticketId}` : null;
+}
+
+/** What a proposal opens: a tech request for the tech team, or a plain team to-do (MDP 10-16). */
+export function proposalNoun(kind: string): string {
+  return kind === "task" ? "ticket" : "tech request";
 }
 
 /**
- * The "Log as tech request" tap: opens one tech_request ticket for the proposal (a second tap
- * changes nothing) with the scope and the Slack conversation as its first comment, swaps the
- * button for a note, and posts it to the tech channel (automation_flags.tech_requests_channel).
+ * The "Log as tech request" / "Log as ticket" tap: opens one ticket for the proposal (a second tap
+ * changes nothing) with the scope and the Slack conversation as its first comment, and swaps the
+ * button for a note. A tech request (kind 'tech') is a tech_request posted to the tech channel
+ * (automation_flags.tech_requests_channel); a task (kind 'task', MDP 10-16) is a team_task with
+ * the checklist "Done", assigned to the first owner named, tagging the owners in the note.
  */
 export async function logTechRequest(
   admin: Admin,
@@ -33,20 +40,26 @@ export async function logTechRequest(
   const { data: p } = await admin.from("slack_assistant_tech_proposals").select("*").eq("id", opts.proposalId).maybeSingle();
   if (!p) return;
 
+  const isTask = p.kind === "task";
+  const owners = p.owner_slack_ids ?? [];
   let ticketId = p.ticket_id;
   if (!ticketId) {
+    const { data: ownerProfile } = owners.length
+      ? await admin.from("profiles").select("id").in("slack_user_id", owners).limit(1).maybeSingle()
+      : { data: null };
     const { data: askedBy } = p.asked_by ? await admin.from("profiles").select("display_name").eq("id", p.asked_by).maybeSingle() : { data: null };
     const askedByName = askedBy?.display_name ?? actor.name;
     const { data: ticket, error } = await admin
       .from("tickets")
       .upsert(
         {
-          type: "tech_request",
+          type: isTask ? "team_task" : "tech_request",
           status: "open",
           priority: "normal",
           source: "manual",
           created_by: actor.profileId,
-          external_ref: `tech:${p.id}`,
+          assignee_id: isTask ? (ownerProfile?.id ?? null) : null,
+          external_ref: `${isTask ? "task" : "tech"}:${p.id}`,
           metadata: { title: p.title, summary: p.summary, slack_url: p.slack_url, asked_by_name: askedByName },
         },
         { onConflict: "external_ref", ignoreDuplicates: true },
@@ -59,10 +72,14 @@ export async function logTechRequest(
     }
     if (ticket) {
       ticketId = ticket.id;
-      await admin.from("ticket_items").insert([
-        { ticket_id: ticket.id, label: "Reviewed by the tech team", sort_order: 0 },
-        { ticket_id: ticket.id, label: BUILT_ITEM, sort_order: 1 },
-      ]);
+      await admin.from("ticket_items").insert(
+        isTask
+          ? [{ ticket_id: ticket.id, label: TASK_DONE_ITEM, sort_order: 0 }]
+          : [
+              { ticket_id: ticket.id, label: "Reviewed by the tech team", sort_order: 0 },
+              { ticket_id: ticket.id, label: BUILT_ITEM, sort_order: 1 },
+            ],
+      );
       const body = [
         `${SCOPE_HEADING} (asked by ${askedByName})`,
         p.scope?.trim() || p.summary,
@@ -78,24 +95,25 @@ export async function logTechRequest(
         actor_id: actor.profileId,
         to_value: "open",
         note: `Logged from Slack by ${actor.name}`,
-        payload: { source: "pique_bot", kind: "tech_request", proposal_id: p.id, slack_url: p.slack_url },
+        payload: { source: "pique_bot", kind: isTask ? "team_task" : "tech_request", proposal_id: p.id, slack_url: p.slack_url },
       });
       await admin.from("slack_assistant_tech_proposals").update({ ticket_id: ticket.id }).eq("id", p.id).is("ticket_id", null);
-      await notifyTechChannel(admin, { proposalId: p.id, ticketId: ticket.id, title: p.title, summary: p.summary, slackUrl: p.slack_url, by: askedByName });
+      if (!isTask) await notifyTechChannel(admin, { proposalId: p.id, ticketId: ticket.id, title: p.title, summary: p.summary, slackUrl: p.slack_url, by: askedByName });
     } else {
-      const { data: existing } = await admin.from("tickets").select("id").eq("external_ref", `tech:${p.id}`).maybeSingle();
+      const { data: existing } = await admin.from("tickets").select("id").eq("external_ref", `${isTask ? "task" : "tech"}:${p.id}`).maybeSingle();
       ticketId = existing?.id ?? null;
     }
   }
 
-  const link = ticketId ? ticketLink(ticketId) : null;
-  const note = `:white_check_mark: Logged as a tech request by ${actor.name}${link ? ` · <${link}|Open>` : ""}. I'll post here when it's done.`;
+  const link = ticketId ? ticketLink(ticketId, p.kind) : null;
+  const forWho = isTask && owners.length ? ` for ${owners.map((o) => `<@${o}>`).join(" ")}` : "";
+  const note = `:white_check_mark: Logged as a ${proposalNoun(p.kind)}${forWho} by ${actor.name}${link ? ` · <${link}|Open>` : ""}. I'll post here when it's done.`;
   // Swap only the tapped button for the note; other requests offered in the same answer keep theirs.
   const tapped = `tech:${p.id}`;
   const blocks = opts.blocks.map((b) =>
     (b as { block_id?: string }).block_id === tapped ? { type: "context", block_id: tapped, elements: [{ type: "mrkdwn", text: note }] } : b,
   );
-  await slackApi("chat.update", { channel: opts.channel, ts: opts.messageTs, blocks, text: `Logged as a tech request: ${p.title}` });
+  await slackApi("chat.update", { channel: opts.channel, ts: opts.messageTs, blocks, text: `Logged as a ${proposalNoun(p.kind)}: ${p.title}` });
 }
 
 async function notifyTechChannel(
@@ -125,6 +143,7 @@ async function notifyTechChannel(
 
 type Finished = {
   id: string;
+  kind: string;
   title: string;
   summary: string;
   ticket_id: string;
@@ -140,6 +159,8 @@ const DONE_STATUSES = ["resolved", "closed"];
 
 /** The checklist item that means the work is done (ticked in the app or in Slack). */
 const BUILT_ITEM = "Built, fixed or answered";
+/** A team task's only checklist item. */
+const TASK_DONE_ITEM = "Done";
 
 /**
  * When a tech request's ticket is resolved or closed (MDP 10-10): reply in the Slack thread it
@@ -153,7 +174,7 @@ export async function announceFinishedTechRequests(admin: Admin, opts: { dry: bo
   const { data } = await admin
     .from("slack_assistant_tech_proposals")
     .select(
-      "id, title, summary, ticket_id, tech_post_channel, tech_post_ts, finished_notified_at, tickets(status), slack_assistant_threads(channel_id, thread_ts), profiles!slack_assistant_tech_proposals_asked_by_fkey(display_name, slack_user_id)",
+      "id, kind, title, summary, ticket_id, tech_post_channel, tech_post_ts, finished_notified_at, tickets(status), slack_assistant_threads(channel_id, thread_ts), profiles!slack_assistant_tech_proposals_asked_by_fkey(display_name, slack_user_id)",
     )
     .not("ticket_id", "is", null)
     .gte("created_at", since);
@@ -168,8 +189,15 @@ export async function announceFinishedTechRequests(admin: Admin, opts: { dry: bo
       .in("ticket_id", open.map((r) => r.ticket_id))
       .eq("label", BUILT_ITEM)
       .eq("is_done", true);
-    for (const ticketId of new Set((built ?? []).map((b) => b.ticket_id))) {
+    const { data: tasksDone } = await admin
+      .from("ticket_items")
+      .select("ticket_id")
+      .in("ticket_id", open.filter((r) => r.kind === "task").map((r) => r.ticket_id))
+      .eq("label", TASK_DONE_ITEM)
+      .eq("is_done", true);
+    for (const ticketId of new Set([...(built ?? []), ...(tasksDone ?? [])].map((b) => b.ticket_id))) {
       const row = open.find((r) => r.ticket_id === ticketId)!;
+      const doneItem = row.kind === "task" ? TASK_DONE_ITEM : BUILT_ITEM;
       if (opts.dry) {
         row.tickets = { status: "resolved" };
         continue;
@@ -185,8 +213,8 @@ export async function announceFinishedTechRequests(admin: Admin, opts: { dry: bo
         ticket_id: ticketId,
         event_type: "status_change",
         to_value: "resolved",
-        note: `Resolved: "${BUILT_ITEM}" was ticked`,
-        payload: { source: "pique_bot", kind: "tech_request" },
+        note: `Resolved: "${doneItem}" was ticked`,
+        payload: { source: "pique_bot", kind: row.kind === "task" ? "team_task" : "tech_request" },
       });
       row.tickets = { status: "resolved" };
     }
@@ -235,7 +263,7 @@ export async function announceFinishedTechRequests(admin: Admin, opts: { dry: bo
         unfurl_links: false,
       });
     }
-    if (status === "resolved") {
+    if (status === "resolved" && row.kind !== "task") {
       const asker = row.profiles?.display_name ?? "the team";
       await admin.from("changelog_entries").insert({
         title: `Tech request done: ${row.title}`.slice(0, 200),
@@ -263,7 +291,7 @@ async function whatWasDone(admin: Admin, ticketId: string): Promise<string | nul
 
 function renderFinished(row: Finished, status: string, what: string | null): string {
   const who = row.profiles?.slack_user_id ? `<@${row.profiles.slack_user_id}> ` : "";
-  const link = ticketLink(row.ticket_id);
+  const link = ticketLink(row.ticket_id, row.kind);
   const head = status === "resolved" ? `${who}:white_check_mark: *Done:* ${esc(row.title)}` : `${who}*Closed, not going ahead:* ${esc(row.title)}`;
   return [head, what ? esc(what) : null, link ? `<${link}|Open the ticket>` : null].filter(Boolean).join("\n");
 }
@@ -359,6 +387,7 @@ const NUDGE_WITHIN_MS = 24 * 3_600_000;
 
 type Unlogged = {
   id: string;
+  kind: string;
   title: string;
   thread_id: string | null;
   created_at: string;
@@ -376,7 +405,7 @@ export async function nudgeUnloggedTechRequests(admin: Admin, opts: { dry: boole
   const now = Date.now();
   const { data } = await admin
     .from("slack_assistant_tech_proposals")
-    .select("id, title, thread_id, created_at, slack_assistant_threads(channel_id, thread_ts), profiles!slack_assistant_tech_proposals_asked_by_fkey(slack_user_id)")
+    .select("id, kind, title, thread_id, created_at, slack_assistant_threads(channel_id, thread_ts), profiles!slack_assistant_tech_proposals_asked_by_fkey(slack_user_id)")
     .is("ticket_id", null)
     .is("nudged_at", null)
     .is("dismissed_at", null)
@@ -405,7 +434,11 @@ export async function nudgeUnloggedTechRequests(admin: Admin, opts: { dry: boole
       continue;
     }
     const who = r.profiles?.slack_user_id ? `<@${r.profiles.slack_user_id}> ` : "";
-    const text = `${who}Still want to log *${esc(r.title)}* as a tech request? Nothing reaches the tech team until someone taps the button.`;
+    const noun = proposalNoun(r.kind);
+    const text =
+      r.kind === "task"
+        ? `${who}Still want to log *${esc(r.title)}* as a ticket? It isn't tracked until someone taps the button.`
+        : `${who}Still want to log *${esc(r.title)}* as a tech request? Nothing reaches the tech team until someone taps the button.`;
     if (opts.dry) {
       results.push({ proposal: r.id, text });
       continue;
@@ -427,7 +460,7 @@ export async function nudgeUnloggedTechRequests(admin: Admin, opts: { dry: boole
           type: "actions",
           block_id: `tech:${r.id}`,
           elements: [
-            { type: "button", action_id: "pique_bot_tech_request", style: "primary", text: { type: "plain_text", text: "Log as tech request" }, value: r.id },
+            { type: "button", action_id: "pique_bot_tech_request", style: "primary", text: { type: "plain_text", text: `Log as ${noun}` }, value: r.id },
             { type: "button", action_id: "pique_bot_tech_dismiss", text: { type: "plain_text", text: "No thanks" }, value: r.id },
           ],
         },

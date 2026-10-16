@@ -35,7 +35,7 @@ export const DOMAINS: Domain[] = [
     key: "requests",
     label: "Requests",
     blurb: "Small SOP tasks tied to a date on the reservation.",
-    types: ["vehicle_registration", "pet_fee", "pack_n_play", "direct_booking_id_check", "guest_vetting", "extension_request", "save_booking", "guest_count_check", "booking_request", "email_alert", "contact_us", "payment_failed", "payment_dispute"],
+    types: ["vehicle_registration", "pet_fee", "pack_n_play", "direct_booking_id_check", "guest_vetting", "extension_request", "save_booking", "guest_count_check", "booking_request", "team_task", "email_alert", "contact_us", "payment_failed", "payment_dispute"],
   },
   {
     key: "tech",
@@ -252,6 +252,21 @@ export const CREATABLE_TYPES: TypeSpec[] = [
     needsReservation: true,
     fields: [{ key: "requested_until", label: "Wants to stay until", kind: "date" }],
     items: ["Availability checked", "Replied to guest"],
+    dueRule: "none",
+  },
+  // Requests: a plain to-do for the team, often logged through Pique-a-choo in Slack (MDP 10-16).
+  {
+    type: "team_task",
+    domain: "requests",
+    stage: null,
+    blurb: "A to-do for someone on the team, so it isn't dropped (cancel a subscription, call a vendor, follow up).",
+    needsReservation: false,
+    standalone: true,
+    fields: [
+      { key: "title", label: "What needs doing", kind: "text", required: true },
+      { key: "summary", label: "Details", kind: "textarea" },
+    ],
+    items: ["Done"],
     dueRule: "none",
   },
   // Tech
